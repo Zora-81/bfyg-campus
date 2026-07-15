@@ -1,0 +1,21 @@
+# 运行时生成 / 数据库（SQLite WAL 模式）
+server/data.db
+server/data.db-journal
+server/data.db-wal
+server/data.db-shm
+server/uploads/*
+!server/uploads/.gitkeep
+
+# 依赖
+server/node_modules/
+
+# 环境变量与密钥
+.env
+.env.local
+.env.*.local
+
+# Windows 误生成的空设备文件
+nul
+
+# 工作区
+.workbuddy/
