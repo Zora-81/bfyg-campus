@@ -331,13 +331,14 @@ body.main-active .grain-overlay { display:none; }
   --sh-card: 0 4px 12px rgba(0,0,0,0.45);
 
   --main-bg-image:
-    radial-gradient(ellipse 120% 55% at 72% -8%, rgba(70,100,200,0.40) 0%, transparent 50%),
-    radial-gradient(ellipse 90% 45% at 15% 108%, rgba(40,64,150,0.34) 0%, transparent 55%),
-    radial-gradient(ellipse 70% 40% at 50% 48%, rgba(30,46,100,0.22) 0%, transparent 70%),
-    linear-gradient(180deg, #05081a 0%, #081026 42%, #05081a 100%);
-  --main-bg-overlay: linear-gradient(180deg, rgba(4,6,16,0.08) 0%, rgba(2,4,12,0.46) 100%);
+    radial-gradient(ellipse 140% 60% at 72% -8%, rgba(90,130,230,0.55) 0%, transparent 48%),
+    radial-gradient(ellipse 110% 55% at 15% 108%, rgba(60,100,200,0.48) 0%, transparent 52%),
+    radial-gradient(ellipse 80% 50% at 50% 48%, rgba(50,80,170,0.32) 0%, transparent 70%),
+    radial-gradient(ellipse 160% 35% at 45% 55%, rgba(200,210,255,0.12) 0%, transparent 55%),
+    linear-gradient(180deg, #060a1d 0%, #0a1030 42%, #060a1d 100%);
+  --main-bg-overlay: linear-gradient(180deg, rgba(4,6,16,0.06) 0%, rgba(2,4,12,0.32) 100%);
   --main-bg-blur: 0px;
-  --main-bg-dim: 0.42;
+  --main-bg-dim: 0.22;
 }
 
 /* starry 玻璃质感：面板半透明透出星空 */
@@ -1135,14 +1136,6 @@ body.main-active #main-dots { display:block; }
 }
 .bg-theme:hover .bg-theme-preview { box-shadow:0 6px 18px rgba(0,0,0,0.35); }
 .bg-theme.active .bg-theme-preview { border-color:var(--accent-light); box-shadow:0 0 0 2px var(--accent-soft), 0 6px 18px rgba(0,0,0,0.35); }
-.bg-theme-preview.aurora {
-  background:
-    radial-gradient(ellipse 90% 60% at 25% 25%, rgba(124,92,252,1.0), transparent 55%),
-    radial-gradient(ellipse 80% 55% at 75% 30%, rgba(0,210,255,0.85), transparent 48%),
-    radial-gradient(ellipse 100% 50% at 55% 90%, rgba(88,101,242,0.95), transparent 52%),
-    radial-gradient(ellipse 70% 35% at 15% 78%, rgba(236,72,153,0.65), transparent 50%),
-    linear-gradient(180deg, #080b20, #0f1232, #140f35, #0d0f28);
-}
 .bg-theme-preview.light {
   background:
     radial-gradient(ellipse 80% 60% at 50% 18%, rgba(124,92,252,0.28), transparent 55%),
@@ -1314,7 +1307,7 @@ body.main-active #main-dots { display:block; }
 /* ═══ MESSAGES AREA — SOCIAL FEED LAYOUT ═══ */
 .messages-area {
   flex:1; overflow-y:auto; padding:12px 0 4px;
-  display:flex; flex-direction:column; align-items:flex-start;
+  display:flex; flex-direction:column; align-items:flex-end;
   gap:0;
   scrollbar-width:thin; scrollbar-color:var(--bg-hover) transparent;
   overscroll-behavior-y:contain;
@@ -1324,7 +1317,7 @@ body.main-active #main-dots { display:block; }
 /* Inner container to constrain feed width */
 .messages-area > * {
   width:100%; max-width:var(--feed-max-width);
-  padding:0 16px;
+  padding:0 0 0 16px;
   box-sizing:border-box;
 }
 
@@ -1870,11 +1863,11 @@ body.main-active #main-dots { display:block; }
 /* ═══ INPUT AREA — 默认隐藏，点FAB/💬评论时才显示 ═══ */
 .message-input-area {
   display:none;
-  padding:0 16px calc(16px + env(safe-area-inset-bottom));
+  padding:0 0 calc(16px + env(safe-area-inset-bottom)) 16px;
   flex-shrink:0; position:relative;
 }
 .message-input-area.input-visible {
-  display:block;
+  display:flex; justify-content:flex-end;
 }
 
 /* ═══ FAB 浮动发消息按钮 — 全平台左上角（顶栏下方、feed 左上） ═══ */
@@ -1895,6 +1888,7 @@ body.main-active #main-dots { display:block; }
   background:var(--bg-input); border-radius:var(--r-md);
   padding:0 12px; border:1px solid transparent;
   transition:border-color var(--t), box-shadow var(--t);
+  width:100%; max-width:var(--feed-max-width);
 }
 .message-input-wrapper:focus-within {
   border-color:var(--accent); box-shadow:0 0 0 2px var(--accent-g);
@@ -2147,7 +2141,7 @@ body.main-active #main-dots { display:block; }
   }
   .msg-group:last-child { border-bottom:none; }
   .messages-area > * { padding:0; }
-  .messages-area { padding:0 0 16px !important; }
+  .messages-area { padding:0 0 16px !important; align-items:flex-start !important; }
 
   /* 头部：头像 + 昵称/称号 横排 */
   .msg-feed-left {
