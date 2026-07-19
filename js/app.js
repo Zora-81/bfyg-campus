@@ -517,12 +517,13 @@
 
     // 加载频道列表（InsForge）
     IF.listChannels().then(function(list) {
-      channels = list || [];
+      channels = filterDmChannels(list);
       renderChannels();
       if (channels.length > 0) {
         switchChannel(channels[0]);
       }
       fetchUnreadCount();
+      subscribeNotifications();
     }).catch(function() {
       channels = [];
       renderChannels();
@@ -580,11 +581,12 @@
     ensureFab();
     // 输入栏默认隐藏（点FAB或评论时才 showInputBar 显示）
     IF.listChannels().then(function(list) {
-      channels = list || [];
+      channels = filterDmChannels(list);
       renderChannels();
       renderRightSidebar();
       if (channels.length > 0) { switchChannel(channels[0]); }
       fetchUnreadCount();
+      subscribeNotifications();
     }).catch(function() {
       channels = []; renderChannels(); renderRightSidebar();
       showToast('加载频道失败，请检查网络', 'error');
@@ -654,7 +656,7 @@
     // 确保频道数据仍在（从个人主页返回时 channels 应该还在内存中）
     if(!channels || channels.length === 0){
       IF.listChannels().then(function(list){
-        channels = list || [];
+        channels = filterDmChannels(list);
         renderChannels();
         renderRightSidebar();
         if(channels.length > 0) switchChannel(channels[0]);
@@ -991,7 +993,7 @@
     return hash;
   }
 
-  function switchChannel(ch){
+  function switchChannel(ch, onAfterRender){
     // Mark previous as read
     if (currentChannel && currentChannel.id !== ch.id) {
       lastReadTimestamps[currentChannel.id] = Date.now();
@@ -1019,6 +1021,9 @@
         renderMessages();
         if (messagesArea) { messagesArea.scrollTop = 0; } // 进入频道停在顶部，自然一些
         hideScrollBtn();
+        if (typeof onAfterRender === 'function') {
+          try { onAfterRender(); } catch (e) {}
+        }
       };
       // 聚合本频道所有消息的点赞（一次查询，前端计数；无触发器/无计数列/无 RLS 冲突）
       if (ids.length && currentUser && IF.getLikeAggregates) {
@@ -1032,6 +1037,7 @@
       }
     }).catch(function() {
       renderMessages();
+      if (typeof onAfterRender === 'function') { try { onAfterRender(); } catch (e) {} }
     });
 
     if(pinBar) pinBar.classList.remove('visible');
@@ -1829,6 +1835,29 @@
     // 后台发送（跨国链路慢，不要等 UI）
     IF.sendMessage(currentChannel.id, text, currentUser.id, parentId).then(function(msg){
       replacePendingMessage(tempId, currentChannel.id, msg);
+      // 触发 @ 提及通知：@ 解析交给后端 RPC，前端只传完整 content
+      try {
+        if (currentChannel.type === 'dm') {
+          // 私聊：给对方发私信通知（不 @ 提醒）；friendId 来自进入私聊时记录的映射
+          var dmFriend = dmChannelToFriend[currentChannel.id];
+          if (dmFriend && IF.notifyDm && typeof IF.notifyDm === 'function') {
+            IF.notifyDm({
+              messageId: msg.id,
+              authorId: currentUser.id,
+              channelId: currentChannel.id,
+              friendId: dmFriend,
+              content: (msg.content != null ? msg.content : text)
+            }).catch(function(){});
+          }
+        } else if (IF.notifyMentions && typeof IF.notifyMentions === 'function') {
+          IF.notifyMentions({
+            messageId: msg.id,
+            authorId: currentUser.id,
+            channelId: currentChannel.id,
+            content: (msg.content != null ? msg.content : text)
+          }).catch(function(){});
+        }
+      } catch (e) {}
       // 回复发送成功后，就地替换评论区的 pending 节点为真实评论（不重建列表、不闪、不跳位置）
       try {
         if (parentId) {
@@ -2063,6 +2092,35 @@
     if (loginRetry) loginRetry.style.display = 'none';
   }
 
+  // ── 通知锚点跳转：跳到指定消息并高亮 ────────
+  function highlightMessageNode(node) {
+    if (!node) return;
+    node.classList.remove('msg-highlight');
+    void node.offsetWidth; // 强制重排以重启动画
+    node.classList.add('msg-highlight');
+    setTimeout(function() { node.classList.remove('msg-highlight'); }, 2400);
+  }
+
+  function scrollToMessage(msgId) {
+    if (!msgId) return;
+    var attempts = 0;
+    function tryFind() {
+      var node = messagesArea ? messagesArea.querySelector('.msg-group[data-msg-id="' + msgId + '"]') : null;
+      if (!node) node = document.querySelector('.msg-comment-item[data-comment-id="' + msgId + '"]');
+      if (!node) node = document.querySelector('[data-id="' + msgId + '"]');
+      if (node) {
+        try { node.scrollIntoView({ behavior: REDUCED_MOTION ? 'auto' : 'smooth', block: 'center' }); } catch (e) {
+          if (node.scrollIntoView) node.scrollIntoView();
+        }
+        highlightMessageNode(node);
+        return;
+      }
+      attempts++;
+      if (attempts < 50) setTimeout(tryFind, 80); // 等待频道消息渲染/网络加载
+    }
+    tryFind();
+  }
+
   // ── Notification ─────────────────────────────
   var unreadNotifCount = 0;
 
@@ -2084,24 +2142,22 @@
     }
   }
 
+  var notifyOpen = false;
   function openNotifDropdown() {
     if (!notifyDropdown || !notifyList) return;
-    var isOpen = notifyDropdown.style.display === 'block';
-    if (isOpen) {
-      if (REDUCED_MOTION || typeof gsap === 'undefined') {
-        notifyDropdown.style.display = 'none';
-      } else {
-        gsap.killTweensOf(notifyDropdown);
-        gsap.to(notifyDropdown, { opacity: 0, y: -8, duration: 0.18, ease: 'power2.in', onComplete: function(){ notifyDropdown.style.display = 'none'; } });
-      }
-    } else {
-      notifyDropdown.style.display = 'block';
-      if (!REDUCED_MOTION && typeof gsap !== 'undefined') {
-        gsap.killTweensOf(notifyDropdown);
-        gsap.from(notifyDropdown, { opacity: 0, y: -8, duration: 0.24, ease: 'power2.out' });
-      }
-      loadNotifications();
+    if (notifyOpen) { hideNotifDropdown(); return; }
+    notifyOpen = true;
+    notifyDropdown.style.display = 'block';
+    // 强制重置动画残留，避免卡在 opacity:0 不可见
+    notifyDropdown.style.opacity = '1';
+    notifyDropdown.style.transform = 'none';
+    if (!REDUCED_MOTION && typeof gsap !== 'undefined') {
+      gsap.killTweensOf(notifyDropdown);
+      gsap.from(notifyDropdown, { opacity: 0, y: -8, duration: 0.24, ease: 'power2.out' });
     }
+    loadNotifications();
+    // 进入 dropdown 即加载好友数据（无论当前 Tab，确保切换即时）
+    renderFriends();
   }
 
   function loadNotifications() {
@@ -2114,29 +2170,92 @@
           return;
         }
         list.forEach(function(n) {
+          if (n.type === 'dm') return; // 私信不进通知 tab，未读只在好友列表显示
           var item = document.createElement('div');
           item.className = 'notify-item' + (n.is_read ? '' : ' unread');
+          var isFriendReq = n.type === 'friend_request' || n.type === 'friend' || n.type === 'friend_request_received';
           item.innerHTML =
-            '<span class="notify-icon">' + (n.type === 'mention' ? '💬' : '🔔') + '</span>' +
+            '<span class="notify-icon">' + (n.type === 'mention' ? '💬' : (isFriendReq ? '👋' : '🔔')) + '</span>' +
             '<div class="notify-body">' +
               '<div class="notify-title">' + escapeHtml(n.title) + '</div>' +
               '<div class="notify-preview">' + escapeHtml(n.body) + '</div>' +
-            '</div>';
-          item.addEventListener('click', function() {
-            markNotifRead(n.id);
-            if (n.link) {
-              // navigate to the linked channel
-              var chId = n.link.replace('/channel/', '');
-              if (chId) {
-                var ch = channels.find(function(c) { return c.id == chId; });
-                if (ch) switchChannel(ch);
-              }
+            '</div>' +
+            (isFriendReq ? '<div class="notify-actions"><button type="button" class="notify-btn notify-accept" data-action="accept">同意</button><button type="button" class="notify-btn notify-reject" data-action="reject">拒绝</button></div>' : '');
+          if (isFriendReq) {
+            var acceptBtn = item.querySelector('.notify-accept');
+            var rejectBtn = item.querySelector('.notify-reject');
+            if (acceptBtn) {
+              acceptBtn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                respondToFriendRequest(n, 'accept', item);
+              });
             }
-            hideNotifDropdown();
-          });
+            if (rejectBtn) {
+              rejectBtn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                respondToFriendRequest(n, 'reject', item);
+              });
+            }
+          } else {
+            item.addEventListener('click', function() {
+              markNotifRead(n.id);
+              if (n.link) {
+                // 解析 /channel/{id}#msg-{id}：支持锚点跳转并高亮对应消息
+                var hashIdx = n.link.indexOf('#');
+                var chPart = hashIdx >= 0 ? n.link.slice(0, hashIdx) : n.link;
+                var frag = hashIdx >= 0 ? n.link.slice(hashIdx + 1) : '';
+                var chId = chPart.replace('/channel/', '').replace(/\/+$/, '');
+                var msgId = '';
+                var m = frag && frag.match(/^msg-(.+)$/);
+                if (m) msgId = m[1];
+                if (chId) {
+                  var ch = channels.find(function(c) { return String(c.id) === String(chId); });
+                  if (ch) {
+                    if (msgId) {
+                      switchChannel(ch, function() { scrollToMessage(msgId); });
+                    } else {
+                      switchChannel(ch);
+                    }
+                  }
+                }
+              }
+              hideNotifDropdown();
+            });
+          }
           notifyList.appendChild(item);
         });
       }).catch(function(){});
+  }
+
+  function respondToFriendRequest(n, action, item) {
+    if (!IF || !IF.friendRespond || !n.link) {
+      if (typeof showToast === 'function') showToast('无法操作好友请求', 'error', 2000);
+      return;
+    }
+    var m = n.link.match(/[?&]id=([^&]+)/);
+    var id = m ? m[1] : '';
+    if (!id) {
+      if (typeof showToast === 'function') showToast('缺少请求ID', 'error', 2000);
+      return;
+    }
+    var acceptBtn = item && item.querySelector('.notify-accept');
+    var rejectBtn = item && item.querySelector('.notify-reject');
+    if (acceptBtn) acceptBtn.disabled = true;
+    if (rejectBtn) rejectBtn.disabled = true;
+    IF.friendRespond(id, action)
+      .then(function() {
+        item.style.opacity = '0.55';
+        var actions = item.querySelector('.notify-actions');
+        if (actions) actions.innerHTML = '<span class="notify-status">' + (action === 'accept' ? '已同意' : '已拒绝') + '</span>';
+        markNotifRead(n.id);
+        renderFriends();
+      })
+      .catch(function(err) {
+        if (acceptBtn) acceptBtn.disabled = false;
+        if (rejectBtn) rejectBtn.disabled = false;
+        var raw = (err && (err.message || err.error_description || err.msg || String(err))) || '操作失败';
+        if (typeof showToast === 'function') showToast(raw, 'error', 2500);
+      });
   }
 
   function markNotifRead(id) {
@@ -2147,7 +2266,8 @@
   }
 
   function hideNotifDropdown() {
-    if (!notifyDropdown || notifyDropdown.style.display !== 'block') return;
+    if (!notifyDropdown || !notifyOpen) return;
+    notifyOpen = false;
     if (REDUCED_MOTION || typeof gsap === 'undefined') {
       notifyDropdown.style.display = 'none';
       return;
@@ -2164,7 +2284,7 @@
     }).catch(function(){});
   }
 
-  if (btnNotify) btnNotify.addEventListener('click', openNotifDropdown);
+  if (btnNotify) btnNotify.addEventListener('click', function(e){ if (e) e.stopPropagation(); openNotifDropdown(); });
   if (notifyMarkAll) notifyMarkAll.addEventListener('click', markAllRead);
 
   // Close dropdown on outside click
@@ -2174,6 +2294,246 @@
       hideNotifDropdown();
     }
   });
+
+  // ── Friends Tab（好友 Tab）────────────────────
+  var tabNotif   = document.getElementById('tab-notif');
+  var tabFriends = document.getElementById('tab-friends');
+  var panelNotif = document.getElementById('panel-notif');
+  var panelFriends = document.getElementById('panel-friends');
+  var friendsListEl = document.getElementById('friends-list');
+  var friendsReqEl  = document.getElementById('friends-requests');
+  var friendAddInput = document.getElementById('friend-add-input');
+  var friendAddBtn  = document.getElementById('friend-add-btn');
+  var friendSearchResults = document.getElementById('friend-search-results');
+
+  function switchNotifyTab(tab) {
+    if (!tabNotif || !tabFriends || !panelNotif || !panelFriends) return;
+    var isFriends = tab === 'friends';
+    tabNotif.classList.toggle('active', !isFriends);
+    tabFriends.classList.toggle('active', isFriends);
+    panelNotif.style.display = isFriends ? 'none' : 'flex';
+    panelFriends.style.display = isFriends ? 'flex' : 'none';
+    if (isFriends) renderFriends();
+  }
+  if (tabNotif) tabNotif.addEventListener('click', function(){ switchNotifyTab('notif'); });
+  if (tabFriends) tabFriends.addEventListener('click', function(){ switchNotifyTab('friends'); });
+
+  function friendAvatarHtml(u) {
+    var name = (u && (u.nickname || u.username)) || '同学';
+    var initial = getInitial(name);
+    if (u && u.avatar_url) {
+      return '<div class="friend-avatar"><img src="' + u.avatar_url + '" alt="" onerror="this.parentNode.textContent=\'' + initial + '\'"></div>';
+    }
+    return '<div class="friend-avatar" style="background:' + getAvatarColor((u && u.username) || '?') + '">' + initial + '</div>';
+  }
+
+  function renderFriendList(container, list, isRequest) {
+    if (!container) return;
+    container.innerHTML = '';
+    if (!list || list.length === 0) {
+      container.innerHTML = '<div class="notify-empty">' + (isRequest ? '暂无请求' : '暂无好友') + '</div>';
+      return;
+    }
+    list.forEach(function(u) {
+      var user = u.other || u;   // entry.other 才是用户资料对象
+      var item = document.createElement('div');
+      item.className = 'friend-item';
+      item.innerHTML = friendAvatarHtml(user) +
+        '<span class="friend-name">' + escapeHtml((user && (user.nickname || user.username)) || '同学') + '</span>';
+      var actions = document.createElement('span');
+      actions.className = 'friend-actions';
+      if (!isRequest) {
+        var rm = document.createElement('button');
+        rm.type = 'button';
+        rm.className = 'friend-btn friend-remove';
+        rm.textContent = '移除';
+        rm.addEventListener('click', function(e) {
+          e.stopPropagation();
+          if (!IF || !IF.friendRemove || !user.id) return;
+          IF.friendRemove(user.id).then(function(){ renderFriends(); }).catch(function(){});
+        });
+        actions.appendChild(rm);
+      } else {
+        var acc = document.createElement('button');
+        acc.type = 'button';
+        acc.className = 'friend-btn friend-accept';
+        acc.textContent = '接受';
+        acc.addEventListener('click', function(e) {
+          e.stopPropagation();
+          if (!IF || !IF.friendRespond || !u.id) return;
+          IF.friendRespond(u.id, 'accept').then(function(){ renderFriends(); }).catch(function(){});
+        });
+        var rej = document.createElement('button');
+        rej.type = 'button';
+        rej.className = 'friend-btn friend-reject';
+        rej.textContent = '拒绝';
+        rej.addEventListener('click', function(e) {
+          e.stopPropagation();
+          if (!IF || !IF.friendRespond || !u.id) return;
+          IF.friendRespond(u.id, 'reject').then(function(){ renderFriends(); }).catch(function(){});
+        });
+        actions.appendChild(acc);
+        actions.appendChild(rej);
+      }
+      item.appendChild(actions);
+      container.appendChild(item);
+    });
+  }
+
+  function renderFriends() {
+    if (!IF || !IF.friendsList || !friendsListEl || !friendsReqEl) return;
+    IF.friendsList().then(function(data) {
+      data = data || {};
+      // 兼容多种返回结构：{ friends, requests } 或 { accepted, pending }
+      var friends = data.friends || data.accepted || [];
+      var requests = data.requests || data.pending || [];
+      renderFriendList(friendsListEl, friends, false);
+      renderFriendList(friendsReqEl, requests, true);
+    }).catch(function() {
+      if (friendsListEl) friendsListEl.innerHTML = '<div class="notify-empty">加载失败</div>';
+    });
+  }
+
+  if (friendAddBtn && friendAddInput) {
+    function isUuid(str) {
+      return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+    }
+    function clearSearchCandidates() {
+      if (!friendSearchResults) return;
+      friendSearchResults.innerHTML = '';
+      friendSearchResults.classList.remove('visible');
+    }
+    function renderSearchCandidates(list) {
+      if (!friendSearchResults) return;
+      friendSearchResults.innerHTML = '';
+      if (!list || list.length === 0) {
+        friendSearchResults.classList.remove('visible');
+        return;
+      }
+      list.forEach(function(u) {
+        var item = document.createElement('div');
+        item.className = 'friend-search-candidate';
+        item.setAttribute('data-id', u.id);
+        item.innerHTML = friendAvatarHtml(u) +
+          '<span class="friend-name">' + escapeHtml((u && (u.nickname || u.username)) || '同学') + '</span>' +
+          '<span class="friend-username">' + escapeHtml((u && u.username) || '') + '</span>';
+        item.addEventListener('click', function(e) {
+          e.stopPropagation();
+          sendFriendRequest(u.id, u);
+        });
+        friendSearchResults.appendChild(item);
+      });
+      friendSearchResults.classList.add('visible');
+    }
+    function sendFriendRequest(targetId, targetUser) {
+      if (!IF || !IF.friendRequest || !targetId) return;
+      if (friendAddBtn) friendAddBtn.disabled = true;
+      Promise.resolve(IF.friendRequest(targetId))
+        .then(function() {
+          if (friendAddInput) friendAddInput.value = '';
+          clearSearchCandidates();
+          renderFriends();
+          var name = (targetUser && (targetUser.nickname || targetUser.username)) || '该用户';
+          if (typeof showToast === 'function') showToast('已向 ' + name + ' 发送好友申请', 'success', 2500);
+        })
+        .catch(function(err) {
+          var raw = (err && (err.message || err.error_description || err.msg || String(err))) || '加好友失败';
+          if (typeof showToast === 'function') showToast(raw, 'error', 3000);
+        })
+        .then(function() { if (friendAddBtn) friendAddBtn.disabled = false; });
+    }
+    function onAddFriendClick() {
+      if (!IF || !friendAddInput) return;
+      clearSearchCandidates();
+      var val = (friendAddInput.value || '').trim();
+      if (!val) {
+        if (typeof showToast === 'function') showToast('请输入 uid 或昵称', 'error', 2000);
+        return;
+      }
+      // uuid 直接发送请求
+      if (isUuid(val)) {
+        sendFriendRequest(val);
+        return;
+      }
+      // 昵称/用户名搜索
+      if (!IF.searchUsers) {
+        if (typeof showToast === 'function') showToast('暂不支持昵称搜索', 'error', 2000);
+        return;
+      }
+      if (friendAddBtn) friendAddBtn.disabled = true;
+      Promise.resolve(IF.searchUsers(val, 5))
+        .then(function(list) {
+          if (!list || list.length === 0) {
+            if (typeof showToast === 'function') showToast('未找到用户：' + val, 'error', 2500);
+            return;
+          }
+          // 始终显示候选列表，让用户点选确认，避免误发
+          renderSearchCandidates(list);
+        })
+        .catch(function(err) {
+          var raw = (err && (err.message || err.error_description || err.msg || String(err))) || '搜索失败';
+          if (typeof showToast === 'function') showToast(raw, 'error', 2500);
+        })
+        .then(function() { if (friendAddBtn) friendAddBtn.disabled = false; });
+    }
+    friendAddBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      onAddFriendClick();
+    });
+    friendAddInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') { e.preventDefault(); onAddFriendClick(); }
+    });
+    // 输入变化时清空候选，避免旧候选残留
+    friendAddInput.addEventListener('input', clearSearchCandidates);
+  }
+
+  // ── Realtime 通知订阅（最小订阅，不干扰聊天订阅）──
+  var notifRtHandler = null;
+  var notifRtSubscribed = false;
+  function subscribeNotifications() {
+    if (notifRtSubscribed) return;
+    if (!IF || !IF.insforge || !IF.insforge.realtime || !currentUser) return;
+    notifRtSubscribed = true;
+    var rt = IF.insforge.realtime;
+    var subscribe = function() {
+      var channel = 'notifications:' + currentUser.id;
+      try {
+        rt.subscribe(channel).then(function(resp) {
+          if (!resp || !resp.ok) { console.warn('[notif-rt] 订阅失败', resp && resp.error); return; }
+          if (notifRtHandler) { try { rt.off('new_notification', notifRtHandler); } catch (e) {} }
+          notifRtHandler = function(payload) {
+            var rec = (payload && (payload.record || payload)) || {};
+            if (rec.user_id && rec.user_id !== currentUser.id) return;
+            if (rec.type === 'dm') {
+              // 私信未读只在好友列表显示，不冒顶部铃红点
+              var fu = parseDmLink(rec.link);
+              if (fu) {
+                dmUnread[fu.friendId] = (dmUnread[fu.friendId] || 0) + 1;
+                refreshFriendBadges();
+              }
+              return;
+            }
+            unreadNotifCount = (unreadNotifCount || 0) + 1;
+            updateNotifBadge();
+            if (notifyDropdown && notifyDropdown.style.display === 'block') loadNotifications();
+          };
+          rt.on('new_notification', notifRtHandler);
+        }).catch(function(e) { console.warn('[notif-rt] subscribe', e); });
+      } catch (e) { console.warn('[notif-rt] subscribe', e); }
+    };
+    try {
+      var c = rt.connect();
+      if (c && typeof c.then === 'function') c.then(subscribe).catch(subscribe);
+      else subscribe();
+    } catch (e) { console.warn('[notif-rt] connect', e); }
+  }
+
+  // 兜底轮询：realtime 未命中时仍刷新未读红点（不破坏现有逻辑）
+  setInterval(function() {
+    if (document.visibilityState === 'visible' && currentUser && IF && IF.unreadCount) {
+      fetchUnreadCount();
+    }
+  }, 15000);
 
   // ── @mention autocomplete ────────────────────
   var mentionDropdown = null;
@@ -2459,6 +2819,7 @@
     }
     // 加载成员列表到弹窗
     loadMembersToPopup();
+    loadFriendsToPopup();
     updatePopupUserCard();
   }
 
@@ -2481,7 +2842,7 @@
   // ==================== BACKGROUND SETTINGS ====================
 
   var BG_STORAGE_KEY = 'campus_main_bg_v1';
-  var THEME_NAMES = { starry: '星空', aurora: '蓝紫极光', light: '白昼极简', classroom: '自然森绿', custom: '我的壁纸' };
+  var THEME_NAMES = { starry: '星空', light: '白昼极简', classroom: '自然森绿', custom: '我的壁纸' };
 
   var currentBg = { theme: 'starry', customUrl: '', blur: 0, dim: 38 };
 
@@ -2497,8 +2858,8 @@
     try { localStorage.setItem(BG_STORAGE_KEY, JSON.stringify(currentBg)); } catch(e) {}
   }
 
-  // 全站主题：aurora/light/classroom 的配色 + 背景均由 CSS [data-theme] 控制；
-  // custom 用 JS 注入用户图片，全站配色沿用深色（aurora）基底。
+  // 全站主题：starry/light/classroom 的配色 + 背景均由 CSS [data-theme] 控制；
+  // custom 用 JS 注入用户图片，全站配色沿用深色（starry）基底。
   function applyTheme(theme, animate){
     var root = document.documentElement;
     var body = document.body;
@@ -2531,17 +2892,88 @@
 
     // 同步漂浮光点配色
     if (typeof window.__rebuildMainDots === 'function') {
-      window.__rebuildMainDots(theme === 'custom' ? 'aurora' : theme);
+      window.__rebuildMainDots(theme === 'custom' ? 'starry' : theme);
     }
 
     if (animate && !REDUCED_MOTION && typeof gsap !== 'undefined') {
       var mainBg = document.getElementById('main-bg');
-      if (mainBg) gsap.fromTo(mainBg, { opacity: 0.55 }, { opacity: 1, duration: 0.6, ease: 'power2.out' });
+      var mainDots = document.getElementById('main-dots');
+      if (mainBg) {
+        gsap.killTweensOf(mainBg);
+        gsap.fromTo(mainBg, { opacity: 0, scale: 1.05 }, { opacity: 1, scale: 1, duration: 0.9, ease: 'power2.out' });
+      }
+      if (mainDots) {
+        gsap.killTweensOf(mainDots);
+        gsap.fromTo(mainDots, { opacity: 0, scale: 1.02 }, { opacity: 1, scale: 1, duration: 1.0, ease: 'power2.out' });
+      }
     }
+  }
+
+  // ─── GSAP 星空微交互：视差 + 流星彩蛋 ───
+  function setupStarryGsapEffects(){
+    if (REDUCED_MOTION || typeof gsap === 'undefined') return;
+
+    var mainBg = document.getElementById('main-bg');
+    var mainDots = document.getElementById('main-dots');
+    if (!mainBg || !mainDots) return;
+
+    // 鼠标视差：背景层与 Canvas 层错位移动，营造纵深
+    var hasQuickTo = typeof gsap.quickTo === 'function';
+    var bgX, bgY, dotsX, dotsY;
+    if (hasQuickTo) {
+      bgX = gsap.quickTo(mainBg, 'x', { duration: 1.2, ease: 'power2.out' });
+      bgY = gsap.quickTo(mainBg, 'y', { duration: 1.2, ease: 'power2.out' });
+      dotsX = gsap.quickTo(mainDots, 'x', { duration: 0.8, ease: 'power2.out' });
+      dotsY = gsap.quickTo(mainDots, 'y', { duration: 0.8, ease: 'power2.out' });
+    }
+
+    var parallax = { x: 0, y: 0 };
+    window.addEventListener('mousemove', function(e){
+      if (document.body.dataset.theme !== 'starry') return;
+      var nx = (e.clientX / window.innerWidth - 0.5) * 2;
+      var ny = (e.clientY / window.innerHeight - 0.5) * 2;
+      parallax.x = -nx; parallax.y = -ny;
+      if (hasQuickTo) {
+        bgX(parallax.x * 10); bgY(parallax.y * 6);
+        dotsX(parallax.x * 18); dotsY(parallax.y * 10);
+      } else {
+        gsap.to(mainBg, { x: parallax.x * 10, y: parallax.y * 6, duration: 1.2, ease: 'power2.out', overwrite: true });
+        gsap.to(mainDots, { x: parallax.x * 18, y: parallax.y * 10, duration: 0.8, ease: 'power2.out', overwrite: true });
+      }
+    }, { passive: true });
+
+    // 流星彩蛋：偶发 DOM 流星划过聊天区
+    function scheduleMeteor(){
+      if (document.body.dataset.theme !== 'starry') { setTimeout(scheduleMeteor, 3000); return; }
+      var delay = (Math.random() * 35 + 22) * 1000; // 22-57 秒
+      setTimeout(function(){
+        if (document.body.dataset.theme !== 'starry') { scheduleMeteor(); return; }
+        spawnMeteorAcrossChat();
+        scheduleMeteor();
+      }, delay);
+    }
+    function spawnMeteorAcrossChat(){
+      var el = document.createElement('div');
+      el.className = 'starry-meteor';
+      var startY = Math.random() * window.innerHeight * 0.65;
+      var endY = startY + Math.random() * 120 + 60;
+      el.style.cssText = 'position:fixed;z-index:2;pointer-events:none;width:220px;height:3px;left:-260px;top:0;opacity:0;transform:rotate(22deg);';
+      el.style.background = 'linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(180,220,255,0.8) 45%, rgba(255,255,255,1) 70%, rgba(255,255,255,0) 100%)';
+      el.style.boxShadow = '0 0 10px 2px rgba(180,230,255,0.55), 0 0 20px 6px rgba(140,200,255,0.25)';
+      document.body.appendChild(el);
+      var dur = Math.random() * 0.7 + 1.0;
+      gsap.fromTo(el,
+        { x: -260, y: startY, opacity: 1 },
+        { x: window.innerWidth + 260, y: endY, duration: dur, ease: 'power1.in',
+          onComplete: function(){ if (el.parentNode) el.parentNode.removeChild(el); } });
+      gsap.to(el, { opacity: 0, duration: 0.35, delay: dur - 0.35, ease: 'power1.in' });
+    }
+    scheduleMeteor();
   }
 
   function initBackgroundSettings(){
     loadBackgroundSettings();
+    setupStarryGsapEffects();
 
     var themes = document.getElementById('bg-themes');
     var fileInput = document.getElementById('bg-file-input');
@@ -3191,4 +3623,140 @@
     overlay.onclick = function(e){ if(e.target===overlay) overlay.remove(); };
     document.body.appendChild(overlay);
   };
+
+  // ==================== 好友私聊 DM ====================
+  // 私信未读只显示在好友列表（顶部铃不冒红点），计数内存维护。
+  var dmUnread = {};            // friendId -> 未读数
+  var dmChannelToFriend = {};   // dmChannelId -> friendId（发送私信通知用）
+  var dmReturnChannel = null;   // 进入私聊前的公共频道（返回目标）
+  var dmBackBtn = document.getElementById('dm-back-btn');
+
+  // 过滤 DM 频道：私聊房间只通过好友列表进入，不进公共频道列表
+  function filterDmChannels(list) {
+    return (list || []).filter(function(c) { return c.type !== 'dm'; });
+  }
+
+  // 解析通知 link：/dm/{channelId}/{friendId}
+  function parseDmLink(link) {
+    if (!link) return null;
+    var m = String(link).match(/^\/dm\/([^/]+)\/([^/]+)/);
+    if (!m) return null;
+    return { channelId: m[1], friendId: m[2] };
+  }
+
+  // 渲染好友列表到头像弹窗（整行点击进入私聊）
+  function loadFriendsToPopup() {
+    var box = document.getElementById('panel-friends-list');
+    if (!box || !IF) return;
+    IF.friendsList().then(function(res) {
+      var friends = (res && res.friends) || [];
+      box.innerHTML = '';
+      if (!friends.length) {
+        box.innerHTML = '<div class="popup-empty">暂无好友，去通知里加好友吧</div>';
+        return;
+      }
+      friends.forEach(function(f) {
+        var u = f.other || {};
+        var item = document.createElement('div');
+        item.className = 'friend-item' + (dmUnread[u.id] ? ' has-unread' : '');
+        item.setAttribute('data-friend', u.id);
+        var initial = getInitial(u.nickname || u.username || '友');
+        var av = u.avatar_url
+          ? '<img src="'+escapeHtml(u.avatar_url)+'" alt="" onerror="this.style.display=\'none\'">'
+          : escapeHtml(initial);
+        item.innerHTML =
+          '<div class="friend-avatar" style="background:'+getAvatarColor(u.username||u.id)+'">'+av+'</div>'+
+          '<span class="friend-name">'+escapeHtml(u.nickname || u.username || '未知用户')+'</span>'+
+          '<span class="friend-badge">'+(dmUnread[u.id]||'')+'</span>';
+        item.addEventListener('click', function() { openDm(f); });
+        box.appendChild(item);
+      });
+    }).catch(function() {
+      box.innerHTML = '<div class="popup-empty">好友加载失败</div>';
+    });
+  }
+
+  // 刷新已渲染好友项的未读红点（收到私信实时更新）
+  function refreshFriendBadges() {
+    var box = document.getElementById('panel-friends-list');
+    if (!box) return;
+    box.querySelectorAll('.friend-item').forEach(function(item) {
+      var fid = item.getAttribute('data-friend');
+      var n = dmUnread[fid] || 0;
+      item.classList.toggle('has-unread', n > 0);
+      var badge = item.querySelector('.friend-badge');
+      if (badge) badge.textContent = n;
+    });
+  }
+
+  // 进入与某好友的私聊（复用 switchChannel + 现有消息体系）
+  function openDm(friend) {
+    if (!IF || !currentUser) return;
+    var u = friend.other || {};
+    if (!u.id) return;
+    dmReturnChannel = currentChannel; // 记住返回目标（进入前是公共频道）
+    closeAvatarPopup();
+    IF.findOrCreateDm(u.id).then(function(res) {
+      if (!res || res.error || !res.id) { showToast('打开私聊失败', 'error'); return; }
+      dmChannelToFriend[res.id] = u.id;
+      var dmChannel = { id: res.id, name: (u.nickname || u.username || '好友'), type: 'dm', description: '私聊' };
+      document.body.classList.add('dm-mode');
+      switchChannel(dmChannel, function() {
+        if (msgInput) msgInput.placeholder = '发私信给 ' + (u.nickname || u.username);
+        // 进入动画：聊天区从右侧轻微滑入
+        if (!REDUCED_MOTION && typeof gsap !== 'undefined') {
+          var main = document.getElementById('channel-main');
+          if (main) gsap.fromTo(main, { x: 24, autoAlpha: 0 }, { x: 0, autoAlpha: 1, duration: 0.32, ease: 'expo.out', clearProps: 'opacity,transform' });
+        }
+        dmUnread[u.id] = 0;          // 进入即清空该好友未读
+        refreshFriendBadges();
+      });
+    }).catch(function(e) {
+      showToast('打开私聊失败：' + ((e && e.message) || '未知错误'), 'error');
+    });
+  }
+
+  // 返回公共频道（带 GSAP 过渡）
+  function returnFromDm() {
+    document.body.classList.remove('dm-mode');
+    var target = dmReturnChannel || (channels && channels[0]) || null;
+    if (!target) {
+      if (IF && IF.listChannels) {
+        IF.listChannels().then(function(list){
+          channels = filterDmChannels(list);
+          renderChannels();
+          if (channels[0]) switchChannel(channels[0]);
+        });
+      }
+      return;
+    }
+    switchChannel(target, function() {
+      if (!REDUCED_MOTION && typeof gsap !== 'undefined') {
+        var main = document.getElementById('channel-main');
+        if (main) gsap.fromTo(main, { x: 30, autoAlpha: 0 }, { x: 0, autoAlpha: 1, duration: 0.32, ease: 'expo.out', clearProps: 'opacity,transform' });
+      }
+      if (dmBackBtn) gsap.set(dmBackBtn, { x: 0, opacity: 1, clearProps: 'transform,opacity' });
+    });
+  }
+
+  // 返回箭头交互：hover 微动 + 点击滑出后返回
+  if (dmBackBtn) {
+    dmBackBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      if (REDUCED_MOTION || typeof gsap === 'undefined') { returnFromDm(); return; }
+      var main = document.getElementById('channel-main');
+      gsap.killTweensOf([dmBackBtn, main]);
+      var tl = gsap.timeline({ onComplete: function(){ returnFromDm(); } });
+      tl.to(dmBackBtn, { x: -22, opacity: 0, duration: 0.18, ease: 'power2.in' }, 0);
+      if (main) tl.to(main, { x: -28, autoAlpha: 0, duration: 0.24, ease: 'power2.in' }, 0);
+    });
+    dmBackBtn.addEventListener('mouseenter', function() {
+      if (REDUCED_MOTION || typeof gsap === 'undefined') return;
+      gsap.to(dmBackBtn, { x: -4, scale: 1.08, duration: 0.2, ease: 'power2.out' });
+    });
+    dmBackBtn.addEventListener('mouseleave', function() {
+      if (REDUCED_MOTION || typeof gsap === 'undefined') return;
+      gsap.to(dmBackBtn, { x: 0, scale: 1, duration: 0.2, ease: 'power2.out' });
+    });
+  }
 })();
