@@ -9,9 +9,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="../css/style.css?v=20260718be" />
+  <link rel="stylesheet" href="../css/style.css?v=20260719st" />
 </head>
-<body>
+<body data-theme="starry">
   <!-- School Night Photo Background (清晰远景) -->
   <div id="school-bg" aria-hidden="true"></div>
   <!-- 校园灯光暖光晕 (从建筑底部向上渐变) -->
@@ -200,14 +200,19 @@
 
         </div>
 
-        <!-- 登录提交加载动画：居中校徽 + 旋转光环 -->
+        <!-- 登录提交加载动画：恒星轨道校徽（GSAP 行星环绕） -->
         <div class="login-submit-loader" id="login-submit-loader" aria-hidden="true">
-          <div class="submit-loader-inner">
-            <svg class="submit-loader-ring" viewBox="0 0 130 130" aria-hidden="true">
-              <circle class="submit-loader-track" cx="65" cy="65" r="58" />
-              <circle class="submit-loader-progress" cx="65" cy="65" r="58" />
+          <div class="orbit-loader" id="orbit-loader">
+            <svg class="orbit-svg orbit-1" viewBox="0 0 240 240" aria-hidden="true">
+              <ellipse cx="120" cy="120" rx="110" ry="55" />
             </svg>
-            <img src="../images/school-badge-new.png" alt="" class="submit-loader-badge" />
+            <svg class="orbit-svg orbit-2" viewBox="0 0 240 240" aria-hidden="true">
+              <ellipse cx="120" cy="120" rx="110" ry="55" />
+            </svg>
+            <svg class="orbit-svg orbit-3" viewBox="0 0 240 240" aria-hidden="true">
+              <ellipse cx="120" cy="120" rx="110" ry="55" />
+            </svg>
+            <img src="../images/school-badge-new.png" alt="" class="orbit-badge" />
           </div>
           <p class="submit-loader-text">正在进入校园频道<span class="submit-loader-dots"></span></p>
         </div>
@@ -247,9 +252,13 @@
               <div class="notify-list" id="notify-list"><div class="notify-empty">暂无通知</div></div>
             </div>
           </div>
-          <!-- User avatar (click to open popup) -->
-          <button class="nav-avatar-btn" id="nav-avatar-btn" aria-label="个人菜单" title="点击查看成员/频道信息">
-            <div class="nav-avatar" id="nav-avatar">U</div>
+          <!-- Personal menu (settings / channel info / background) -->
+          <button class="nav-avatar-btn" id="nav-avatar-btn" aria-label="个人菜单" title="打开个人菜单">
+            <svg class="nav-menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22">
+              <line x1="4" y1="8" x2="20" y2="8" stroke-linecap="round"/>
+              <line x1="4" y1="14" x2="14" y2="14" stroke-linecap="round"/>
+              <circle cx="19" cy="14" r="1.5" fill="currentColor" stroke="none"/>
+            </svg>
           </button>
         </div>
       </header>
@@ -352,13 +361,54 @@
       </div>
     </aside>
 
-    <!-- ═══ Avatar Popup (members / channel info) ═══ -->
+    <!-- ═══ Avatar Popup (personal menu / settings / channel info) ═══ -->
     <div class="avatar-popup-overlay" id="avatar-popup-overlay"></div>
     <div class="avatar-popup" id="avatar-popup">
       <div class="popup-handle"></div>
       <div class="popup-scroll">
+
+        <!-- Background settings -->
         <div class="popup-section">
-          <h3 class="popup-title">频道信息</h3>
+          <h3 class="popup-title">🎨 背景设置</h3>
+          <div class="bg-themes" id="bg-themes">
+            <button class="bg-theme active" data-theme="starry" title="星空" aria-label="星空">
+              <span class="bg-theme-preview starry"></span>
+              <span class="bg-theme-name">星空</span>
+            </button>
+            <button class="bg-theme" data-theme="aurora" title="蓝紫极光" aria-label="蓝紫极光">
+              <span class="bg-theme-preview aurora"></span>
+              <span class="bg-theme-name">蓝紫极光</span>
+            </button>
+            <button class="bg-theme" data-theme="light" title="白昼极简" aria-label="白昼极简">
+              <span class="bg-theme-preview light"></span>
+              <span class="bg-theme-name">白昼极简</span>
+            </button>
+            <button class="bg-theme" data-theme="classroom" title="自然森绿" aria-label="自然森绿">
+              <span class="bg-theme-preview classroom"></span>
+              <span class="bg-theme-name">自然森绿</span>
+            </button>
+            <button class="bg-theme" data-theme="custom" title="我的壁纸" aria-label="上传我的壁纸">
+              <span class="bg-theme-preview custom"><span class="bg-upload-icon">+</span></span>
+              <span class="bg-theme-name">我的壁纸</span>
+            </button>
+          </div>
+          <input type="file" id="bg-file-input" accept="image/*" style="display:none" />
+          <div class="bg-sliders" id="bg-sliders" style="display:none">
+            <div class="bg-slider-row">
+              <span>模糊</span>
+              <input type="range" id="bg-blur" min="0" max="20" value="0" />
+            </div>
+            <div class="bg-slider-row">
+              <span>暗角</span>
+              <input type="range" id="bg-dim" min="0" max="80" value="38" />
+            </div>
+          </div>
+          <button class="bg-reset" id="bg-reset">恢复默认</button>
+        </div>
+
+        <!-- Channel info -->
+        <div class="popup-section">
+          <h3 class="popup-title">📡 频道信息</h3>
           <div class="panel-info" id="panel-info">
             <div class="info-row"><span class="info-label">频道名称</span><span class="info-value">校园频道</span></div>
             <div class="info-row"><span class="info-label">创建日期</span><span class="info-value">2025年9月</span></div>
@@ -366,14 +416,18 @@
             <div class="info-row"><span class="info-label">在线成员</span><span class="info-value" id="rp-online-count">0</span></div>
           </div>
         </div>
+
+        <!-- Members -->
         <div class="popup-section" id="panel-members">
-          <h3 class="popup-title">成员 <span class="member-count" id="member-count">12</span></h3>
-          <div id="member-roles-container">
-            <!-- Role sections rendered by JS -->
+          <h3 class="popup-title">👥 成员 <span class="member-count" id="member-count">12</span></h3>
+          <div id="avatar-popup-members">
+            <!-- Members rendered by JS -->
           </div>
         </div>
+
+        <!-- Quick actions -->
         <div class="popup-section">
-          <h3 class="popup-title">快捷操作</h3>
+          <h3 class="popup-title">⚡ 快捷操作</h3>
           <div class="quick-actions">
             <button class="quick-action" id="qa-notifications"><span class="qa-icon">🔔</span> 通知设置</button>
             <button class="quick-action" id="qa-invite"><span class="qa-icon">🔗</span> 邀请好友</button>
@@ -389,12 +443,12 @@
     <!-- Rendered dynamically by JS -->
   </div>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.15.0/gsap.min.js?v=20260718be" defer></script>
-  <script src="../js/shooting-stars.js?v=20260718be"></script>
-  <script src="../js/main-bg.js?v=20260718be"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.15.0/gsap.min.js?v=20260719st" defer></script>
+  <script src="../js/shooting-stars.js?v=20260719st"></script>
+  <script src="../js/main-bg.js?v=20260719st"></script>
   <!-- InsForge SDK 客户端（ESM，CDN 引入），注入 window.IF 并派发 IF_READY -->
-  <script type="module" src="../js/if-client.js?v=20260718be"></script>
-  <script src="../js/app.js?v=20260718be" defer></script>
+  <script type="module" src="../js/if-client.js?v=20260719st"></script>
+  <script src="../js/app.js?v=20260719st" defer></script>
 </body>
 </html>
 
