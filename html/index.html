@@ -1,13 +1,15 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0a0c1a" />
   <title>校园频道 - 登录</title>
+  <link rel="icon" type="image/png" href="../images/school-badge-new.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="../css/style.css" />
+  <link rel="stylesheet" href="../css/style.css?v=20260718bd" />
 </head>
 <body>
   <!-- School Night Photo Background (清晰远景) -->
@@ -26,44 +28,134 @@
 
   <!-- ==================== LOGIN ==================== -->
   <div id="view-login" class="view active">
-    <div class="login-page">
-      <div class="login-left">
-        <div class="login-left-inner">
-          <!-- 3D Carousel Container (full left panel) -->
-          <div class="login-carousel-container" id="loginCarousel"></div>
+
+    <!-- 第一阶段：欢迎引导页（BobZhang 同款流光） -->
+    <div id="welcome-screen" class="welcome-screen active" aria-hidden="false">
+      <div class="welcome-inner">
+        <!-- 校园徽章（悬浮在标题上方） -->
+        <div class="welcome-campus-badge" aria-hidden="true">
+          <img src="../images/school-badge-new.png" alt="" class="welcome-campus-img" />
+          <span class="welcome-campus-star">✦</span>
         </div>
+
+        <div class="welcome-title-wrap">
+          <div class="welcome-title-glow"></div>
+          <h1 class="welcome-title" id="welcome-title">欢迎来到校园频道</h1>
+        </div>
+
+        <button class="welcome-enter" id="welcome-enter" type="button">确定进入</button>
       </div>
-      <div class="login-right">
-        <!-- 入口区：校徽 + 双按钮 + 打字机文字 -->
-        <div class="login-entry" id="login-entry">
-          <div class="login-logo"><img src="../images/school-badge-new.png" alt="宝丰一高校徽" class="login-badge" /></div>
-          <h1 class="login-school-name">宝丰一高</h1>
-          <p class="login-motto">校园频道 — 连接你我，点亮青春</p>
-          <div class="login-actions">
-            <button class="btn-signin" id="btn-signin">登录</button>
-            <button class="btn-signup" id="btn-signup">注册</button>
+    </div>
+
+    <!-- 第二阶段：加载过渡（双点旋转→合并→变星→飞星） -->
+    <div id="loading-stage" class="loading-stage" aria-hidden="true">
+      <svg class="loading-goo-defs" aria-hidden="true">
+        <defs>
+          <filter id="goo">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="8" result="blur" />
+            <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 18 -7" result="goo" />
+            <feBlend in="SourceGraphic" in2="goo" />
+          </filter>
+        </defs>
+      </svg>
+      <div class="loading-dots" id="loading-dots">
+        <div class="loading-dot"></div>
+        <div class="loading-dot"></div>
+      </div>
+      <div class="loading-star" id="loading-star">
+        <svg viewBox="0 0 100 100">
+          <path d="M50 0 Q50 50 100 50 Q50 50 50 100 Q50 50 0 50 Q50 50 50 0 Z" />
+        </svg>
+      </div>
+    </div>
+
+    <!-- 第三阶段：小怪兽登录界面（分屏） -->
+    <div id="monster-login" class="monster-login" aria-hidden="true">
+      <!-- 左侧：吉祥物小怪兽 -->
+      <div class="monster-scene" id="monster-scene">
+        <div class="monster-canvas" id="monster-canvas">
+
+          <!-- 1. 紫色高个 (Z-10, BACK) -->
+          <div class="monster monster-purple" id="monster-purple">
+            <svg class="monster-body-svg" viewBox="0 0 130 340" preserveAspectRatio="none">
+              <path class="monster-shape purple-shape" d="M 0 340 C 0 220, 0 110, 0 0 L 130 0 C 130 110, 130 220, 130 340 Z" fill="#6a35ff" />
+            </svg>
+            <div class="monster-face monster-purple-face">
+              <div class="eyes">
+                <div class="eye eye-white"><div class="pupil"></div></div>
+                <div class="eye eye-white"><div class="pupil"></div></div>
+              </div>
+              <div class="mouth purple-mouth"></div>
+            </div>
           </div>
-          <div class="login-typewriter" id="login-typewriter">
-            <span class="tw-text"></span><span class="tw-cursor">|</span>
+
+          <!-- 2. 黑色高个 (Z-30, MIDDLE) - 直角顶无圆角 -->
+          <div class="monster monster-black" id="monster-black">
+            <svg class="monster-body-svg" viewBox="0 0 80 280" preserveAspectRatio="none">
+              <path class="monster-shape black-shape" d="M 0 280 C 0 180, 0 90, 0 0 L 80 0 C 80 90, 80 180, 80 280 Z" fill="#222222" />
+            </svg>
+            <div class="monster-face monster-black-face">
+              <div class="eyes">
+                <div class="eye eye-white"><div class="pupil"></div></div>
+                <div class="eye eye-white"><div class="pupil"></div></div>
+              </div>
+            </div>
           </div>
+
+          <!-- 3. 黄色圆头 (Z-40, FRONT) - 单只纯黑眼 -->
+          <div class="monster monster-yellow" id="monster-yellow">
+            <div class="monster-face monster-yellow-face">
+              <div class="eye eye-black yellow-eye"><div class="pupil"></div></div>
+              <div class="mouth yellow-mouth"></div>
+            </div>
+          </div>
+
+          <!-- 4. 橙色胖子 (Z-50, FRONT LEFT) - 双只纯黑眼 -->
+          <div class="monster monster-orange" id="monster-orange">
+            <div class="monster-face monster-orange-face">
+              <div class="eyes">
+                <div class="eye eye-black"><div class="pupil"></div></div>
+                <div class="eye eye-black"><div class="pupil"></div></div>
+              </div>
+              <div class="mouth orange-mouth">
+                <svg class="mouth-svg" viewBox="0 0 20 12" preserveAspectRatio="none"><path d="M 2 2 Q 10 12 18 2" fill="none" stroke="#000" stroke-width="4" stroke-linecap="round"/></svg>
+              </div>
+            </div>
+          </div>
+
         </div>
       </div>
 
-      <!-- 弹出登录卡片 (全屏覆盖) -->
-      <div class="login-modal-overlay" id="login-modal-overlay">
-        <div class="login-card login-card-modal" id="login-card-modal">
-          <button class="modal-close" id="modal-close" aria-label="关闭">
+      <!-- 右侧：登录卡片（白色 BobZhang 风格，但 InsForge 邮箱/密码） -->
+      <div class="monster-login-card-wrap" id="monster-login-card-wrap">
+        <div class="login-card" id="login-card">
+          <button class="modal-close" id="modal-close" aria-label="返回欢迎页" type="button">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
-          <div class="login-logo"><img src="../images/school-badge-new.png" alt="宝丰一高校徽" class="login-badge" /></div>
+
+          <!-- 顶部星标 Logo（与飞星落点连贯） -->
+          <div class="login-logo-star" id="login-logo-star">
+            <svg viewBox="0 0 100 100">
+              <path d="M50 0 Q50 50 100 50 Q50 50 50 100 Q50 50 0 50 Q50 50 50 0 Z" />
+            </svg>
+          </div>
+
           <h2 id="login-card-title">欢迎回来</h2>
           <p class="login-sub" id="login-card-sub">使用你的账号登录校园频道</p>
+
           <form id="login-form" novalidate>
-            <div class="input-group">
-              <label class="input-label">用户名</label>
+            <div class="input-group" id="group-email">
+              <label class="input-label">邮箱</label>
+              <div class="input-wrapper">
+                <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                <input name="email" type="email" placeholder="请输入邮箱（QQ/网易等均可）" autocomplete="email" required />
+              </div>
+            </div>
+            <div class="input-group" id="group-nickname" style="display:none">
+              <label class="input-label">昵称</label>
               <div class="input-wrapper">
                 <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                <input name="username" type="text" placeholder="请输入用户名" autocomplete="username" required />
+                <input name="nickname" type="text" placeholder="显示名称，如 张三" autocomplete="nickname" />
               </div>
             </div>
             <div class="input-group">
@@ -75,89 +167,95 @@
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                 </button>
               </div>
+              <p class="input-hint" id="pw-hint" style="display:none">密码至少 8 位，需同时包含字母和数字</p>
             </div>
             <div class="login-extras">
               <label class="checkbox-label"><input type="checkbox" /> 记住我</label>
-              <a href="#">忘记密码</a>
+              <a href="#" id="forgot-link">忘记密码</a>
             </div>
-            <button class="btn-login" type="submit"><span class="btn-text" id="btn-submit-text">登录</span></button>
+            <button class="btn-login" type="submit" id="btn-login-submit"><span class="btn-text" id="btn-submit-text">登录</span></button>
             <p id="login-error" class="login-error" role="alert"></p>
+            <button type="button" id="login-retry" class="login-retry" style="display:none" aria-label="重试">重试</button>
           </form>
           <p class="login-footer-text" id="login-footer-switch">还没有账号？<a href="#" id="link-switch-mode">立即注册</a></p>
+
+          <!-- 邮箱验证面板（注册后需验证时显示） -->
+          <div id="verify-panel" style="display:none">
+            <h2 id="verify-title">验证你的邮箱</h2>
+            <p class="login-sub" id="verify-sub">我们已向 <span id="verify-email-display" style="color:#4f46e5;font-weight:600"></span> 发送了 6 位验证码</p>
+            <div class="input-group">
+              <label class="input-label">验证码</label>
+              <div class="input-wrapper">
+                <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>
+                <input id="verify-code" name="verify-code" type="text" inputmode="numeric" maxlength="6" placeholder="请输入 6 位验证码" autocomplete="one-time-code" />
+              </div>
+            </div>
+            <button class="btn-login" type="button" id="btn-verify"><span class="btn-text">验证并登录</span></button>
+            <p id="verify-error" class="login-error" role="alert"></p>
+            <p class="login-footer-text">
+              <a href="#" id="link-resend-code">重新发送验证码</a>
+              <span style="float:right"><a href="#" id="link-back-login">返回登录</a></span>
+            </p>
+          </div>
+
+        </div>
+
+        <!-- 登录提交加载动画：居中校徽 + 旋转光环 -->
+        <div class="login-submit-loader" id="login-submit-loader" aria-hidden="true">
+          <div class="submit-loader-inner">
+            <svg class="submit-loader-ring" viewBox="0 0 130 130" aria-hidden="true">
+              <circle class="submit-loader-track" cx="65" cy="65" r="58" />
+              <circle class="submit-loader-progress" cx="65" cy="65" r="58" />
+            </svg>
+            <img src="../images/school-badge-new.png" alt="" class="submit-loader-badge" />
+          </div>
+          <p class="submit-loader-text">正在进入校园频道<span class="submit-loader-dots"></span></p>
         </div>
       </div>
     </div>
   </div>
-
-  <!-- ==================== MAIN APP (QQ Channel Style) ==================== -->
+  <!-- ==================== MAIN APP (社交信息流风格) ==================== -->
   <div id="view-main" class="view" aria-hidden="true">
     <div class="app-shell">
-      <!-- Left sidebar: Server/Channel list -->
-      <aside class="sidebar" id="sidebar">
-        <!-- Server icon -->
-        <div class="sidebar-server" title="校园频道"><img src="../images/school-badge-new.png" alt="宝丰一高校徽" class="server-icon" /><span class="server-title">校园频道</span></div>
-        <div class="sidebar-divider"></div>
-        <!-- Channel categories -->
-        <nav class="sidebar-channels" id="sidebar-channels">
-          <!-- Categories and channels rendered by JS -->
-        </nav>
-        <!-- Bottom: user info -->
-        <div class="sidebar-user">
-          <div class="user-avatar" id="user-avatar">U</div>
-          <div class="user-info">
-            <span class="user-name" id="user-name">同学</span>
-            <span class="user-tag" id="user-tag"><span class="status-dot online" style="width:8px;height:8px;display:inline-block;border-radius:50%;border:none"></span> 在线 · <span class="role-badge member">成员</span></span>
+
+      <!-- ═══ Top Navigation Bar ═══ -->
+      <header class="top-nav" id="top-nav">
+        <div class="nav-left">
+          <!-- Hamburger: opens channel drawer (PC + Mobile) -->
+          <button class="hamburger-btn" id="hamburger-btn" aria-label="频道列表">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="24" height="24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+          </button>
+          <!-- Server badge -->
+          <div class="nav-server-badge" title="校园频道">
+            <img src="../images/school-badge-new.png" alt="" class="nav-server-icon" />
           </div>
-          <div class="user-actions">
-            <button class="icon-btn" id="btn-mic" title="麦克风">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
-            </button>
-            <button class="icon-btn" id="btn-headphone" title="耳机">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
-            </button>
-            <button class="icon-btn" id="btn-logout" title="退出登录">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-            </button>
+          <div class="nav-channel-info">
+            <span class="nav-hash">#</span>
+            <h2 class="nav-channel-title" id="channel-title">综合交流</h2>
+            <span class="nav-channel-desc" id="channel-desc">自由聊天，分享日常</span>
           </div>
         </div>
-      </aside>
-
-      <!-- Mobile sidebar overlay backdrop -->
-      <div class="sidebar-overlay" id="sidebar-overlay"></div>
-
-      <!-- Middle: Channel content / messages -->
-      <main class="channel-main" id="channel-main">
-        <header class="channel-header" id="channel-header">
-          <div class="channel-header-left">
-            <button class="mobile-menu-btn" id="mobile-menu-btn">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        <div class="nav-right">
+          <!-- Notification bell -->
+          <div class="notify-wrap" id="notify-wrap">
+            <button class="icon-btn nav-icon-btn" id="btn-notify" title="通知">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
             </button>
-            <span class="channel-hash">#</span>
-            <h2 class="channel-title" id="channel-title">综合交流</h2>
-            <span class="channel-divider">|</span>
-            <span class="channel-desc" id="channel-desc">自由聊天，分享日常</span>
-          </div>
-          <div class="channel-header-right">
-            <div class="notify-wrap" id="notify-wrap">
-              <button class="icon-btn" id="btn-notify" title="通知">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-              </button>
-              <span class="notify-badge" id="notify-badge" style="display:none">0</span>
-              <div class="notify-dropdown" id="notify-dropdown" style="display:none">
-                <div class="notify-header"><span>通知</span><button class="notify-mark-all" id="notify-mark-all">全部已读</button></div>
-                <div class="notify-list" id="notify-list">
-                  <div class="notify-empty">暂无通知</div>
-                </div>
-              </div>
+            <span class="notify-badge" id="notify-badge" style="display:none">0</span>
+            <div class="notify-dropdown" id="notify-dropdown" style="display:none">
+              <div class="notify-header"><span>通知</span><button class="notify-mark-all" id="notify-mark-all">全部已读</button></div>
+              <div class="notify-list" id="notify-list"><div class="notify-empty">暂无通知</div></div>
             </div>
-            <button class="icon-btn" id="btn-pin" title="置顶">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M12 2L12 22M12 2L8 6M12 2L16 6"/></svg>
-            </button>
-            <button class="icon-btn" id="btn-members" title="成员">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-            </button>
           </div>
-        </header>
+          <!-- User avatar (click to open popup) -->
+          <button class="nav-avatar-btn" id="nav-avatar-btn" aria-label="个人菜单" title="点击查看成员/频道信息">
+            <div class="nav-avatar" id="nav-avatar">U</div>
+          </button>
+        </div>
+      </header>
+
+      <!-- ═══ Main Content Area (full-width) ═══ -->
+      <main class="channel-main" id="channel-main">
 
         <!-- Pinned messages bar -->
         <div class="pin-bar" id="pin-bar">
@@ -173,7 +271,8 @@
           <span class="ann-close" id="ann-close">✕</span>
         </div>
 
-        <!-- Messages area -->
+        <!-- Messages area (social feed) -->
+        <div class="feed-wrapper" id="feed-wrapper">
         <div class="messages-area" id="messages-area">
           <!-- Messages rendered by JS -->
         </div>
@@ -202,12 +301,64 @@
             </div>
           </div>
         </div>
-      </main>
+        </div><!-- /feed-wrapper -->
 
-      <!-- Right panel: members / details -->
-      <aside class="right-panel" id="right-panel">
-        <div class="panel-section">
-          <h3 class="panel-title">频道信息</h3>
+        <!-- ═══ Right Sidebar (贴吧风格：热点话题 + 频道推荐) ═══ -->
+        <aside class="right-sidebar" id="right-sidebar">
+          <div class="sidebar-card">
+            <h3 class="sidebar-card-title">🔥 热门话题</h3>
+            <ul class="sidebar-list" id="hot-topics">
+              <li class="sidebar-skeleton"><span class="skeleton-line" style="width:70%"></span></li>
+              <li class="sidebar-skeleton"><span class="skeleton-line" style="width:85%"></span></li>
+              <li class="sidebar-skeleton"><span class="skeleton-line" style="width:60%"></span></li>
+            </ul>
+          </div>
+          <div class="sidebar-card">
+            <h3 class="sidebar-card-title">📢 频道推荐</h3>
+            <ul class="sidebar-list channel-rec-list" id="rec-channels">
+              <li class="sidebar-skeleton channel-rec-item">
+                <div class="channel-rec-avatar skeleton-box"></div>
+                <div class="channel-rec-info"><span class="skeleton-line" style="width:60%"></span><span class="skeleton-line" style="width:40%"></span></div>
+              </li>
+            </ul>
+          </div>
+        </aside>
+      </main>
+    </div>
+
+    <!-- ═══ Channel Drawer (overlay, triggered by hamburger) ═══ -->
+    <div class="drawer-overlay" id="drawer-overlay"></div>
+    <aside class="channel-drawer" id="sidebar">
+      <div class="drawer-header">
+        <div class="drawer-server">
+          <img src="../images/school-badge-new.png" alt="" class="drawer-server-icon" />
+          <span class="drawer-server-name">校园频道</span>
+        </div>
+      </div>
+      <div class="drawer-divider"></div>
+      <!-- Channel categories (rendered by JS) -->
+      <nav class="drawer-channels" id="sidebar-channels"></nav>
+      <div class="drawer-divider"></div>
+      <!-- User panel at bottom of drawer -->
+      <div class="drawer-user">
+        <div class="drawer-user-avatar" id="user-avatar">U</div>
+        <div class="drawer-user-info">
+          <span class="drawer-user-name" id="user-name">同学</span>
+          <span class="drawer-user-tag" id="user-tag"><span class="status-dot online" style="width:8px;height:8px;display:inline-block;border-radius:50%;border:none"></span> 在线 · <span class="role-badge member">成员</span></span>
+        </div>
+        <button class="icon-btn" id="btn-logout" title="退出登录">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </button>
+      </div>
+    </aside>
+
+    <!-- ═══ Avatar Popup (members / channel info) ═══ -->
+    <div class="avatar-popup-overlay" id="avatar-popup-overlay"></div>
+    <div class="avatar-popup" id="avatar-popup">
+      <div class="popup-handle"></div>
+      <div class="popup-scroll">
+        <div class="popup-section">
+          <h3 class="popup-title">频道信息</h3>
           <div class="panel-info" id="panel-info">
             <div class="info-row"><span class="info-label">频道名称</span><span class="info-value">校园频道</span></div>
             <div class="info-row"><span class="info-label">创建日期</span><span class="info-value">2025年9月</span></div>
@@ -215,31 +366,21 @@
             <div class="info-row"><span class="info-label">在线成员</span><span class="info-value" id="rp-online-count">0</span></div>
           </div>
         </div>
-
-        <!-- Members by role -->
-        <div class="panel-section" id="panel-members">
-          <h3 class="panel-title">成员 <span class="member-count" id="member-count">12</span></h3>
+        <div class="popup-section" id="panel-members">
+          <h3 class="popup-title">成员 <span class="member-count" id="member-count">12</span></h3>
           <div id="member-roles-container">
             <!-- Role sections rendered by JS -->
           </div>
         </div>
-
-        <!-- Quick actions -->
-        <div class="panel-section">
-          <h3 class="panel-title">快捷操作</h3>
+        <div class="popup-section">
+          <h3 class="popup-title">快捷操作</h3>
           <div class="quick-actions">
-            <button class="quick-action" id="qa-notifications">
-              <span class="qa-icon">🔔</span> 通知设置
-            </button>
-            <button class="quick-action" id="qa-invite">
-              <span class="qa-icon">🔗</span> 邀请好友
-            </button>
-            <button class="quick-action" id="qa-search">
-              <span class="qa-icon">🔍</span> 搜索消息
-            </button>
+            <button class="quick-action" id="qa-notifications"><span class="qa-icon">🔔</span> 通知设置</button>
+            <button class="quick-action" id="qa-invite"><span class="qa-icon">🔗</span> 邀请好友</button>
+            <button class="quick-action" id="qa-search"><span class="qa-icon">🔍</span> 搜索消息</button>
           </div>
         </div>
-      </aside>
+      </div>
     </div>
   </div>
 
@@ -248,11 +389,12 @@
     <!-- Rendered dynamically by JS -->
   </div>
 
-  <script src="/socket.io/socket.io.js"></script>
-  <script src="../js/anime.min.js"></script>
-  <script src="../js/shooting-stars.js"></script>
-  <script src="../js/main-bg.js"></script>
-  <script src="../js/app.js" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.15.0/gsap.min.js?v=20260718bd" defer></script>
+  <script src="../js/shooting-stars.js?v=20260718bd"></script>
+  <script src="../js/main-bg.js?v=20260718bd"></script>
+  <!-- InsForge SDK 客户端（ESM，CDN 引入），注入 window.IF 并派发 IF_READY -->
+  <script type="module" src="../js/if-client.js?v=20260718bd"></script>
+  <script src="../js/app.js?v=20260718bd" defer></script>
 </body>
 </html>
 

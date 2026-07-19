@@ -1,46 +1,43 @@
 /* ============================================================
    校园频道 — Full Platform App (Production)
-   后端: Express + Socket.io + SQLite / 前端: Vanilla JS
+   后端: InsForge / 前端: Vanilla JS + GSAP
    ============================================================ */
 (function () {
   'use strict';
 
-  // ==================== API CLIENT ====================
+  // ==================== INS FORGE CLIENT ====================
+  // 后端已迁移至 InsForge（Postgres + Auth + Storage + Realtime）。
+  // SDK 由 js/if-client.js（ESM，CDN 引入）加载后注入 window.IF，
+  // 就绪时派发 IF_READY 事件。前端通过 window.IF 调用所有后端能力。
+  var IF = window.IF || null;
+  window.addEventListener('IF_READY', function () { IF = window.IF; });
 
-  var API_BASE = '/api';
+  // 兼容占位（不再使用本地 token / socket，保留变量名以免散落引用报错）
   var ws = null;
-  var token = localStorage.getItem('bfyg_token') || '';
+  var token = '';
+  var connectionDot = document.querySelector('.connection-dot');
 
-  function apiGet(path) {
-    return fetch(API_BASE + path, { headers: { Authorization: 'Bearer ' + token } })
-      .then(function(r) { return r.json(); });
-  }
-  function apiPost(path, body) {
-    return fetch(API_BASE + path, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-      body: JSON.stringify(body)
-    }).then(function(r) { return r.json(); });
-  }
-  function apiPatch(path, body) {
-    return fetch(API_BASE + path, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-      body: JSON.stringify(body)
-    }).then(function(r) { return r.json(); });
-  }
-  function apiDelete(path) {
-    return fetch(API_BASE + path, {
-      method: 'DELETE',
-      headers: { Authorization: 'Bearer ' + token }
-    }).then(function(r) { return r.json(); });
+  // 聚合所有频道的消息总数（个人主页统计用）
+  function countAllMessages() {
+    var n = 0;
+    for (var k in channelMessages) { if (channelMessages.hasOwnProperty(k)) n += channelMessages[k].length; }
+    return n;
   }
 
   // ==================== STATE ====================
 
+  // 可访问性：尊重系统"减少动效"设置
+  var REDUCED_MOTION = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+  // 移动端检测
+  function isMobile() {
+    return window.innerWidth <= 900 || ('ontouchstart' in window);
+  }
+
   var currentUser = null; // { id, username, nickname, role, avatar_url }
   var channels = [];     // 服务器频道列表
   var channelMessages = {}; // { channelId: [msg, ...] }
+  var likeAgg = {}; // { messageId: { total, mine } } 点赞聚合（前端计数，规避触发器/RLS）
   var currentChannel = null; // 当前选中的频道对象 (含 id)
   var unreadCounts = {};
   var lastReadTimestamps = {};
@@ -53,16 +50,22 @@
   var viewProfile = document.getElementById('view-profile');
   var loginForm  = document.getElementById('login-form');
   var loginError = document.getElementById('login-error');
-  var loginEntry        = document.getElementById('login-entry');
-  var loginModalOverlay = document.getElementById('login-modal-overlay');
-  var loginCardModal    = document.getElementById('login-card-modal');
+  var loginRetry = document.getElementById('login-retry');
+  var monsterLogin      = document.getElementById('monster-login');
+  var loginCard         = document.getElementById('login-card');
   var modalClose        = document.getElementById('modal-close');
-  var btnSignin         = document.getElementById('btn-signin');
-  var btnSignup         = document.getElementById('btn-signup');
   var loginCardTitle    = document.getElementById('login-card-title');
   var loginCardSub      = document.getElementById('login-card-sub');
   var btnSubmitText     = document.getElementById('btn-submit-text');
   var loginFooterSwitch = document.getElementById('login-footer-switch');
+  var loginSubmitLoader = document.getElementById('login-submit-loader');
+  var loginLogoStar     = document.getElementById('login-logo-star');
+  // 欢迎屏 / 加载 / 小怪兽
+  var welcomeScreen     = document.getElementById('welcome-screen');
+  var welcomeEnter      = document.getElementById('welcome-enter');
+  var loadingStage      = document.getElementById('loading-stage');
+  var loadingStar       = document.getElementById('loading-star');
+  var _fromWelcome      = false; // 标记当前是否从欢迎屏进入，关闭弹窗时回到欢迎屏
   var loginMode = 'signin';
   var sidebar         = document.getElementById('sidebar');
   var sidebarChannels = document.getElementById('sidebar-channels');
@@ -73,8 +76,8 @@
   var btnSend         = document.getElementById('btn-send');
   var btnAttach       = document.getElementById('btn-attach');
   var fileInput       = document.getElementById('file-input');
-  var mobileMenuBtn   = document.getElementById('mobile-menu-btn');
-  var sidebarOverlay  = document.getElementById('sidebar-overlay');
+  var mobileMenuBtn   = document.getElementById('hamburger-btn');
+  var drawerOverlay   = document.getElementById('drawer-overlay');
   var userNameEl      = document.getElementById('user-name');
   var userAvatarEl    = document.getElementById('user-avatar');
   var userTagEl       = document.getElementById('user-tag');
@@ -124,86 +127,74 @@
     return text;
   }
 
-  // ==================== SOCKET.IO ====================
+  // ==================== REALTIME (InsForge) ====================
 
-  function connectSocket() {
-    if (ws && ws.connected) return;
-    ws = io({ auth: { token: token } });
+  // 收到新消息的统一处理（本地乐观追加 + 实时推送共用，按 id 去重）
+  function handleIncomingMessage(msg) {
+    var chId = msg.channel_id;
+    if (!channelMessages[chId]) channelMessages[chId] = [];
 
-    ws.on('connect', function() {
-      console.log('[ws] 已连接');
-      if (connectionDot) connectionDot.classList.add('ws-connected');
-      // 重新加入当前频道
-      if (currentChannel && currentChannel.id) {
-        ws.emit('join-channel', currentChannel.id);
+    // 实时消息回来时，若本地还有同内容/同作者的 pending 消息，直接替换避免重复
+    if (currentChannel && currentChannel.id === chId && !msg.isPending && msg.author_id && msg.content) {
+      var pendingIdx = -1;
+      for (var i = 0; i < channelMessages[chId].length; i++) {
+        var m = channelMessages[chId][i];
+        if (m.isPending && m.author_id === msg.author_id && m.content === msg.content) {
+          pendingIdx = i; break;
+        }
       }
-    });
-
-    ws.on('disconnect', function() {
-      console.log('[ws] 断开');
-      if (connectionDot) connectionDot.classList.remove('ws-connected');
-    });
-
-    ws.on('new-message', function(msg) {
-      var chId = msg.channel_id;
-      if (!channelMessages[chId]) channelMessages[chId] = [];
-      // 去重
-      if (!channelMessages[chId].some(function(m){ return m.id === msg.id; })) {
-        channelMessages[chId].push(msg);
-      }
-
-      if (currentChannel && currentChannel.id === chId) {
-        // 当前频道：直接渲染
-        var wasAtBottom = isNearBottom();
+      if (pendingIdx >= 0) {
+        channelMessages[chId][pendingIdx] = msg;
         renderMessages();
-        if (wasAtBottom || msg.username === (currentUser && currentUser.username)) {
-          messagesArea.scrollTop = messagesArea.scrollHeight;
-        } else {
-          showScrollBtn(msg);
-        }
-        // 新消息单独 pop 动画（覆盖 stagger 的最后一条）
-        if (typeof anime === 'function') {
-          var last = messagesArea.querySelector('.msg-group:last-child');
-          if (last) {
-            anime.remove(last);
-            anime({
-              targets: last,
-              scale: [0.92, 1],
-              opacity: [0, 1],
-              duration: 380,
-              easing: 'spring(1, 90, 12, 0)'
-            });
-          }
-        }
+        return;
+      }
+    }
+
+    if (!channelMessages[chId].some(function(m){ return m.id === msg.id; })) {
+      channelMessages[chId].push(msg);
+    }
+
+    if (currentChannel && currentChannel.id === chId) {
+      var wasAtBottom = isNearBottom();
+      renderMessages();
+      if (wasAtBottom || (currentUser && msg.author_id === currentUser.id)) {
+        messagesArea.scrollTop = messagesArea.scrollHeight;
       } else {
-        // 其他频道：增加未读
-        if (!unreadCounts[chId]) unreadCounts[chId] = 0;
-        unreadCounts[chId]++;
-        updateChannelBadges();
+        showScrollBtn(msg);
+      }
+      // 新消息单独 pop 动画（覆盖 stagger 的最后一条）—— fromTo 显式终点 1 + clearProps
+      if (typeof gsap !== 'undefined' && !REDUCED_MOTION) {
+        var last = messagesArea.querySelector('.msg-group:last-child');
+        if (last) {
+          gsap.killTweensOf(last);
+          gsap.fromTo(last, { scale: 0.92, opacity: 0 },
+            { scale: 1, opacity: 1, duration: 0.45, ease: 'elastic.out(1,0.75)', clearProps: 'opacity,transform' });
+        }
+      }
+    } else {
+      // 其他频道：增加未读
+      if (!unreadCounts[chId]) unreadCounts[chId] = 0;
+      unreadCounts[chId]++;
+      updateChannelBadges();
+    }
+  }
+
+  // 订阅当前频道的实时消息（切换频道时调用）
+  function subscribeCurrentChannel() {
+    if (!IF || !currentChannel || !currentChannel.id) return;
+    if (connectionDot) connectionDot.classList.add('ws-connected');
+    IF.connectRealtime(currentChannel.id, {
+      onMessage: handleIncomingMessage,
+      onPresence: function(members) {
+        var onlineEl = document.getElementById('rp-online-count');
+        if (onlineEl) onlineEl.textContent = (members ? members.length : 0);
       }
     });
+  }
 
-    ws.on('user-online', function(data) {
-      console.log('[ws] 用户上线:', data.username);
-    });
-
-    ws.on('user-offline', function(data) {
-      console.log('[ws] 用户离线:', data.userId);
-    });
-
-    ws.on('new-notification', function(data) {
-      unreadNotifCount++;
-      updateNotifBadge();
-      showToast('新通知: ' + data.title, 'info');
-    });
-
-    ws.on('error-msg', function(msg) {
-      if (typeof msg === 'string') alert(msg);
-    });
-
-    ws.on('connect_error', function(err) {
-      console.error('[ws] 连接失败:', err.message);
-    });
+  function disconnectRealtime() {
+    if (IF) IF.disconnectRealtime();
+    if (connectionDot) connectionDot.classList.remove('ws-connected');
   }
 
   // ==================== TEXT TYPE ====================
@@ -232,72 +223,236 @@
 
   // ==================== LOGIN MODAL ====================
 
+  // ==================== 登录流程：欢迎 → 加载 → 小怪兽登录 → 主界面 ====================
+
   function openLoginModal(mode){
-    loginMode=mode;
-    if(mode==='signin'){
-      loginCardTitle.textContent='欢迎回来';
-      loginCardSub.textContent='使用你的账号登录校园频道';
-      btnSubmitText.textContent='登录';
-      loginFooterSwitch.innerHTML='还没有账号？<a href="#" id="link-switch-mode">立即注册</a>';
+    loginMode = mode;
+    var vp0 = document.getElementById('verify-panel'); if(vp0) vp0.style.display='none';
+    pendingVerifyEmail = null; pendingVerifyPassword = null;
+    var nickGroup = document.getElementById('group-nickname');
+    if(mode === 'signin'){
+      loginCardTitle.textContent = '欢迎回来';
+      loginCardSub.textContent = '使用你的账号登录校园频道';
+      btnSubmitText.textContent = '登录';
+      loginFooterSwitch.innerHTML = '还没有账号？<a href="#" id="link-switch-mode">立即注册</a>';
+      if(nickGroup) nickGroup.style.display = 'none';
+      var pwHint = document.getElementById('pw-hint');
+      if(pwHint){ pwHint.style.display='none'; pwHint.className='input-hint'; }
     } else {
-      loginCardTitle.textContent='加入我们';
-      loginCardSub.textContent='创建账号，开启你的校园之旅';
-      btnSubmitText.textContent='注册';
-      loginFooterSwitch.innerHTML='已有账号？<a href="#" id="link-switch-mode">立即登录</a>';
+      loginCardTitle.textContent = '加入我们';
+      loginCardSub.textContent = '创建账号，开启你的校园之旅';
+      btnSubmitText.textContent = '注册';
+      loginFooterSwitch.innerHTML = '已有账号？<a href="#" id="link-switch-mode">立即登录</a>';
+      if(nickGroup) nickGroup.style.display = '';
+      var pwHint2 = document.getElementById('pw-hint');
+      if(pwHint2){ pwHint2.style.display=''; pwHint2.className='input-hint'; pwHint2.textContent='密码至少 8 位，需同时包含字母和数字'; }
     }
-    var newLink=document.getElementById('link-switch-mode');
-    if(newLink) newLink.addEventListener('click',function(e){ e.preventDefault(); openLoginModal(loginMode==='signin'?'signup':'signin'); });
+    var newLink = document.getElementById('link-switch-mode');
+    if(newLink) newLink.addEventListener('click', function(e){ e.preventDefault(); openLoginModal(loginMode==='signin'?'signup':'signin'); });
     if(loginForm) loginForm.reset();
-    if(loginError) loginError.textContent='';
-    // anime.js 驱动弹窗动画（spring 弹簧效果，比纯 CSS 更自然）
-    loginModalOverlay.classList.add('active');
-    anime.remove([loginModalOverlay, loginCardModal]);
-    anime({
-      targets: loginModalOverlay,
-      opacity: [0, 1],
-      duration: 250,
-      easing: 'linear'
-    });
-    anime({
-      targets: loginCardModal,
-      translateY: [40, 0],
-      scale: [0.94, 1],
-      opacity: [0, 1],
-      duration: 600,
-      easing: 'spring(1, 80, 10, 0)'
-    });
+    clearLoginError();
+    resetMonsterState();
+    if(monsterLogin) monsterLogin.classList.add('active');
+    startMonsterEyes();
   }
   function closeLoginModal(){
-    anime.remove([loginModalOverlay, loginCardModal]);
-    anime({
-      targets: loginCardModal,
-      translateY: [0, 20],
-      scale: [1, 0.96],
-      opacity: [1, 0],
-      duration: 250,
-      easing: 'easeInQuad'
-    });
-    anime({
-      targets: loginModalOverlay,
-      opacity: [1, 0],
-      duration: 300,
-      easing: 'linear',
-      complete: function(){ loginModalOverlay.classList.remove('active'); }
-    });
+    var backToWelcome = _fromWelcome;
+    if(monsterLogin){ monsterLogin.classList.remove('active'); stopMonsterEyes(); }
+    if(backToWelcome && welcomeScreen){ welcomeScreen.classList.add('active'); _fromWelcome = false; }
   }
-  if(btnSignin) btnSignin.addEventListener('click',function(){ openLoginModal('signin'); });
-  if(btnSignup) btnSignup.addEventListener('click',function(){ openLoginModal('signup'); });
-  if(modalClose) modalClose.addEventListener('click',closeLoginModal);
-  if(loginModalOverlay) loginModalOverlay.addEventListener('click',function(e){ if(e.target===loginModalOverlay) closeLoginModal(); });
+
+  // ── 欢迎屏 → 加载(双点→星→飞) → 小怪兽登录 ──
+  var _loadingTimers = [];
+  function clearLoadingTimers(){ _loadingTimers.forEach(clearTimeout); _loadingTimers = []; }
+  function enterFromWelcome(){
+    if(!welcomeScreen){ openLoginModal('signin'); return; }
+    _fromWelcome = true;
+    if(welcomeEnter) welcomeEnter.disabled = true;
+    if(REDUCED_MOTION || typeof gsap === 'undefined'){
+      welcomeScreen.classList.remove('active');
+      openLoginModal('signin');
+      return;
+    }
+    if(loadingStage){
+      loadingStage.classList.add('active','phase-rotating');
+      // rotating(0-1.2s) → merging(1.2-1.6s) → star(1.6-2.0s) → flying(2.0-2.85s)
+      _loadingTimers.push(setTimeout(function(){ loadingStage.classList.remove('phase-rotating'); loadingStage.classList.add('phase-merging'); }, 1200));
+      _loadingTimers.push(setTimeout(function(){ loadingStage.classList.remove('phase-merging'); loadingStage.classList.add('phase-star'); }, 1600));
+      _loadingTimers.push(setTimeout(function(){
+        loadingStage.classList.remove('phase-star'); loadingStage.classList.add('phase-flying');
+        flyStarToCard();
+      }, 2000));
+      _loadingTimers.push(setTimeout(function(){
+        clearLoadingTimers();
+        loadingStage.classList.remove('active','phase-flying');
+        if(welcomeScreen) welcomeScreen.classList.remove('active');
+        openLoginModal('signin');
+      }, 2850));
+    } else {
+      welcomeScreen.classList.remove('active');
+      openLoginModal('signin');
+    }
+  }
+
+  // 飞星：从 loading star 飞向登录卡片顶部星标
+  function flyStarToCard(){
+    if(!loginLogoStar) return;
+    var cardRect = loginLogoStar.getBoundingClientRect();
+    var tx = cardRect.left + cardRect.width/2;
+    var ty = cardRect.top + cardRect.height/2;
+    var fly = document.createElement('div');
+    fly.className = 'loading-fly-star';
+    fly.innerHTML = '<svg viewBox="0 0 100 100"><path d="M50 0 Q50 50 100 50 Q50 50 50 100 Q50 50 0 50 Q50 50 50 0 Z" /></svg>';
+    document.body.appendChild(fly);
+    fly.style.left = (window.innerWidth/2) + 'px';
+    fly.style.top  = (window.innerHeight/2) + 'px';
+    fly.style.opacity = '1';
+    fly.style.transition = 'none';
+    void fly.offsetWidth; // 强制回流
+    fly.style.transition = 'left .85s cubic-bezier(.45,.05,.35,1), top .85s cubic-bezier(.45,.05,.35,1), opacity .85s ease';
+    fly.style.left = tx + 'px';
+    fly.style.top  = ty + 'px';
+    setTimeout(function(){
+      fly.style.opacity = '0';
+      if(loginLogoStar){
+        loginLogoStar.style.animation = 'none';
+        void loginLogoStar.offsetWidth;
+        loginLogoStar.style.animation = 'modalStarPop .5s ease';
+      }
+      setTimeout(function(){ if(fly.parentNode) fly.parentNode.removeChild(fly); }, 400);
+    }, 850);
+  }
+
+  // ── 登录提交加载动画：居中校徽 + 旋转光环 ──
+  var _loaderWatchdog = null;
+  function showLoginLoader(){
+    if(!loginSubmitLoader) return;
+    loginSubmitLoader.classList.add('active');
+    loginSubmitLoader.setAttribute('aria-hidden','false');
+    if(_loaderWatchdog){ clearTimeout(_loaderWatchdog); _loaderWatchdog = null; }
+    _loaderWatchdog = setTimeout(function(){
+      _loaderWatchdog = null;
+      if(viewMain && viewMain.classList.contains('active')) return;
+      try {
+        if(loginSubmitLoader){ loginSubmitLoader.classList.remove('active'); loginSubmitLoader.setAttribute('aria-hidden','true'); loginSubmitLoader.style.opacity=''; }
+        showLoginError({ message: '登录超时，可能是网络较慢或后端无响应。请检查网络后重试。' });
+      } catch(e){}
+    }, 12000);
+  }
+  function hideLoginLoader(cb){
+    if(_loaderWatchdog){ clearTimeout(_loaderWatchdog); _loaderWatchdog = null; }
+    if(!loginSubmitLoader){ if(cb) cb(); return; }
+    loginSubmitLoader.classList.remove('active');
+    loginSubmitLoader.setAttribute('aria-hidden','true');
+    loginSubmitLoader.style.opacity = '';
+    if(cb) cb();
+  }
+
+  // ── 小怪兽眼睛跟随鼠标（3 级弹簧，仿 BobZhang AnimatedCharacters）──
+  var _eyeRAF = null, _eyeOn = false;
+  var _eyeTarget = { x:0, y:0 };   // 鼠标归一化 -1..1
+  var _eyeNorm   = { x:0, y:0 };   // 平滑后当前值
+  var _eyeState  = 'idle';         // idle | email | pwfocus | error
+  function startMonsterEyes(){
+    if(_eyeOn) return; _eyeOn = true;
+    window.addEventListener('mousemove', _onMonsterMouseMove);
+    if(!_eyeRAF) _eyeRAF = requestAnimationFrame(_monsterEyeLoop);
+  }
+  function stopMonsterEyes(){
+    _eyeOn = false;
+    window.removeEventListener('mousemove', _onMonsterMouseMove);
+  }
+  function _onMonsterMouseMove(e){
+    if(_eyeState === 'email' || _eyeState === 'pwfocus' || _eyeState === 'error') return; // 聚焦/错误时眼睛锁定
+    _eyeTarget.x = (e.clientX / window.innerWidth) * 2 - 1;
+    _eyeTarget.y = (e.clientY / window.innerHeight) * 2 - 1;
+  }
+  function _monsterEyeLoop(){
+    if(!_eyeOn){ _eyeRAF = null; return; }
+    _eyeNorm.x += (_eyeTarget.x - _eyeNorm.x) * 0.12;
+    _eyeNorm.y += (_eyeTarget.y - _eyeNorm.y) * 0.12;
+    var nx = _eyeNorm.x, ny = _eyeNorm.y;
+    // 紫/黑：白眼底+黑瞳，移动瞳孔
+    setPupil('monster-purple', nx*3.5, ny*3.5);
+    setPupil('monster-black',  nx*3.5, ny*3.5);
+    // 黄/橙：纯黑眼（黑上黑，瞳不可见），只移整张脸
+    if(_eyeState === 'idle'){
+      setFace('monster-purple', nx*14, ny*8);
+      setFace('monster-black',  nx*12, ny*6);
+      setFace('monster-yellow', nx*20, ny*5);
+      setFace('monster-orange', nx*25, ny*10);
+      setBody('monster-purple', nx*10);
+      setBody('monster-black',  nx*8);
+      setBody('monster-yellow', nx*8);
+      setBody('monster-orange', nx*12);
+    }
+    _eyeRAF = requestAnimationFrame(_monsterEyeLoop);
+  }
+  function setPupil(id, x, y){
+    var m = document.getElementById(id); if(!m) return;
+    var ps = m.querySelectorAll('.pupil');
+    for(var i=0;i<ps.length;i++){ ps[i].style.setProperty('--px', x+'px'); ps[i].style.setProperty('--py', y+'px'); }
+  }
+  function setFace(id, x, y){
+    var f = document.querySelector('#'+id+' .monster-face'); if(!f) return;
+    f.style.setProperty('--fx', x+'px'); f.style.setProperty('--fy', y+'px');
+  }
+  function setBody(id, x){
+    var m = document.getElementById(id); if(!m) return;
+    m.style.setProperty('--bx', x+'px');
+  }
+  // 设置怪兽状态（聚焦/错误时锁定眼睛 + 形变）
+  function setMonsterState(s){
+    _eyeState = s;
+    if(monsterLogin){
+      monsterLogin.classList.toggle('state-email',   s==='email');
+      monsterLogin.classList.toggle('state-pwfocus', s==='pwfocus');
+      monsterLogin.classList.toggle('state-error',   s==='error');
+    }
+    // 进入非 idle 状态时清除内联 transform 变量，让 CSS 状态类生效
+    if(s !== 'idle'){
+      ['monster-purple','monster-black','monster-yellow','monster-orange'].forEach(function(id){
+        var m = document.getElementById(id); if(!m) return;
+        m.style.removeProperty('--bx'); m.style.removeProperty('--by');
+        m.style.removeProperty('--br'); m.style.removeProperty('--bsx'); m.style.removeProperty('--bsy');
+        var f = m.querySelector('.monster-face'); if(f){ f.style.removeProperty('--fx'); f.style.removeProperty('--fy'); f.style.removeProperty('--fr'); }
+        var ps = m.querySelectorAll('.pupil'); for(var i=0;i<ps.length;i++){ ps[i].style.removeProperty('--px'); ps[i].style.removeProperty('--py'); }
+      });
+    }
+    if(s === 'idle'){ _eyeTarget.x = 0; _eyeTarget.y = 0; }
+  }
+  function resetMonsterState(){ setMonsterState('idle'); }
+
+  // 入口现在只有 welcome → loading → monster-login
+  if(modalClose) modalClose.addEventListener('click', closeLoginModal);
   document.addEventListener('keydown',function(e){
-    if(e.key==='Escape'&&loginModalOverlay.classList.contains('active')) closeLoginModal();
+    if(e.key==='Escape' && monsterLogin && monsterLogin.classList.contains('active')) closeLoginModal();
   });
+
+  // ── 输入框聚焦 → 小怪兽状态（眼睛锁定 + 形变）──
+  var _emailInput = loginForm ? loginForm.querySelector('input[name="email"]') : null;
+  var _pwInput    = loginForm ? loginForm.querySelector('input[name="password"]') : null;
+  if(_emailInput){
+    _emailInput.addEventListener('focus', function(){ if(_eyeState!=='error') setMonsterState('email'); });
+    _emailInput.addEventListener('blur',  function(){ if(_eyeState==='email') setMonsterState('idle'); });
+  }
+  if(_pwInput){
+    _pwInput.addEventListener('focus', function(){ if(_eyeState!=='error') setMonsterState('pwfocus'); });
+    _pwInput.addEventListener('blur',  function(){ if(_eyeState==='pwfocus') setMonsterState('idle'); });
+  }
+
+  // ── 欢迎屏入口 ──
+  if(welcomeEnter) welcomeEnter.addEventListener('click', enterFromWelcome);
+  if(welcomeScreen && viewLogin && viewLogin.classList.contains('active')){
+    welcomeScreen.classList.add('active');
+  }
 
   // ==================== AUTH FLOW ====================
 
   function isLoggedIn() { return !!token && !!currentUser; }
 
   function showMain() {
+    _fromWelcome = false;
     viewLogin.classList.remove('active');
     viewLogin.setAttribute('aria-hidden','true');
     viewMain.classList.add('active');
@@ -315,25 +470,89 @@
     }
     if(userTagEl) userTagEl.innerHTML = '<span class="status-dot online" style="width:8px;height:8px;display:inline-block;border-radius:50%;border:none"></span> 在线';
 
-    // 加载频道列表
-    apiGet('/channels').then(function(res) {
-      channels = res.channels || [];
+    // 顶部导航栏头像
+    var navAvatar = document.getElementById('nav-avatar');
+    if(navAvatar){
+      navAvatar.textContent = getInitial(currentUser.nickname || currentUser.username);
+      navAvatar.style.background = getAvatarColor(currentUser.username);
+    }
+
+    // 加载频道列表（InsForge）
+    IF.listChannels().then(function(list) {
+      channels = list || [];
       renderChannels();
       if (channels.length > 0) {
         switchChannel(channels[0]);
       }
-      // Sow socket
-      connectSocket();
       fetchUnreadCount();
     }).catch(function() {
-      // 离线模式：使用本地频道占位
-      channels = [{ id: 1, name: '全频道大厅', description: '离线模式', type: 'public', member_count: 0, joined: true }];
+      channels = [];
       renderChannels();
-      if (channels.length > 0) switchChannel(channels[0]);
+      showToast('加载频道失败，请检查网络', 'error');
     });
 
     if(window._carousel) window._carousel.stop();
     closeLoginModal();
+  }
+
+  // ── 带 GSAP 过渡动画的 showMain（登录成功后调用）──
+  function showMainWithTransition(){
+    _fromWelcome = false;
+    // 1. 关闭登录弹窗（小怪兽登录界面），眼睛跟随停止
+    if(monsterLogin){ monsterLogin.classList.remove('active'); stopMonsterEyes(); }
+
+    // 2. 切换视图状态
+    viewLogin.classList.remove('active');
+    viewLogin.setAttribute('aria-hidden','true');
+    viewMain.classList.add('active');
+    viewMain.removeAttribute('aria-hidden');
+    if(viewProfile){ viewProfile.classList.remove('active'); viewProfile.setAttribute('aria-hidden','true'); }
+    document.body.classList.add('main-active');
+
+    // 3. 渲染用户信息
+    if(userNameEl) userNameEl.textContent = currentUser.nickname || currentUser.username;
+    if(userAvatarEl){
+      userAvatarEl.textContent = getInitial(currentUser.nickname || currentUser.username);
+      userAvatarEl.style.background = getAvatarColor(currentUser.username);
+      userAvatarEl.style.cursor = 'pointer';
+      userAvatarEl.title = '点击查看个人主页';
+      userAvatarEl.onclick = function(){ showProfile(); };
+    }
+    if(userTagEl) userTagEl.innerHTML = '<span class="status-dot online" style="width:8px;height:8px;display:inline-block;border-radius:50%;border:none"></span> 在线';
+    var navAvatar = document.getElementById('nav-avatar');
+    if(navAvatar){
+      navAvatar.textContent = getInitial(currentUser.nickname || currentUser.username);
+      navAvatar.style.background = getAvatarColor(currentUser.username);
+    }
+
+    // 4. 优雅入场动画（fromTo 显式终点 opacity:1 + clearProps 兜底，绝不留在 opacity:0）
+    if(!REDUCED_MOTION && typeof gsap !== 'undefined'){
+      try {
+        gsap.killTweensOf([viewMain, '#top-nav', '#channel-main', '#message-input-area']);
+        gsap.fromTo(viewMain, { y: 24, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease: 'power3.out', clearProps: 'opacity,transform' });
+        gsap.fromTo('#top-nav', { y: -18, opacity: 0 }, { y: 0, opacity: 1, duration: 0.42, ease: 'power2.out', delay: 0.06, clearProps: 'opacity,transform' });
+        gsap.fromTo('#channel-main', { y: 16, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease: 'power3.out', delay: 0.1, clearProps: 'opacity,transform' });
+        // 输入栏默认隐藏（CSS display:none），不做入场动画
+        // 用户点FAB或💬评论时 showInputBar() 才显示
+      } catch(e){ console.warn('GSAP entrance skipped:', e); }
+    }
+
+    // 5. 加载频道数据（与动画并行）
+    // 6. 创建FAB浮动按钮 + 隐藏底部输入栏（全平台）
+    ensureFab();
+    // 输入栏默认隐藏（点FAB或评论时才 showInputBar 显示）
+    IF.listChannels().then(function(list) {
+      channels = list || [];
+      renderChannels();
+      renderRightSidebar();
+      if (channels.length > 0) { switchChannel(channels[0]); }
+      fetchUnreadCount();
+    }).catch(function() {
+      channels = []; renderChannels(); renderRightSidebar();
+      showToast('加载频道失败，请检查网络', 'error');
+    });
+
+    if(window._carousel) window._carousel.stop();
   }
 
   function showLogin(){
@@ -343,13 +562,20 @@
     viewLogin.removeAttribute('aria-hidden');
     if(viewProfile){ viewProfile.classList.remove('active'); viewProfile.setAttribute('aria-hidden','true'); }
     document.body.classList.remove('main-active');
-    loginModalOverlay.classList.remove('active');
-    loginCardModal.classList.remove('active');
-    // 清除 anime.js 留下的内联样式，避免下次打开错位
-    loginModalOverlay.style.opacity = '';
-    loginCardModal.style.opacity = '';
-    loginCardModal.style.transform = '';
-    if (ws) { ws.disconnect(); }
+    if(monsterLogin) monsterLogin.classList.remove('active');
+    stopMonsterEyes();
+    // 清除 GSAP 留下的内联样式，避免下次打开错位
+    if(loginCard){ loginCard.style.opacity = ''; loginCard.style.transform = ''; }
+    // 清理加载层残留状态
+    if(loginSubmitLoader){
+      loginSubmitLoader.classList.remove('active');
+      loginSubmitLoader.setAttribute('aria-hidden','true');
+      loginSubmitLoader.style.opacity = '';
+    }
+    if(_loaderTl){ _loaderTl.kill(); _loaderTl = null; }
+    // 恢复登录卡片可见性
+    if(typeof gsap !== 'undefined' && loginCard) gsap.set(loginCard,{opacity:1,scale:1,y:0});
+    disconnectRealtime();
     channels = [];
     channelMessages = {};
     currentChannel = null;
@@ -373,34 +599,186 @@
 
   // ==================== PROFILE PAGE ====================
 
+  var ROLE_META = {
+    admin:   { label: '系统管理员', icon: '🔧' },
+    teacher: { label: '教师',       icon: '👩‍🏫' },
+    student: { label: '在校学生',   icon: '📚' }
+  };
+
   function renderProfile() {
     if (!viewProfile) return;
     var user = currentUser;
     if (!user) return;
 
+    var roleMeta = ROLE_META[user.role] || ROLE_META.student;
+    var avatarInner = user.avatar_url
+      ? '<img src="'+escapeHtml(user.avatar_url)+'" alt="" onerror="this.style.display=\'none\'">'
+      : getInitial(user.nickname||user.username);
+    var titleBadge = user.title
+      ? '<span class="profile-title-badge">✦ '+escapeHtml(user.title)+'</span>'
+      : '<span class="profile-title-badge profile-title-empty">未设置称号</span>';
+
     viewProfile.innerHTML =
       '<div class="profile-container">'+
         '<button class="profile-back" id="profile-back">← 返回</button>'+
         '<div class="profile-card">'+
-          '<div style="width:80px;height:80px;margin:0 auto 16px;"><div class="profile-avatar" style="background:'+getAvatarColor(user.username)+'">'+getInitial(user.nickname||user.username)+'</div></div>'+
+          '<div class="profile-avatar-wrap" id="avatar-upload-trigger" title="点击更换头像">'+
+            '<div class="profile-avatar" id="prof-avatar-el" style="background:'+getAvatarColor(user.username)+'">'+avatarInner+'</div>'+
+            '<div class="avatar-camera-overlay"><span>📷</span></div>'+
+            '<input type="file" id="avatar-file-input" accept="image/*" style="display:none;">'+
+          '</div>'+
           '<h2 class="profile-name">'+escapeHtml(user.nickname||user.username)+'</h2>'+
           '<p class="profile-username">@'+escapeHtml(user.username)+'</p>'+
-          '<p class="profile-bio">'+(user.role === 'admin' ? '🔧 系统管理员' : user.role === 'moderator' ? '🛡️ 频道版主' : '📚 在校学生')+'</p>'+
-        '<div class="profile-stats">'+
-          '<div class="profile-stat"><span class="ps-num">'+(user.role==='admin'?'管理员':user.role==='moderator'?'版主':'成员')+'</span><span class="ps-label">身份</span></div>'+
-          '<div class="profile-stat"><span class="ps-num">'+channels.length+'</span><span class="ps-label">频道</span></div>'+
-          '<div class="profile-stat"><span class="ps-num">在线</span><span class="ps-label">状态</span></div>'+
-        '</div>'+
-          '<div class="profile-actions">'+
-            (user.role === 'admin' ? '<button class="profile-btn" id="profile-admin-btn">管理后台</button>' : '')+
+          '<div class="profile-title-row" id="profile-title-row">'+titleBadge+'</div>'+
+          '<p class="profile-bio">'+roleMeta.icon+' '+roleMeta.label+'</p>'+
+
+          '<div class="profile-stats">'+
+            '<div class="profile-stat"><span class="ps-num">'+roleMeta.label.slice(0,3)+'</span><span class="ps-label">身份</span></div>'+
+            '<div class="profile-stat"><span class="ps-num" id="prof-channels">-</span><span class="ps-label">可见频道</span></div>'+
+            '<div class="profile-stat"><span class="ps-num" id="prof-messages">-</span><span class="ps-label">我的消息</span></div>'+
+            '<div class="profile-stat"><span class="ps-num" id="prof-joined">-</span><span class="ps-label">加入天数</span></div>'+
+          '</div>'+
+
+          // 编辑区（默认收起）
+          '<div class="profile-edit" id="profile-edit" style="display:none;">'+
+            '<div class="pe-field"><label>昵称</label>'+
+              '<input type="text" id="pe-nickname" maxlength="20" placeholder="你的昵称" value="'+escapeHtml(user.nickname||'')+'"></div>'+
+            '<div class="pe-field"><label>称号 <span class="pe-hint">可自拟 · 最多12字</span></label>'+
+              '<input type="text" id="pe-title" maxlength="12" placeholder="如：学习委员 / 篮球队长" value="'+escapeHtml(user.title||'')+'"></div>'+
+            '<div class="pe-actions">'+
+              '<button class="profile-btn" id="pe-save">保存</button>'+
+              '<button class="profile-btn profile-btn-outline" id="pe-cancel">取消</button>'+
+            '</div>'+
+            '<div class="pe-msg" id="pe-msg"></div>'+
+          '</div>'+
+
+          '<div class="profile-actions" id="profile-actions">'+
+            '<button class="profile-btn" id="profile-edit-btn">编辑资料</button>'+
+            (user.role === 'admin' ? '<button class="profile-btn profile-btn-outline" id="profile-admin-btn">管理后台</button>' : '')+
             '<button class="profile-btn profile-btn-outline" id="profile-logout-btn">退出登录</button>'+
           '</div>'+
         '</div>'+
       '</div>';
 
+    // ---- 真实统计 ----
+    var chEl = document.getElementById('prof-channels');
+    if (chEl) chEl.textContent = (channels ? channels.length : 0);
+
+    var joinedEl = document.getElementById('prof-joined');
+    if (joinedEl) {
+      var createdAt = user.created_at || (IF && IF.resolveAuthor ? (IF.resolveAuthor(user.id)||{}).created_at : null);
+      if (createdAt) {
+        var days = Math.max(0, Math.floor((Date.now() - new Date(createdAt).getTime()) / 86400000));
+        joinedEl.textContent = days;
+      } else { joinedEl.textContent = '—'; }
+    }
+
+    // 我的消息数：向后端真实统计（count head 查询，不拉全量）
+    var msgEl = document.getElementById('prof-messages');
+    if (msgEl) {
+      if (IF && IF.insforge) {
+        IF.insforge.database.from('messages')
+          .select('*', { count: 'exact', head: true }).eq('author_id', user.id)
+          .then(function(r){ msgEl.textContent = (r && typeof r.count === 'number') ? r.count : countAllMessages(); })
+          .catch(function(){ msgEl.textContent = countAllMessages(); });
+      } else { msgEl.textContent = countAllMessages(); }
+    }
+
+    // ---- 事件绑定 ----
     setTimeout(function() {
       var backBtn = document.getElementById('profile-back');
       if (backBtn) backBtn.addEventListener('click', backToMain);
+
+      // ---- 头像上传 ----
+      var avatarTrigger = document.getElementById('avatar-upload-trigger');
+      var avatarInput   = document.getElementById('avatar-file-input');
+      if (avatarTrigger && avatarInput) {
+        avatarTrigger.addEventListener('click', function(e){
+          // 防止在编辑模式下点头像误触（编辑模式不换头像）
+          if (editBox && editBox.style.display === 'block') return;
+          e.stopPropagation();
+          avatarInput.click();
+        });
+        avatarInput.addEventListener('change', function(){
+          var file = this.files && this.files[0];
+          if (!file) return;
+          // 校验
+          if (!file.type.startsWith('image/')) { alert('请选择图片文件'); return; }
+          if (file.size > 5*1024*1024) { alert('图片不能超过 5MB'); return; }
+          var avatarEl  = document.getElementById('prof-avatar-el');
+          var overlayEl = avatarTrigger.querySelector('.avatar-camera-overlay');
+          // 本地预览
+          var reader = new FileReader();
+          reader.onload = function(ev) {
+            if (avatarEl) {
+              avatarEl.innerHTML = '<img src="'+ev.target.result+'" alt="" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">';
+              avatarEl.style.background = 'transparent';
+            }
+            if (overlayEl) overlayEl.style.display = 'none';
+          };
+          reader.readAsDataURL(file);
+          // 上传到 InsForge Storage → 更新 profile
+          (IF && IF.uploadFile ? IF.uploadFile(file) : Promise.reject('SDK未就绪'))
+            .then(function(result) {
+              var url = (result && result.url) || '';
+              if (!url) throw new Error('上传未返回URL');
+              return IF.updateMyProfile(currentUser.id, { avatar_url: url });
+            })
+            .then(function() {
+              // 用上传返回的真实 URL（已改写为反代域名），而非本地预览的 data URL
+              currentUser.avatar_url = url;
+              // 同步更新导航栏头像
+              var navA = document.getElementById('nav-avatar');
+              if (navA && currentUser.avatar_url) {
+                navA.innerHTML = '<img src="'+currentUser.avatar_url+'" alt="" style="width:100%;height:100%;border-radius:50%;object-fit:cover;" onerror="this.parentNode.textContent=\''+getInitial(currentUser.nickname||currentUser.username)+'\'">';
+              }
+              showToast('头像更新成功 ✅');
+            })
+            .catch(function(err) {
+              console.error('[avatar] 上传失败', err);
+              showToast('头像上传失败：' + ((err && err.message) || '未知错误'), 'error');
+              // 回滚显示
+              renderProfile();
+            });
+          this.value = ''; // 允许重复选同一文件
+        });
+      }
+
+      var editBtn = document.getElementById('profile-edit-btn');
+      var editBox = document.getElementById('profile-edit');
+      var actionsBox = document.getElementById('profile-actions');
+      if (editBtn) editBtn.addEventListener('click', function(){
+        if (editBox) editBox.style.display = 'block';
+        if (actionsBox) actionsBox.style.display = 'none';
+      });
+      var cancelBtn = document.getElementById('pe-cancel');
+      if (cancelBtn) cancelBtn.addEventListener('click', function(){
+        if (editBox) editBox.style.display = 'none';
+        if (actionsBox) actionsBox.style.display = 'flex';
+      });
+
+      var saveBtn = document.getElementById('pe-save');
+      if (saveBtn) saveBtn.addEventListener('click', function(){
+        var nick = (document.getElementById('pe-nickname').value || '').trim();
+        var ttl  = (document.getElementById('pe-title').value || '').trim();
+        var msgBox = document.getElementById('pe-msg');
+        if (!nick) { if (msgBox){ msgBox.textContent='昵称不能为空'; msgBox.className='pe-msg pe-msg-err'; } return; }
+        saveBtn.disabled = true; saveBtn.textContent = '保存中…';
+        if (msgBox) { msgBox.textContent=''; msgBox.className='pe-msg'; }
+        Promise.resolve(IF && IF.updateMyProfile ? IF.updateMyProfile(user.id, { nickname: nick, title: ttl }) : Promise.reject(new Error('后端未就绪')))
+          .then(function(){
+            currentUser.nickname = nick;
+            currentUser.title = ttl;
+            // 同步顶部导航头像/名字
+            var navName = document.getElementById('user-name');
+            if (navName) navName.textContent = nick;
+            renderProfile();
+          })
+          .catch(function(e){
+            saveBtn.disabled = false; saveBtn.textContent = '保存';
+            if (msgBox){ msgBox.textContent='保存失败：'+((e&&e.message)||'请重试'); msgBox.className='pe-msg pe-msg-err'; }
+          });
+      });
 
       var adminBtn = document.getElementById('profile-admin-btn');
       if (adminBtn) adminBtn.addEventListener('click', function() {
@@ -409,12 +787,11 @@
 
       var logoutBtn = document.getElementById('profile-logout-btn');
       if (logoutBtn) logoutBtn.addEventListener('click', function() {
-        localStorage.removeItem('bfyg_token');
-        token = '';
+        if (IF) IF.signOut().catch(function(){});
         currentUser = null;
         showLogin();
       });
-    }, 100);
+    }, 60);
   }
 
   // ==================== CHANNELS ====================
@@ -456,6 +833,95 @@
     });
   }
 
+  // ── 右侧边栏渲染（贴吧风格：热点话题 + 频道推荐）──
+  function renderRightSidebar() {
+    var hotEl = document.getElementById('hot-topics');
+    var recEl = document.getElementById('rec-channels');
+    if (!hotEl || !recEl) return;
+
+    // ① 热点话题：取最近消息的频道+内容作为"热点"
+    hotEl.innerHTML = '';
+    var allMsgs = [];
+    Object.keys(channelMessages).forEach(function(chId) {
+      var msgs = channelMessages[chId] || [];
+      msgs.forEach(function(m) { allMsgs.push(m); });
+    });
+    // 按时间倒序，取前7条
+    allMsgs.sort(function(a,b){ return new Date(b.created_at) - new Date(a.created_at); });
+    var hotItems = allMsgs.slice(0, 7);
+
+    if (hotItems.length === 0) {
+      hotEl.innerHTML = '<li style="padding:10px;color:var(--text-muted);font-size:0.82rem;">暂无热点话题</li>';
+    } else {
+      hotItems.forEach(function(msg, i) {
+        var li = document.createElement('li');
+        var rank = i + 1;
+        var rankCls = rank <= 3 ? 'top3' : '';
+        // 截取内容作为标题
+        var title = msg.content_type === 'text' ? msg.content.slice(0, 30) : '[图片]';
+        if (title.length >= 30) title += '...';
+        // 热度标签
+        var isHot = rank <= 2;
+        var tag = isHot ? '热' : (rank <= 4 ? '新' : '');
+        var tagCls = isHot ? 'hot' : 'new';
+
+        // 找到频道名
+        var chName = '?';
+        var ch = channels.find(function(c){ return c.id == msg.channel_id; });
+        if (ch) chName = ch.name;
+
+        li.innerHTML =
+          '<span class="hot-rank '+rankCls+'">'+rank+'</span>'+
+          '<span class="hot-text">'+escapeHtml(title)+'</span>'+
+          (tag ? '<span class="hot-tag '+tagCls+'">'+tag+'</span>' : '');
+        li.addEventListener('click', function() {
+          if (ch) switchChannel(ch);
+          // 高亮对应消息
+          var msgEl = document.querySelector('[data-msg-id="'+msg.id+'"]');
+          if (msgEl) msgEl.scrollIntoView({ behavior:'smooth', block:'center' });
+        });
+        hotEl.appendChild(li);
+      });
+    }
+
+    // ② 频道推荐：显示非公告频道
+    recEl.innerHTML = '';
+    var publicChannels = channels.filter(function(c) { return c.type !== 'announcement'; });
+    if (publicChannels.length === 0) {
+      recEl.innerHTML = '<li style="padding:10px;color:var(--text-muted);font-size:0.82rem;">暂无推荐频道</li>';
+    } else {
+      publicChannels.slice(0, 5).forEach(function(ch) {
+        var li = document.createElement('li');
+        li.className = 'channel-rec-item';
+        // 统计消息数
+        var msgs = channelMessages[ch.id] || [];
+        var msgCount = msgs.length;
+        // 随机颜色
+        var colors = ['#7c5cfc','#f43f5e','#10b981','#f59e0b','#06b6d4','#8b5cf6'];
+        var color = colors[Math.abs(hashCode(ch.name)) % colors.length];
+
+        li.innerHTML =
+          '<div class="channel-rec-avatar" style="background:linear-gradient(135deg,'+color+','+color+'88)">'+
+            escapeHtml((ch.name||'?').charAt(0))+
+          '</div>'+
+          '<div class="channel-rec-info">'+
+            '<div class="channel-rec-name">#'+escapeHtml(ch.name)+'</div>'+
+            '<div class="channel-rec-desc">'+(ch.description || '校园交流')+'</div>'+
+            '<div class="channel-rec-stats">💬 '+msgCount+' 条消息</div>'+
+          '</div>';
+        li.addEventListener('click', function() { switchChannel(ch); });
+        recEl.appendChild(li);
+      });
+    }
+  }
+
+  // 简单哈希（用于稳定随机色）
+  function hashCode(str) {
+    var hash = 0;
+    for (var i = 0; i < str.length; i++) { hash = ((hash << 5) - hash) + str.charCodeAt(i); }
+    return hash;
+  }
+
   function switchChannel(ch){
     // Mark previous as read
     if (currentChannel && currentChannel.id !== ch.id) {
@@ -475,27 +941,40 @@
 
     document.querySelectorAll('.ch-item').forEach(function(el){ el.classList.toggle('active', parseInt(el.dataset.channel) === ch.id); });
 
-    // Load messages from server
+    // Load messages from InsForge
     showMessageSkeleton();
-    apiGet('/messages/' + ch.id).then(function(res) {
-      channelMessages[ch.id] = (res.messages || []).concat(res.pinned || []);
-      renderMessages();
-      if (messagesArea) { messagesArea.scrollTop = messagesArea.scrollHeight; }
-      hideScrollBtn();
+    IF.getMessages(ch.id).then(function(list) {
+      channelMessages[ch.id] = list || [];
+      var ids = (list || []).map(function(m){ return m.id; });
+      var afterAgg = function() {
+        renderMessages();
+        if (messagesArea) { messagesArea.scrollTop = messagesArea.scrollHeight; }
+        hideScrollBtn();
+      };
+      // 聚合本频道所有消息的点赞（一次查询，前端计数；无触发器/无计数列/无 RLS 冲突）
+      if (ids.length && currentUser && IF.getLikeAggregates) {
+        IF.getLikeAggregates(ids, currentUser.id).then(function(agg){
+          likeAgg = agg || {};
+          afterAgg();
+        }).catch(function(){ likeAgg = {}; afterAgg(); });
+      } else {
+        likeAgg = {};
+        afterAgg();
+      }
     }).catch(function() {
       renderMessages();
     });
 
     if(pinBar) pinBar.classList.remove('visible');
     if(annBanner) annBanner.classList.remove('visible');
-    closeSidebar();
+    closeDrawer();
 
-    // Socket join
-    if (ws && ws.connected) {
-      if (currentChannel && currentChannel.id !== ch.id) {
-        ws.emit('leave-channel', currentChannel.id);
+    // Realtime 订阅当前频道
+    if (IF) {
+      if (currentChannel && currentChannel.id && currentChannel.id !== ch.id) {
+        IF.unsubscribeChannel(currentChannel.id);
       }
-      ws.emit('join-channel', ch.id);
+      subscribeCurrentChannel();
     }
   }
 
@@ -528,38 +1007,128 @@
 
     msgs.forEach(function(msg) {
       var group=document.createElement('div');
-      group.className='msg-group';
+      group.className='msg-group' + (msg.isPending ? ' msg-pending' : '') + (msg.isFailed ? ' msg-failed' : '') + (msg.is_mod ? ' msg-group-mod' : '');
       if(msg.is_pinned){ group.style.background='rgba(240,178,50,0.04)'; group.style.borderRadius='var(--r)'; }
 
       if(msg.is_pinned){
         var pinBadge=document.createElement('div'); pinBadge.className='msg-pin-indicator'; pinBadge.textContent='📌 置顶'; group.appendChild(pinBadge);
       }
 
-      // Header
-      var header=document.createElement('div'); header.className='msg-header';
-      header.innerHTML=
-        '<div class="msg-avatar" style="background:'+getAvatarColor(msg.username||'未知')+'">'+getInitial(msg.nickname||msg.username||'?')+'</div>'+
-        '<span class="msg-author">'+escapeHtml(msg.nickname||msg.username||'未知')+'</span>'+
-        '<span class="msg-time">'+formatTime(msg.created_at)+'</span>';
-      group.appendChild(header);
+      // Quote (reply reference)
+      var quoteHtml = '';
+      if (msg.parent_id) {
+        var parentMsg = findMessageById(currentChannel.id, msg.parent_id);
+        if (parentMsg) {
+          var qAuthor = (IF ? IF.resolveAuthor(parentMsg.author_id) : { nickname: '未知' });
+          var qName = qAuthor.nickname || qAuthor.username || '未知用户';
+          var qText = parentMsg.content_type === 'text' ? parentMsg.content : (parentMsg.content_type === 'image' ? '[图片]' : '[文件]');
+          if (qText && qText.length > 50) qText = qText.slice(0, 50) + '…';
+          quoteHtml = '<div class="msg-quote"><span class="quote-author">@'+escapeHtml(qName)+'</span><span class="quote-text">'+escapeHtml(qText)+'</span></div>';
+        }
+      }
 
-      // Content
-      var content=document.createElement('div'); content.className='msg-content';
+      // 转发预览块（HuLa 范式：显示"X 转发了消息" + 原消息预览卡）
+      var forwardHtml = '';
+      if (msg.forward_from) {
+        var fAuthor = msg.forward_author || '某人';
+        var fPreview = msg.forward_preview || '';
+        if (fPreview && fPreview.length > 120) fPreview = fPreview.slice(0, 120) + '…';
+        forwardHtml = '<div class="msg-forward"><div class="msg-forward-head">🔁 '+escapeHtml(fAuthor)+' 转发了消息</div><div class="msg-forward-card">'+escapeHtml(fPreview)+'</div></div>';
+      }
+
+      var author = (IF ? IF.resolveAuthor(msg.author_id) : { username: '未知', nickname: '未知用户' });
+
+      // 头像（优先头像图，否则首字母）
+      var avatarInner;
+      if (author.avatar_url) {
+        avatarInner = '<img src="'+escapeHtml(author.avatar_url)+'" alt="'+escapeHtml(author.nickname||'')+'" onerror="this.style.display=\'none\'">';
+      } else {
+        avatarInner = getInitial(author.nickname||author.username||'?');
+      }
+      var avatarBg = getAvatarColor(author.username||'未知');
+
+      // 称号（来自用户 profile 的 title 字段；无则不渲染）
+      var titleHtml = '';
+      if (author.title) {
+        titleHtml = '<span class="msg-feed-title" title="'+escapeHtml(author.title)+'">✦ '+escapeHtml(author.title)+'</span>';
+      }
+
+      // 角色标签
+      var role = author.role || 'member';
+      var roleLabel = role === 'admin' ? '管理员' : role === 'moderator' ? '版主' : '成员';
+      var roleCls = role === 'admin' ? 'admin' : role === 'moderator' ? 'moderator' : 'member';
+
+      // 内容区块（文字 / 图片横排 / 文件）
+      var contentBlock;
       if (msg.content_type === 'image') {
+        var imgs = [];
         try {
           var imgData = JSON.parse(msg.content);
-          content.innerHTML = '<div class="msg-img-wrap" onclick="window.openImg(\'' + escapeHtml(imgData.url) + '\')"><img src="' + escapeHtml(imgData.url) + '" alt="图片" loading="lazy" onerror="this.parentElement.innerHTML=\'<div class=msg-file-broken>image broken</div>\'"></div>';
-        } catch(e) { content.textContent = '[image]'; }
+          imgs = Array.isArray(imgData) ? imgData : [imgData];
+        } catch(e) {}
+        if (imgs.length === 0) {
+          contentBlock = '<div class="msg-content">[image]</div>';
+        } else if (imgs.length > 1) {
+          var ghtml = imgs.map(function(im){
+            var url = im.url || im;
+            return '<div class="msg-img-wrap" onclick="window.openImg(\''+escapeHtml(url)+'\')"><img src="'+escapeHtml(url)+'" alt="图片" loading="lazy" onerror="this.parentElement.innerHTML=\'<div class=msg-file-broken>image broken</div>\'"></div>';
+          }).join('');
+          contentBlock = '<div class="msg-img-gallery">'+ghtml+'</div>';
+        } else {
+          var oneUrl = imgs[0].url || imgs[0];
+          contentBlock = '<div class="msg-content"><div class="msg-img-wrap" onclick="window.openImg(\''+escapeHtml(oneUrl)+'\')"><img src="'+escapeHtml(oneUrl)+'" alt="图片" loading="lazy" onerror="this.parentElement.innerHTML=\'<div class=msg-file-broken>image broken</div>\'"></div></div>';
+        }
       } else if (msg.content_type === 'file') {
         try {
           var fileData = JSON.parse(msg.content);
-          content.innerHTML = '<div class="msg-file-card"><span class="msg-file-icon">file</span><div class="msg-file-info"><a href="' + escapeHtml(fileData.url) + '" target="_blank" class="msg-file-name">' + escapeHtml(fileData.name) + '</a><span class="msg-file-size">' + formatFileSize(fileData.size) + '</span></div></div>';
-        } catch(e) { content.textContent = '[file]'; }
+          contentBlock = '<div class="msg-content"><div class="msg-file-card"><span class="msg-file-icon">file</span><div class="msg-file-info"><a href="'+escapeHtml(fileData.url)+'" target="_blank" class="msg-file-name">' + escapeHtml(fileData.name) + '</a><span class="msg-file-size">' + formatFileSize(fileData.size) + '</span></div></div></div>';
+        } catch(e) { contentBlock = '<div class="msg-content">[file]</div>'; }
       } else {
-        content.innerHTML = formatMsgText(msg.content);
+        contentBlock = '<div class="msg-content">'+formatMsgText(msg.content)+'</div>';
       }
-      group.appendChild(content);
 
+      // 状态（发送中 / 失败）
+      var statusHtml = '';
+      if (msg.isPending) statusHtml = '<span class="msg-status">(发送中...)</span>';
+      else if (msg.isFailed) statusHtml = '<span class="msg-status">(发送失败)</span>';
+
+      // 互动栏（贴吧风格：👁浏览 ❤点赞 💬评论 🔁转发）
+      var viewCount = simulateViews(msg.created_at);
+      var la = likeAgg[msg.id] || { total: 0, mine: false };
+      var replyCount = (channelMessages[currentChannel.id] || []).filter(function(m){ return m.parent_id === msg.id; }).length;
+      var interactionsHtml =
+        '<div class="msg-interactions">'+
+          '<div class="msg-interactions-left">'+
+            '<span class="msg-view-count">👁 '+viewCount+'</span>'+
+          '</div>'+
+          '<div class="msg-interactions-right">'+
+            '<button type="button" class="msg-interact-btn'+(la.mine?' liked':'')+'" data-act="like" data-msg-id="'+msg.id+'">♥ <span class="msg-interact-count">'+ la.total +'</span></button>'+
+            '<button type="button" class="msg-interact-btn" data-act="comment" data-msg-id="'+msg.id+'">💬 <span class="msg-interact-count">'+ replyCount +'</span></button>'+
+            '<button type="button" class="msg-interact-btn" data-act="share" data-msg-id="'+msg.id+'" title="转发">🔁</button>'+
+          '</div>'+
+        '</div>'+
+        '<div class="msg-comment-section" id="comment-'+msg.id+'"></div>';
+
+      // 贴吧风格模板：头像+昵称横排 → 内容 → 底部互动
+      group.innerHTML =
+        '<div class="msg-feed-left">'+
+          '<div class="msg-feed-avatar" style="background:'+avatarBg+'">'+avatarInner+'</div>'+
+          '<div class="msg-feed-meta">'+
+            '<span class="msg-feed-name">'+escapeHtml(author.nickname||author.username||'未知')+'</span>'+
+            '<span class="msg-feed-role"><span class="role-badge '+roleCls+'">'+roleLabel+'</span></span>'+
+            titleHtml+
+            (statusHtml ? '<span class="msg-status">'+statusHtml+'</span>' : '')+
+          '</div>'+
+        '</div>'+
+        '<div class="msg-feed-body">'+
+          quoteHtml+
+          forwardHtml+
+          contentBlock+
+          interactionsHtml+
+        '</div>';
+
+      // 绑定互动按钮事件
+      bindInteractionButtons(group, msg);
       messagesArea.appendChild(group);
     });
 
@@ -568,20 +1137,220 @@
       messagesArea.scrollTop=messagesArea.scrollHeight;
     }
 
-    // anime.js：消息交错进场（stagger）
-    if (typeof anime === 'function') {
+    // GSAP：消息交错进场（stagger）—— 用 fromTo 显式终点 opacity:1 + clearProps 兜底，绝不留在 opacity:0
+    if (typeof gsap !== 'undefined' && !REDUCED_MOTION) {
       var groups = messagesArea.querySelectorAll('.msg-group');
       if (groups.length) {
-        anime.remove(groups);
-        anime({
-          targets: groups,
-          translateY: [14, 0],
-          opacity: [0, 1],
-          delay: anime.stagger(45, { start: 60 }),
-          duration: 320,
-          easing: 'easeOutQuad'
-        });
+        gsap.killTweensOf(groups);
+        gsap.fromTo(groups,
+          { y: 14, opacity: 0 },
+          { y: 0, opacity: 1, duration: 0.42, ease: 'power3.out',
+            stagger: { each: 0.04, start: 0.05 },
+            clearProps: 'opacity,transform' });  // 动画结束清 inline，回 CSS 默认(可见)
       }
+      // 欢迎卡片轻微弹入（更精致）
+      var wc = messagesArea.querySelector('.welcome-card');
+      if (wc) {
+        gsap.killTweensOf(wc);
+        gsap.fromTo(wc, { opacity: 0, y: -10, scale: 0.96 },
+          { opacity: 1, y: 0, scale: 1, duration: 0.5, ease: 'back.out(1.6)', clearProps: 'opacity,transform' });
+      }
+    }
+    // 更新右侧边栏（消息变化后刷新热点）
+    renderRightSidebar();
+  }
+
+  // ── 浏览量模拟（纯前端，基于时间衰减）──
+  function simulateViews(createdAt) {
+    if (!createdAt) return '1';
+    var ageMs = Date.now() - new Date(createdAt).getTime();
+    var ageHours = Math.max(0.1, ageMs / 3600000);
+    // 越新浏览越高：base × e^(-0.03×hours) + 随机扰动
+    var base = Math.floor(300 * Math.exp(-0.03 * ageHours) + Math.random() * 50 + 10);
+    if (base >= 10000) return (base / 10000).toFixed(1) + '万+';
+    if (base >= 1000) return (base / 1000).toFixed(1) + 'k+';
+    return String(base);
+  }
+
+  // ── 移动端评论模式（非回复模式）──
+  var _commentTargetId = null; // 当前正在评论哪条消息的 ID
+  function getCommentTarget() { return _commentTargetId; }
+  function setCommentTarget(msgId) { _commentTargetId = msgId; }
+
+  // ── 绑定互动按钮事件（点赞/评论/分享）──
+  function bindInteractionButtons(group, msg) {
+    group.querySelectorAll('.msg-interact-btn').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var act = btn.getAttribute('data-act');
+        if (act === 'like') {
+          // 真实点赞：写 message_likes 表（Flarum 范式），乐观更新 + 后台持久化
+          if (!IF || !IF.toggleLike || !currentUser) return;
+          var lBtn = btn;
+          var lIsLiked = !lBtn.classList.contains('liked');
+          if (lIsLiked) lBtn.classList.add('liked'); else lBtn.classList.remove('liked');
+          var lCount = lBtn.querySelector('.msg-interact-count');
+          var lCur = parseInt(lCount.textContent) || 0;
+          var lNext = lIsLiked ? lCur + 1 : Math.max(0, lCur - 1);
+          lCount.textContent = lNext;
+          if (!likeAgg[msg.id]) likeAgg[msg.id] = { total: lCur, mine: false };
+          likeAgg[msg.id].total = lNext;
+          likeAgg[msg.id].mine = lIsLiked;
+          // GSAP 微动效
+          if (!REDUCED_MOTION && typeof gsap !== 'undefined') {
+            try { gsap.fromTo(lBtn, {scale:1.25}, {scale:1, duration:0.3, ease:'elastic.out(1,0.6)'}); } catch(e){}
+          }
+          IF.toggleLike(msg.id, currentUser.id).then(function(res){
+            if (res && typeof res.total === 'number') {
+              lCount.textContent = res.total;
+              likeAgg[msg.id].total = res.total;
+            }
+          }).catch(function(){
+            // 失败回滚到之前状态
+            if (lIsLiked) lBtn.classList.remove('liked'); else lBtn.classList.add('liked');
+            lCount.textContent = lCur;
+            likeAgg[msg.id].total = lCur;
+            likeAgg[msg.id].mine = !lIsLiked;
+            showToast('点赞失败，请重试', 'error');
+          });
+        } else if (act === 'comment') {
+          // 评论 = 真实回复：展开子回复列表 + 进入回复模式（发送带 parent_id）
+          var cSec = document.getElementById('comment-'+msg.id);
+          if (cSec) {
+            document.querySelectorAll('.msg-comment-section.open').forEach(function(el){
+              if (el !== cSec) { el.classList.remove('open'); el.innerHTML=''; }
+            });
+            var cOpen = cSec.classList.toggle('open');
+            if (cOpen) {
+              renderCommentList(cSec, msg);
+              cSec.scrollIntoView({ behavior:'smooth', block:'nearest' });
+              setReply(msg); // 进入回复模式：输入框显示"回复 @X"，发送带 parent_id = msg.id
+            } else if (replyingTo && replyingTo.id === msg.id) {
+              clearReply();
+            }
+          }
+          showInputBar();
+          setTimeout(function(){
+            var input = document.getElementById('msg-input');
+            if (input) input.focus();
+          }, 300);
+        } else if (act === 'share') {
+          // 转发：弹窗选目标频道 → 发一条带 forward_from 的新消息
+          openForwardModal(msg);
+        }
+      });
+    });
+  }
+
+  // ── 评论列表渲染（真实回复 = parent_id 子消息）──
+  function renderCommentList(sec, parentMsg) {
+    var list = (channelMessages[currentChannel.id] || []).filter(function(m){ return m.parent_id === parentMsg.id; });
+    if (!list.length) {
+      sec.innerHTML = '<div class="msg-comment-empty">暂无评论，来抢沙发~</div>';
+      return;
+    }
+    sec.innerHTML = list.map(function(m){
+      var a = (IF ? IF.resolveAuthor(m.author_id) : { nickname:'未知' });
+      var name = a.nickname || a.username || '未知';
+      var text = m.content_type === 'text' ? m.content : (m.content_type === 'image' ? '[图片]' : '[文件]');
+      var color = getAvatarColor(a.username || '?');
+      var init = getInitial(name);
+      return '<div class="msg-comment-item">'+
+        '<div class="msg-comment-avatar" style="background:'+color+'">'+init+'</div>'+
+        '<div class="msg-comment-body"><div class="comment-meta"><span class="comment-author">'+escapeHtml(name)+'</span></div>'+
+        '<div class="msg-comment-text">'+escapeHtml(text)+'</div></div></div>';
+    }).join('');
+  }
+
+  // ── 转发弹窗：选目标频道 → 发带 forward_from 的新消息（HuLa 范式）──
+  var forwardModal = null;
+  function openForwardModal(msg) {
+    if (!currentUser || !IF || !IF.forwardMessage) return;
+    closeForwardModal();
+    var fAuthor = (IF ? IF.resolveAuthor(msg.author_id) : { nickname:'未知' });
+    var fName = fAuthor.nickname || fAuthor.username || '未知';
+    var fPreview = msg.content_type === 'text' ? msg.content : (msg.content_type === 'image' ? '[图片]' : '[文件]');
+    if (fPreview && fPreview.length > 100) fPreview = fPreview.slice(0, 100) + '…';
+    forwardModal = document.createElement('div');
+    forwardModal.className = 'modal-mask';
+    forwardModal.id = 'forward-modal';
+    forwardModal.innerHTML =
+      '<div class="modal-box forward-box">'+
+        '<div class="modal-title">转发消息</div>'+
+        '<div class="forward-preview">'+escapeHtml(fPreview)+'</div>'+
+        '<div class="forward-hint">选择转发到：</div>'+
+        '<div class="forward-channels" id="forward-channels"></div>'+
+        '<div class="modal-actions"><button class="btn-cancel" id="forward-cancel">取消</button></div>'+
+      '</div>';
+    document.body.appendChild(forwardModal);
+    var chWrap = forwardModal.querySelector('#forward-channels');
+    IF.listChannels().then(function(chs){
+      (chs || []).forEach(function(ch){
+        if (currentChannel && ch.id === currentChannel.id) return; // 不转发到当前频道
+        var b = document.createElement('button');
+        b.className = 'forward-ch-item';
+        b.textContent = '# ' + ch.name;
+        b.addEventListener('click', function(){
+          IF.forwardMessage(ch.id, currentUser.id, {
+            forwardFrom: msg.id,
+            forwardAuthor: fName,
+            forwardPreview: fPreview,
+            content: fPreview
+          }).then(function(){
+            closeForwardModal();
+            showToast('已转发到 #' + ch.name);
+          }).catch(function(){ showToast('转发失败，请重试', 'error'); });
+        });
+        chWrap.appendChild(b);
+      });
+      if (!chs || !chs.length) chWrap.innerHTML = '<div class="forward-hint">暂无其他频道</div>';
+    }).catch(function(){ chWrap.innerHTML = '<div class="forward-hint">加载频道失败</div>'; });
+    forwardModal.querySelector('#forward-cancel').addEventListener('click', closeForwardModal);
+    forwardModal.addEventListener('click', function(e){ if (e.target === forwardModal) closeForwardModal(); });
+  }
+  function closeForwardModal() {
+    if (forwardModal) { forwardModal.remove(); forwardModal = null; }
+  }
+
+  // ── 输入栏显隐控制（全平台） ──
+  var fab = null;
+  function ensureFab() {
+    if (fab) return;
+    // 创建浮动发消息按钮（桌面右下角 / 移动端左上角由CSS控制位置）
+    fab = document.createElement('button');
+    fab.className = 'msg-fab';
+    fab.id = 'msg-fab';
+    fab.innerHTML = '+';
+    fab.title = '发消息';
+    fab.addEventListener('click', function(e) {
+      e.stopPropagation();
+      // 退出评论模式（FAB = 发新消息，不是评论）
+      setCommentTarget(null);
+      showInputBar();
+      var input = document.getElementById('msg-input');
+      if (input) {
+        // 恢复"发新消息"提示（若之前点过💬会残留评论文案）
+        var orig = input.getAttribute('data-original-placeholder');
+        input.placeholder = orig || ('发送消息到 #' + (currentChannel ? currentChannel.name : ''));
+        input.focus();
+      }
+    });
+    document.body.appendChild(fab);
+  }
+  function showInputBar() {
+    var ia = document.getElementById('message-input-area');
+    if (ia) {
+      ia.classList.add('input-visible');
+      // 隐藏FAB（避免遮挡）
+      if (fab) fab.style.display = 'none';
+    }
+  }
+  function hideInputBar() {
+    var ia = document.getElementById('message-input-area');
+    if (ia) {
+      ia.classList.remove('input-visible');
+      // 恢复FAB
+      if (fab) fab.style.display = '';
     }
   }
 
@@ -594,7 +1363,7 @@
 
   function formatTime(ts) {
     if (!ts) return '';
-    var d = new Date(ts + 'Z'); // SQLite 存的是 UTC
+    var d = new Date(ts); // InsForge TIMESTAMPTZ 为 ISO 8601（带时区），直接解析
     var now = new Date();
     if (d.toDateString() === now.toDateString()) {
       return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
@@ -602,20 +1371,220 @@
     return (d.getMonth()+1)+'/'+d.getDate()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
   }
 
+  // ── Reply / quote state ─────────────────────
+  var replyingTo = null;
+  var replyBar = null;
+
+  function buildReplyBar() {
+    if (replyBar) return;
+    var inputArea = document.getElementById('message-input-area');
+    if (!inputArea) return;
+    replyBar = document.createElement('div');
+    replyBar.id = 'reply-bar';
+    replyBar.className = 'reply-bar';
+    replyBar.innerHTML =
+      '<div class="reply-info">' +
+        '<span class="reply-label" id="reply-label"></span>' +
+        '<span class="reply-preview" id="reply-preview"></span>' +
+      '</div>' +
+      '<button type="button" class="reply-cancel" id="reply-cancel" aria-label="取消回复">&times;</button>';
+    // 插入到输入框 wrapper 之前
+    var wrapper = inputArea.querySelector('.message-input-wrapper');
+    inputArea.insertBefore(replyBar, wrapper);
+    replyBar.querySelector('#reply-cancel').addEventListener('click', function(e){
+      e.preventDefault();
+      clearReply();
+    });
+  }
+
+  function setReply(msg) {
+    if (!msg) return;
+    buildReplyBar();
+    if (!replyBar) return;
+    replyingTo = msg;
+    var author = (IF ? IF.resolveAuthor(msg.author_id) : { nickname: '未知' });
+    var name = author.nickname || author.username || '未知用户';
+    var preview = msg.content_type === 'text' ? msg.content : (msg.content_type === 'image' ? '[图片]' : '[文件]');
+    if (preview && preview.length > 60) preview = preview.slice(0, 60) + '…';
+    document.getElementById('reply-label').textContent = '回复 @' + name;
+    document.getElementById('reply-preview').textContent = preview;
+    replyBar.classList.add('open');
+    if (msgInput) msgInput.focus();
+  }
+
+  function clearReply() {
+    replyingTo = null;
+    if (replyBar) replyBar.classList.remove('open');
+    // 退出评论模式
+    setCommentTarget(null);
+    // 恢复placeholder
+    if (msgInput) {
+      var orig = msgInput.getAttribute('data-original-placeholder');
+      msgInput.placeholder = orig || '';
+    }
+    // 退出评论模式时隐藏输入栏（全平台）
+    hideInputBar();
+  }
+
+  function findMessageById(channelId, id) {
+    var arr = channelMessages[channelId] || [];
+    for (var i = 0; i < arr.length; i++) {
+      if (arr[i].id === id) return arr[i];
+    }
+    return null;
+  }
+
   function sendMessage(){
-    if(!msgInput||!currentUser||!currentChannel) return;
+    if(!msgInput||!currentUser||!currentChannel||!IF) return;
     var text=msgInput.value.trim(); if(!text) return;
 
-    if (ws && ws.connected) {
-      ws.emit('send-message', { channelId: currentChannel.id, content: text });
-    } else {
-      // Fallback: HTTP POST
-      apiPost('/messages/' + currentChannel.id, { content: text }).then(function() {
-        // 消息会通过 socket 广播回来，这里只需清输入
-      });
+    // ═══ 移动端评论模式：追加内联评论，不发新消息到频道 ═══
+    var cmtId = getCommentTarget();
+    if (cmtId) {
+      var cmtSec = document.getElementById('comment-'+cmtId);
+      if (cmtSec) {
+        // 移除"暂无评论"占位文字
+        var placeholder = cmtSec.querySelector('div');
+        if (placeholder && placeholder.textContent.includes('暂无评论')) {
+          placeholder.remove();
+        }
+        // 创建评论条目
+        var cmtItem = document.createElement('div');
+        cmtItem.className = 'msg-comment-item';
+        var userInitial = getInitial(currentUser.nickname || currentUser.username || '?');
+        var userColor = getAvatarColor(currentUser.username || '');
+        var now = new Date();
+        var timeStr = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+        cmtItem.innerHTML =
+          '<div class="msg-comment-avatar" style="background:'+userColor+'">'+userInitial+'</div>'+
+          '<div class="msg-comment-body">'+
+            '<div class="comment-meta">'+
+              '<span class="comment-author">'+escapeHtml(currentUser.nickname||currentUser.username)+'</span>'+
+              '<span class="comment-time">'+timeStr+'</span>'+
+            '</div>'+
+            '<div class="msg-comment-text">'+escapeHtml(text)+'</div>'+
+          '</div>';
+        cmtSec.appendChild(cmtItem);
+        // 更新评论计数按钮
+        var group = cmtSec.closest('.msg-group');
+        if (group) {
+          var cmtBtn = group.querySelector('[data-act="comment"] .msg-interact-count');
+          if (cmtBtn) {
+            var cur = parseInt(cmtBtn.textContent) || 0;
+            cmtBtn.textContent = cur + 1;
+          }
+        }
+        // 动效
+        if (!REDUCED_MOTION && typeof gsap !== 'undefined') {
+          try { gsap.fromTo(cmtItem, {y:10,opacity:0}, {y:0,opacity:1,duration:0.25,ease:'power2.out'}); } catch(e){}
+        }
+      }
+      msgInput.value='';
+      // 保持评论placeholder（可连续评论）
+      if (msgInput) {
+        msgInput.placeholder = '💬 写下你的评论...';
+      }
+      // 保持输入栏打开（方便连续评论）
+      msgInput.focus();
+      // 滚动到评论区
+      if (cmtSec) cmtSec.scrollIntoView({ behavior:'smooth', block:'nearest' });
+      return; // ← 不执行后续的频道消息发送
     }
+
+    // ═══ 正常频道消息（非评论模式）═══
+
+    var parentId = (replyingTo && replyingTo.id) ? replyingTo.id : null;
+
+    // 乐观 UI：立即清空输入、显示本地"发送中"消息，再后台请求
+    var tempId = 'pending-' + Date.now() + '-' + Math.random().toString(36).slice(2,8);
+    var pendingMsg = {
+      id: tempId,
+      channel_id: currentChannel.id,
+      author_id: currentUser.id,
+      content: text,
+      content_type: 'text',
+      parent_id: parentId,
+      created_at: new Date().toISOString(),
+      isPending: true
+    };
+    if (!channelMessages[currentChannel.id]) channelMessages[currentChannel.id] = [];
+    channelMessages[currentChannel.id].push(pendingMsg);
     msgInput.value='';
     msgInput.focus();
+    clearReply();
+    renderMessages();
+    if (messagesArea) messagesArea.scrollTop = messagesArea.scrollHeight;
+
+    // 后台发送（跨国链路慢，不要等 UI）
+    IF.sendMessage(currentChannel.id, text, currentUser.id, parentId).then(function(msg){
+      replacePendingMessage(tempId, currentChannel.id, msg);
+      // 回复发送成功后，刷新打开的评论区（显示新回复）
+      try {
+        if (parentId) {
+          var secx = document.getElementById('comment-' + parentId);
+          if (secx && secx.classList.contains('open')) {
+            var pmsgx = findMessageById(currentChannel.id, parentId);
+            if (pmsgx) renderCommentList(secx, pmsgx);
+          }
+        }
+      } catch (e) {}
+      // AI 审核：异步调用，命中违纪后服务端已落库 bot 警告评论 + 通知，主动重拉当前频道与红点
+      try {
+        if (window.IF) {
+          IF.moderateMessage(msg).then(function (res) {
+            if (res && res.violation && currentChannel && currentChannel.id) {
+              IF.getMessages(currentChannel.id).then(function (list) {
+                channelMessages[currentChannel.id] = list || [];
+                renderMessages();
+                if (messagesArea) messagesArea.scrollTop = messagesArea.scrollHeight;
+              }).catch(function () {});
+              updateNotifBadge();
+            }
+          }).catch(function () {});
+        }
+      } catch (e) {}
+    }).catch(function(err){
+      markPendingFailed(tempId, currentChannel.id);
+      var raw = (err && err.message) || '';
+      var isMuted = /muted|禁言|row-level security|violates|425/i.test(raw + '');
+      if (isMuted) {
+        showToast('你已被禁言，暂时不能发言～有疑问可联系管理员', 'error', 5000);
+        return;
+      }
+      var isNetwork = /network|failed to fetch|fetch|timeout|abort|offline|connect/i.test(raw + '');
+      showToast(isNetwork
+        ? '发送失败：网络波动，请稍候点发送再试'
+        : (raw || '发送失败'), 'error', 4000);
+      // eslint-disable-next-line no-console
+      console.error('sendMessage failed:', err);
+    });
+  }
+
+  function replacePendingMessage(tempId, channelId, realMsg) {
+    if (!realMsg || !realMsg.id || !channelId) return;
+    var arr = channelMessages[channelId] || [];
+    for (var i = 0; i < arr.length; i++) {
+      if (arr[i].id === tempId) {
+        arr[i] = realMsg;
+        renderMessages();
+        return;
+      }
+    }
+    // 未找到临时消息时仍正常渲染（实时事件已替换）
+    handleIncomingMessage(realMsg);
+  }
+
+  function markPendingFailed(tempId, channelId) {
+    if (!channelId) return;
+    var arr = channelMessages[channelId] || [];
+    for (var i = 0; i < arr.length; i++) {
+      if (arr[i].id === tempId) {
+        arr[i].isPending = false;
+        arr[i].isFailed = true;
+        renderMessages();
+        return;
+      }
+    }
   }
 
   if(btnSend) btnSend.addEventListener('click',sendMessage);
@@ -647,28 +1616,15 @@
     var isImage = file.type.startsWith('image/');
     showToast('上传中...', 'info');
 
-    fetch('/api/upload', {
-      method: 'POST',
-      headers: { Authorization: 'Bearer ' + token },
-      body: formData
-    })
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
+    IF.uploadFile(file).then(function(data){
       removeToast();
-      if (data.success) {
-        // 通过 WebSocket 发送图片/文件消息
-        if (ws && ws.connected) {
-          ws.emit('send-message', {
-            channelId: currentChannel.id,
-            content: JSON.stringify({ url: data.url, name: data.filename, size: data.size, isImage: data.isImage }),
-            contentType: data.isImage ? 'image' : 'file'
-          });
-        }
-      } else {
-        showToast(data.error || '上传失败', 'error');
-      }
-    })
-    .catch(function() {
+      if (!data || !data.url) { showToast('上传失败', 'error'); return; }
+      return IF.sendFileMessage(currentChannel.id, currentUser.id, {
+        url: data.url, name: file.name, size: file.size, isImage: isImage
+      }).then(function(msg){
+        if (msg) handleIncomingMessage(msg);
+      });
+    }).catch(function(){
       removeToast();
       showToast('上传失败，请检查网络', 'error');
     });
@@ -676,35 +1632,123 @@
     fileInput.value = ''; // 允许重复选同一文件
   }
 
+  // ── Emoji picker ──────────────────────────
+  var emojiBtn = document.querySelector('.emoji-btn');
+  var emojiPanel = null;
+  var EMOJIS = ['😀','😁','😂','🤣','😊','😍','😘','😎','🤔','😅','😭','😡','👍','👎','👌','🙏','💪','👏','🎉','🔥','❤️','💔','⭐','✨','🌹','🍺','🍻','☕','🌈','☀️','🌙','⚡','💡','✅','❌','❓','💯','🚀','📌','📚','🎓','🏫','😴','🤝','😇','🥳','😋','🤩','😏','💤','🙄','😱','🥰','😜','🤗','😢','😤','🤯','🤓','🧐','👀','💬','📝','📷','🎵','⚽','🏀','🎮','🐱','🐶','🌸','🍎','🍔','🍕','☕️','🍰','🎂','💰','💎','🔔','📢','💡'];
+
+  function buildEmojiPanel() {
+    if (emojiPanel) return;
+    emojiPanel = document.createElement('div');
+    emojiPanel.id = 'emoji-panel';
+    emojiPanel.className = 'emoji-panel';
+    var grid = document.createElement('div');
+    grid.className = 'emoji-grid';
+    EMOJIS.forEach(function(e){
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'emoji-item';
+      b.textContent = e;
+      b.addEventListener('click', function(ev){
+        ev.preventDefault();
+        ev.stopPropagation();
+        insertAtCursor(msgInput, e);
+        msgInput.focus();
+      });
+      grid.appendChild(b);
+    });
+    emojiPanel.appendChild(grid);
+    var inputArea = document.getElementById('message-input-area');
+    if (inputArea) inputArea.appendChild(emojiPanel);
+  }
+
+  function insertAtCursor(input, text) {
+    if (!input) return;
+    var start = input.selectionStart || input.value.length;
+    var end = input.selectionEnd || input.value.length;
+    input.value = input.value.substring(0, start) + text + input.value.substring(end);
+    var pos = start + text.length;
+    input.setSelectionRange(pos, pos);
+  }
+
+  function toggleEmojiPanel(force) {
+    buildEmojiPanel();
+    if (!emojiPanel) return;
+    var show = (typeof force === 'boolean') ? force : !emojiPanel.classList.contains('open');
+    emojiPanel.classList.toggle('open', show);
+    // 关闭提及下拉，避免叠加
+    if (show) hideMentionDropdown();
+  }
+
+  if (emojiBtn) {
+    emojiBtn.addEventListener('click', function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      toggleEmojiPanel();
+    });
+  }
+  // 点外部 / ESC 关闭表情面板
+  document.addEventListener('click', function(e){
+    if (emojiPanel && emojiPanel.classList.contains('open') &&
+        !e.target.closest('#emoji-panel') && !e.target.closest('.emoji-btn')) {
+      toggleEmojiPanel(false);
+    }
+  });
+  document.addEventListener('keydown', function(e){
+    if (e.key === 'Escape' && emojiPanel && emojiPanel.classList.contains('open')) {
+      toggleEmojiPanel(false);
+    }
+  });
+
   // ── Toast ───────────────────────────────────
   var toastEl = null;
   var toastTimer = null;
-  function showToast(msg, type) {
+  function showToast(msg, type, duration) {
     removeToast();
     toastEl = document.createElement('div');
     toastEl.className = 'upload-toast upload-toast-' + (type||'info');
     toastEl.textContent = msg;
     document.body.appendChild(toastEl);
-    if (type !== 'info') {
-      toastTimer = setTimeout(removeToast, 2500);
-    }
+    // info 也自动消失，避免长期遮挡下方错误提示/操作按钮
+    var ms = duration || (type === 'error' ? 3500 : 2500);
+    toastTimer = setTimeout(removeToast, ms);
   }
   function removeToast() {
     if (toastTimer) { clearTimeout(toastTimer); toastTimer = null; }
     if (toastEl) { toastEl.remove(); toastEl = null; }
   }
 
+  // 把 SDK 抛出的网络错误转成人话，并在网络错误时显示重试按钮
+  function showLoginError(err) {
+    var msg = (err && err.message) || '请求失败';
+    var isNetwork = /network|failed to fetch|fetch|timeout|abort|offline|connect/i.test(msg);
+    if (isNetwork) {
+      msg = '网络连接失败，后端地址当前可能无法从中国手机网络访问。请切换 Wi-Fi、关闭省流量模式或开启代理后重试。';
+      if (loginRetry) loginRetry.style.display = 'inline-flex';
+    } else {
+      if (loginRetry) loginRetry.style.display = 'none';
+    }
+    // 恢复登录卡片可见性（加载动画可能已将其淡出；无 GSAP 时须显式置 1，否则回退 CSS 默认 opacity:0）
+    if (loginCard) { loginCard.style.opacity = '1'; loginCard.style.transform = ''; }
+    if (loginSubmitLoader) { loginSubmitLoader.classList.remove('active'); loginSubmitLoader.setAttribute('aria-hidden','true'); loginSubmitLoader.style.opacity = ''; }
+    if (monsterLogin) monsterLogin.classList.add('active');
+    if (_eyeState !== 'error') setMonsterState('error');
+    if (loginError) loginError.textContent = msg;
+  }
+  function clearLoginError() {
+    if (loginError) loginError.textContent = '';
+    if (loginRetry) loginRetry.style.display = 'none';
+  }
+
   // ── Notification ─────────────────────────────
   var unreadNotifCount = 0;
 
   function fetchUnreadCount() {
-    if (!token) return;
-    fetch('/api/notifications/unread-count', { headers: { Authorization: 'Bearer ' + token } })
-      .then(function(r) { return r.json(); })
-      .then(function(data) {
-        unreadNotifCount = data.count || 0;
-        updateNotifBadge();
-      }).catch(function(){});
+    if (!IF) return;
+    IF.unreadCount().then(function(count){
+      unreadNotifCount = count || 0;
+      updateNotifBadge();
+    }).catch(function(){});
   }
 
   function updateNotifBadge() {
@@ -721,41 +1765,26 @@
     if (!notifyDropdown || !notifyList) return;
     var isOpen = notifyDropdown.style.display === 'block';
     if (isOpen) {
-      if (typeof anime === 'function') {
-        anime.remove(notifyDropdown);
-        anime({
-          targets: notifyDropdown,
-          opacity: [1, 0],
-          translateY: [0, -8],
-          duration: 180,
-          easing: 'easeInQuad',
-          complete: function(){ notifyDropdown.style.display = 'none'; }
-        });
-      } else {
+      if (REDUCED_MOTION || typeof gsap === 'undefined') {
         notifyDropdown.style.display = 'none';
+      } else {
+        gsap.killTweensOf(notifyDropdown);
+        gsap.to(notifyDropdown, { opacity: 0, y: -8, duration: 0.18, ease: 'power2.in', onComplete: function(){ notifyDropdown.style.display = 'none'; } });
       }
     } else {
       notifyDropdown.style.display = 'block';
-      if (typeof anime === 'function') {
-        anime.remove(notifyDropdown);
-        anime({
-          targets: notifyDropdown,
-          opacity: [0, 1],
-          translateY: [-8, 0],
-          duration: 240,
-          easing: 'easeOutQuad'
-        });
+      if (!REDUCED_MOTION && typeof gsap !== 'undefined') {
+        gsap.killTweensOf(notifyDropdown);
+        gsap.from(notifyDropdown, { opacity: 0, y: -8, duration: 0.24, ease: 'power2.out' });
       }
       loadNotifications();
     }
   }
 
   function loadNotifications() {
-    if (!token || !notifyList) return;
-    fetch('/api/notifications', { headers: { Authorization: 'Bearer ' + token } })
-      .then(function(r) { return r.json(); })
-      .then(function(data) {
-        var list = data.notifications || [];
+    if (!IF || !notifyList) return;
+    IF.listNotifications().then(function(list) {
+        if (!list) list = [];
         notifyList.innerHTML = '';
         if (list.length === 0) {
           notifyList.innerHTML = '<div class="notify-empty">暂无通知</div>';
@@ -788,10 +1817,7 @@
   }
 
   function markNotifRead(id) {
-    fetch('/api/notifications/' + id + '/read', {
-      method: 'PATCH',
-      headers: { Authorization: 'Bearer ' + token }
-    }).then(function() {
+    IF.markRead(id).then(function() {
       unreadNotifCount = Math.max(0, unreadNotifCount - 1);
       updateNotifBadge();
     }).catch(function(){});
@@ -799,26 +1825,16 @@
 
   function hideNotifDropdown() {
     if (!notifyDropdown || notifyDropdown.style.display !== 'block') return;
-    if (typeof anime === 'function') {
-      anime.remove(notifyDropdown);
-      anime({
-        targets: notifyDropdown,
-        opacity: [1, 0],
-        translateY: [0, -8],
-        duration: 160,
-        easing: 'easeInQuad',
-        complete: function(){ notifyDropdown.style.display = 'none'; }
-      });
-    } else {
+    if (REDUCED_MOTION || typeof gsap === 'undefined') {
       notifyDropdown.style.display = 'none';
+      return;
     }
+    gsap.killTweensOf(notifyDropdown);
+    gsap.to(notifyDropdown, { opacity: 0, y: -8, duration: 0.16, ease: 'power2.in', onComplete: function(){ notifyDropdown.style.display = 'none'; } });
   }
 
   function markAllRead() {
-    fetch('/api/notifications/read-all', {
-      method: 'PATCH',
-      headers: { Authorization: 'Bearer ' + token }
-    }).then(function() {
+    IF.markAllRead().then(function() {
       unreadNotifCount = 0;
       updateNotifBadge();
       loadNotifications();
@@ -1025,96 +2041,396 @@
     });
   }
 
-  // ==================== MOBILE SIDEBAR ====================
+  // ==================== CHANNEL DRAWER ====================
+  // PC 与移动端共用同一个抽屉（#sidebar → .channel-drawer）。
+  // 只有点击 hamburger-btn 才打开；showMain() 绝不调用，避免移动端反复弹出。
 
-  function openSidebar(){
-    if(!sidebar) return;
-    sidebar.classList.add('open');
-    if(sidebarOverlay) sidebarOverlay.classList.add('active');
-    if(typeof anime === 'function'){
-      anime.remove([sidebar, sidebarOverlay]);
-      anime({
-        targets: sidebar,
-        translateX: ['-100%', '0%'],
-        duration: 320,
-        easing: 'easeOutExpo'
-      });
-      if(sidebarOverlay){
-        anime({
-          targets: sidebarOverlay,
-          opacity: [0, 1],
-          duration: 280,
-          easing: 'linear'
-        });
+  function openDrawer(){
+    var drawer = document.getElementById('sidebar'); // channel-drawer
+    var overlay = document.getElementById('drawer-overlay');
+    if(!drawer) return;
+    // 关闭头像弹窗
+    var popup = document.getElementById('avatar-popup');
+    if(popup) { popup.classList.remove('open'); if(typeof gsap !== 'undefined') gsap.set(popup,{x:'100%'}); }
+
+    // 显隐完全由 CSS .open + transition 驱动，GSAP 不控制抽屉位置，
+    // 这样即使 GSAP 未加载或动画未跑完，抽屉也一定停在 translateX(0) 可见。
+    drawer.classList.add('open');
+    if(overlay) overlay.classList.add('active');
+    if(!REDUCED_MOTION && typeof gsap !== 'undefined'){
+      // 仅做遮罩淡入 + 列表内容轻入场（不影响抽屉显隐）
+      gsap.killTweensOf(overlay);
+      gsap.fromTo(overlay, {autoAlpha:0}, {autoAlpha:1, duration:0.28});
+      var inner = drawer.querySelector('.channel-list, .drawer-inner, .drawer-header');
+      if(inner){
+        gsap.killTweensOf(inner);
+        gsap.fromTo(inner, {autoAlpha:0, y:14}, {autoAlpha:1, y:0, duration:0.32, delay:0.04, ease:'expo.out'});
       }
     }
   }
-  function closeSidebar(){
-    if(!sidebar) return;
-    if(typeof anime === 'function'){
-      anime.remove([sidebar, sidebarOverlay]);
-      anime({
-        targets: sidebarOverlay,
-        opacity: [1, 0],
-        duration: 240,
-        easing: 'linear'
-      });
-      anime({
-        targets: sidebar,
-        translateX: ['0%', '-100%'],
-        duration: 300,
-        easing: 'easeInExpo',
-        complete: function(){ sidebar.classList.remove('open'); }
-      });
-      if(sidebarOverlay) sidebarOverlay.classList.remove('active');
-    } else {
-      sidebar.classList.remove('open');
-      if(sidebarOverlay) sidebarOverlay.classList.remove('active');
+  function closeDrawer(){
+    var drawer = document.getElementById('sidebar');
+    var overlay = document.getElementById('drawer-overlay');
+    if(!drawer) return;
+    // 移除 .open 即由 CSS transition 滑回 -100%，不依赖 GSAP
+    drawer.classList.remove('open');
+    if(overlay){
+      if(REDUCED_MOTION || typeof gsap === 'undefined'){
+        overlay.classList.remove('active');
+      } else {
+        gsap.killTweensOf(overlay);
+        gsap.to(overlay, {autoAlpha:0, duration:0.24, onComplete:function(){ overlay.classList.remove('active'); }});
+      }
     }
   }
 
-  if(mobileMenuBtn) mobileMenuBtn.addEventListener('click',function(){
-    if(sidebar.classList.contains('open')) closeSidebar();
-    else openSidebar();
+  if(mobileMenuBtn) mobileMenuBtn.addEventListener('click',function(e){
+    e.stopPropagation();
+    if(sidebar && sidebar.classList.contains('open')) closeDrawer();
+    else openDrawer();
   });
   document.addEventListener('click',function(e){
-    if(sidebar&&sidebar.classList.contains('open')&&!sidebar.contains(e.target)&&e.target!==mobileMenuBtn){
-      closeSidebar();
+    if(sidebar && sidebar.classList.contains('open') && !sidebar.contains(e.target) && e.target !== mobileMenuBtn){
+      closeDrawer();
     }
   });
-  if(sidebarOverlay) sidebarOverlay.addEventListener('click',closeSidebar);
+  if(drawerOverlay) drawerOverlay.addEventListener('click', closeDrawer);
+  // 可访问性：抽屉打开时按 ESC 关闭
+  document.addEventListener('keydown', function(e){
+    if(e.key==='Escape' && sidebar && sidebar.classList.contains('open')) closeDrawer();
+  });
+
+  // ==================== AVATAR POPUP（替代 right-panel） ====================
+
+  var avatarPopup = null;
+  var avatarPopupOverlay = null;
+
+  function initAvatarPopup(){
+    avatarPopup = document.getElementById('avatar-popup');
+    avatarPopupOverlay = document.getElementById('avatar-popup-overlay');
+    var btn = document.getElementById('nav-avatar-btn');
+    if(btn){
+      btn.addEventListener('click', function(e){
+        e.stopPropagation();
+        if(avatarPopup && avatarPopup.classList.contains('open')) closeAvatarPopup();
+        else openAvatarPopup();
+      });
+    }
+    if(avatarPopupOverlay) avatarPopupOverlay.addEventListener('click', closeAvatarPopup);
+  }
+
+  function openAvatarPopup(){
+    if(!avatarPopup) return;
+    // 关闭频道抽屉
+    if(sidebar && sidebar.classList.contains('open')) closeDrawer();
+    
+    avatarPopup.classList.add('open');
+    if(avatarPopupOverlay) avatarPopupOverlay.classList.add('active');
+    if(!REDUCED_MOTION && typeof gsap !== 'undefined'){
+      gsap.killTweensOf(avatarPopup);
+      gsap.fromTo(avatarPopup, {x:'100%'}, {x:'0%', duration:0.32, ease:'expo.out'});
+      if(avatarPopupOverlay){
+        gsap.killTweensOf(avatarPopupOverlay);
+        gsap.fromTo(avatarPopupOverlay, {autoAlpha:0}, {autoAlpha:1, duration:0.28});
+      }
+    }
+    // 加载成员列表到弹窗
+    loadMembersToPopup();
+  }
+
+  function closeAvatarPopup(){
+    if(!avatarPopup) return;
+    if(REDUCED_MOTION || typeof gsap === 'undefined'){
+      avatarPopup.classList.remove('open');
+      if(avatarPopupOverlay) avatarPopupOverlay.classList.remove('active');
+      return;
+    }
+    gsap.killTweensOf([avatarPopup, avatarPopupOverlay]);
+    gsap.to(avatarPopupOverlay, {autoAlpha:0, duration:0.24});
+    gsap.to(avatarPopup, {
+      x:'100%', duration:0.30, ease:'expo.in',
+      onComplete:function(){ avatarPopup.classList.remove('open'); }
+    });
+    if(avatarPopupOverlay) avatarPopupOverlay.classList.remove('active');
+  }
+
+  // 将成员列表渲染进头像弹窗
+  function loadMembersToPopup(){
+    if(!avatarPopup) return;
+    var listEl = avatarPopup.querySelector('#avatar-popup-members');
+    if(!listEl) return;
+    var members = getChannelMembers();
+    if(!members || members.length === 0){
+      listEl.innerHTML = '<div class="popup-empty">暂无成员</div>';
+      return;
+    }
+    listEl.innerHTML = '';
+    members.slice(0, 50).forEach(function(m){
+      var item = document.createElement('div');
+      item.className = 'popup-member';
+      item.innerHTML =
+        '<div class="popup-member-avatar" style="background:'+getAvatarColor(m.username)+'">'+getInitial(m.nickname||m.username)+'</div>'+
+        '<span class="popup-member-name">'+escapeHtml(m.nickname||m.username)+'</span>';
+      listEl.appendChild(item);
+    });
+  }
+
+  // 移动端键盘弹出后，确保消息输入框可见
+  if(msgInput){
+    msgInput.addEventListener('focus', function(){
+      setTimeout(function(){ if(msgInput.scrollIntoView) msgInput.scrollIntoView({ block:'nearest' }); }, 300);
+    });
+  }
 
   // ==================== LOGIN FORM ====================
+
+  var pendingVerifyEmail = null;   // 注册后待验证的邮箱
+  var pendingVerifyPassword = null; // 注册时填的密码，验证成功后若未自动建会话则兜底登录
+
+  // 忘记密码：通过 InsForge 发送重置验证码邮件
+  var forgotLink = document.getElementById('forgot-link');
+  if (forgotLink) {
+    forgotLink.addEventListener('click', function(e) {
+      e.preventDefault();
+      if (!loginForm || !IF) { showToast('后端未就绪', 'error'); return; }
+      var email = (new FormData(loginForm).get('email') || '').trim();
+      if (!email) { showLoginError({message:'请先输入邮箱'}); return; }
+      IF.insforge.auth.sendResetPasswordEmail({ email: email, redirectTo: window.location.href })
+        .then(function(){ showToast('重置邮件已发送，请查收邮箱验证码', 'info'); })
+        .catch(function(err){ showToast((err&&err.message)||'发送失败', 'error'); });
+    });
+  }
 
   if(loginForm){
     loginForm.addEventListener('submit',function(e){
       e.preventDefault();
+      if(loginForm._submitting) return; // 防重复提交
+      loginForm._submitting = true;
+      clearLoginError();
+      var submitBtn = loginForm.querySelector('[type="submit"], .btn-login');
+      if(submitBtn){ submitBtn.disabled = true; submitBtn.textContent = loginMode==='signup'?'注册中...':'登录中...'; }
+      // 立即显示 GSAP 加载动画
+      showLoginLoader();
       var fd=new FormData(loginForm);
-      var u=(fd.get('username')||'').trim();
+      var email=(fd.get('email')||'').trim();
       var p=(fd.get('password')||'').trim();
-      if(!u||!p){ if(loginError) loginError.textContent='请输入账号和密码'; return; }
+      var nick=(fd.get('nickname')||'').trim();
+      var done = function(){
+        loginForm._submitting = false;
+        if(submitBtn){ submitBtn.disabled = false; submitBtn.textContent = loginMode==='signup'?'注册':'登录'; }
+        hideLoginLoader(); // 出错时关闭加载动画
+      };
+      if(!email||!p){ showLoginError({message:'请输入邮箱和密码'}); done(); return; }
+      if(!IF){ showLoginError({message:'后端未就绪，请刷新页面'}); done(); return; }
 
       if(loginMode==='signup'){
-        var displayName = prompt('请输入你的显示名称：', u)||u;
-        apiPost('/auth/register', { username: u, password: p, nickname: displayName }).then(function(res) {
-          if (res.error) { if(loginError) loginError.textContent=res.error; return; }
-          onLoginSuccess(res);
+        if(!nick){ showLoginError({message:'请输入昵称'}); done(); return; }
+        if(p.length < 8 || !/[a-zA-Z]/.test(p) || !/\d/.test(p)){
+          showLoginError({message:'密码至少 8 位，需同时包含字母和数字'});
+          done(); return;
+        }
+        IF.signUp(email, p, nick, nick).then(function(res) {
+          if (res.requireEmailVerification) {
+            showVerifyPanel(email, p);
+            done(); return;
+          }
+          if (res.user) { onLoginSuccess(res.user); return; }
+          // 兜底：任何未识别响应都关闭加载层，避免卡住
+          done();
+        }).catch(function(err){
+          var msg = (err && (err.message || err.error_description || err.msg || '')) + '';
+          // 邮箱已存在 / 需验证 / 任何账号类错误 → 一律进验证面板并补发验证码，
+          // 不再把表单留在登录页（这是此前“点注册跳回登录页”的根因）。
+          if (/already|exists|registered|已注册|已存在|占用|in use|verif|confirm|not confirmed|email|unexpected error|sign up|network|failed to fetch/i.test(msg)) {
+            showVerifyPanel(email, p);
+            done(); return;
+          }
+          showLoginError(err);
+          done();
         });
       } else {
-        apiPost('/auth/login', { username: u, password: p }).then(function(res) {
-          if (res.error) { if(loginError) loginError.textContent=res.error; return; }
-          onLoginSuccess(res);
+        IF.signIn(email, p).then(function(user) {
+          onLoginSuccess(user);
+        }).catch(function(err){
+          showLoginError(err);
+          done();
         });
       }
     });
   }
 
-  function onLoginSuccess(res) {
-    token = res.token;
-    currentUser = res.user;
-    localStorage.setItem('bfyg_token', token);
-    if(loginError) loginError.textContent='';
-    showMain();
+  if(loginRetry){
+    loginRetry.addEventListener('click', function(){
+      if(loginForm) loginForm.dispatchEvent(new Event('submit', { bubbles:true, cancelable:true }));
+    });
+  }
+
+  // 注册时实时提示密码强度
+  if(loginForm){
+    var pwInput = loginForm.querySelector('input[name="password"]');
+    if(pwInput){
+      pwInput.addEventListener('input', function(){
+        var hint = document.getElementById('pw-hint');
+        if(!hint || loginMode!=='signup') return;
+        var v = pwInput.value || '';
+        var hasLetter = /[a-zA-Z]/.test(v);
+        var hasNum = /\d/.test(v);
+        if(v.length >= 8 && hasLetter && hasNum){
+          hint.textContent = '密码强度：符合要求'; hint.className = 'input-hint ok';
+        } else if(v.length >= 6 && (hasLetter || hasNum)){
+          hint.textContent = '密码强度：建议 8 位以上并同时含字母和数字'; hint.className = 'input-hint warn';
+        } else if(v.length > 0){
+          hint.textContent = '密码至少 8 位，需同时包含字母和数字'; hint.className = 'input-hint err';
+        } else {
+          hint.textContent = '密码至少 8 位，需同时包含字母和数字'; hint.className = 'input-hint';
+        }
+      });
+    }
+  }
+
+  function onLoginSuccess(user) {
+    function go(u){
+      currentUser = u;
+      try { clearLoginError(); } catch(e){}
+      // 先关闭加载层，再用 GSAP 过渡到主界面
+      hideLoginLoader(function(){
+        try { showMainWithTransition(); } catch(err){ console.error('showMain error:', err); }
+      });
+    }
+    if (IF) {
+      // 带 8s 超时：completePendingProfile 需连 InsForge DB（新加坡），
+      // 国内网络不稳定时可能 hang。超时后直接进主界面，profile 已在 signIn 时建好。
+      var settled = false;
+      var timer = setTimeout(function(){ if(!settled){ settled=true; go(user); } }, 8000);
+      IF.completePendingProfile(user).then(function(u){
+        if(!settled){ settled=true; clearTimeout(timer); go(u); }
+      }).catch(function(){
+        if(!settled){ settled=true; clearTimeout(timer); go(user); }
+      });
+    } else {
+      go(user);
+    }
+  }
+
+  // 显示邮箱验证面板（注册返回 requireEmailVerification 时）
+  function showVerifyPanel(email, password){
+    pendingVerifyEmail = email;
+    pendingVerifyPassword = password || null;
+    // 把密码暂存到 sessionStorage，避免页面刷新后丢失
+    try { if(password) sessionStorage.setItem('bfyg_pending_password', password); } catch(e){}
+    // 强制收起加载层、恢复卡片/遮罩可见（不依赖 GSAP 或外部 done()，避免被 opacity:0 藏掉）
+    if(loginSubmitLoader){ loginSubmitLoader.classList.remove('active'); loginSubmitLoader.setAttribute('aria-hidden','true'); loginSubmitLoader.style.opacity=''; }
+    if(monsterLogin){ monsterLogin.classList.add('active'); monsterLogin.style.opacity='1'; monsterLogin.style.visibility='visible'; monsterLogin.style.pointerEvents='auto'; }
+    if(loginCard){ loginCard.style.opacity='1'; loginCard.style.transform=''; loginCard.style.filter=''; loginCard.style.visibility='visible'; }
+    if(loginForm) loginForm.style.display='none';
+    if(loginFooterSwitch) loginFooterSwitch.style.display='none';
+    var vp=document.getElementById('verify-panel');
+    if(vp){ vp.style.display='block'; vp.style.opacity='1'; vp.style.position='relative'; vp.style.zIndex='2'; }
+    var disp=document.getElementById('verify-email-display'); if(disp) disp.textContent=email;
+    var err=document.getElementById('verify-error'); if(err) err.textContent='';
+    var sub=document.getElementById('verify-sub'); if(sub) sub.textContent='正在向 '+email+' 发送验证码…';
+    var codeInput=document.getElementById('verify-code');
+    if(codeInput){ codeInput.value=''; setTimeout(function(){ try{codeInput.focus();}catch(e){} }, 300); }
+    // 自动补发验证码（注册/已注册未验证都会走到这里），确保用户一定能拿到码
+    if(IF && pendingVerifyEmail){
+      IF.resendVerification(pendingVerifyEmail).then(function(){
+        if(sub) sub.textContent='验证码已发送至 '+pendingVerifyEmail+'，请输入邮箱中的 6 位验证码';
+      }).catch(function(e2){
+        console.warn('自动补发验证码失败:', e2);
+        if(sub) sub.textContent='验证码发送失败，请点击下方“重新发送验证码”';
+      });
+    }
+  }
+  function hideVerifyPanel(){
+    var vp=document.getElementById('verify-panel'); if(vp) vp.style.display='none';
+    if(loginForm) loginForm.style.display='';
+    if(loginFooterSwitch) loginFooterSwitch.style.display='';
+  }
+
+  function submitVerifyCode(){
+    var codeInput=document.getElementById('verify-code');
+    var err=document.getElementById('verify-error');
+    var code=(codeInput&&codeInput.value||'').trim();
+    if(!code){ if(err) err.textContent='请输入验证码'; return; }
+    if(!IF){ if(err) err.textContent='后端未就绪，请刷新页面'; return; }
+    if(!pendingVerifyEmail){ if(err) err.textContent='会话已失效，请重新注册'; return; }
+    // 如果页面刷新过，从 sessionStorage 恢复密码
+    if(!pendingVerifyPassword){
+      try { pendingVerifyPassword = sessionStorage.getItem('bfyg_pending_password'); } catch(e){}
+    }
+    btnVerify.disabled=true;
+    IF.verifyEmail(pendingVerifyEmail, code, pendingVerifyPassword).then(function(user){
+      btnVerify.disabled=false;
+      try { sessionStorage.removeItem('bfyg_pending_password'); } catch(e){}
+      onLoginSuccess(user);
+    }).catch(function(e2){
+      btnVerify.disabled=false;
+      var raw=(e2&&e2.message)||'';
+      var low=(raw+'').toLowerCase();
+      var fullMsg=raw;
+      if (low.indexOf('invalid')!==-1 || low.indexOf('incorrect')!==-1 || low.indexOf('mismatch')!==-1 || low.indexOf('expired')!==-1) {
+        fullMsg='验证码错误或已过期，请检查邮箱中的最新验证码，或点击“重新发送验证码”';
+      } else if (low.indexOf('network')!==-1 || low.indexOf('failed to fetch')!==-1 || low.indexOf('timeout')!==-1) {
+        fullMsg='网络连接不稳定，请稍后重试';
+      }
+      if(err) err.textContent=fullMsg;
+      // eslint-disable-next-line no-console
+      console.error('verifyEmail failed:', e2);
+    });
+  }
+  var btnVerify=document.getElementById('btn-verify');
+  if(btnVerify){
+    btnVerify.addEventListener('click', submitVerifyCode);
+  }
+  var verifyCodeInput=document.getElementById('verify-code');
+  if(verifyCodeInput){
+    verifyCodeInput.addEventListener('input', function(){
+      var v=(verifyCodeInput.value||'').trim();
+      // 输入满 6 位数字自动提交
+      if(v.length===6 && /^\d{6}$/.test(v)){
+        submitVerifyCode();
+      }
+    });
+  }
+  var linkResend=document.getElementById('link-resend-code');
+  if(linkResend){
+    var resendCountdown = null;
+    linkResend.addEventListener('click',function(e){
+      e.preventDefault();
+      var err=document.getElementById('verify-error');
+      if(!IF||!pendingVerifyEmail){ if(err) err.textContent='会话已失效，请重新注册'; return; }
+      if(linkResend._disabled) return;
+      linkResend._disabled = true;
+      var originalText = linkResend.textContent;
+      IF.resendVerification(pendingVerifyEmail).then(function(){
+        showToast('验证码已重新发送，请查收邮箱','info');
+        if(err) err.textContent='';
+        var left = 60;
+        linkResend.textContent = originalText + ' (' + left + 's)';
+        resendCountdown = setInterval(function(){
+          left--;
+          if(left <= 0){
+            clearInterval(resendCountdown);
+            linkResend._disabled = false;
+            linkResend.textContent = originalText;
+          } else {
+            linkResend.textContent = originalText + ' (' + left + 's)';
+          }
+        }, 1000);
+      }).catch(function(e2){
+        linkResend._disabled = false;
+        linkResend.textContent = originalText;
+        if(err) err.textContent=(e2&&e2.message)||'重发失败';
+      });
+    });
+  }
+  var linkBack=document.getElementById('link-back-login');
+  if(linkBack){
+    linkBack.addEventListener('click',function(e){
+      e.preventDefault();
+      hideVerifyPanel();
+      openLoginModal('signin');
+    });
   }
 
   if(togglePw){
@@ -1130,31 +2446,27 @@
   var btnLogout = document.getElementById('btn-logout');
   if(btnLogout) btnLogout.addEventListener('click',function(e){
     e.preventDefault();
-    localStorage.removeItem('bfyg_token');
-    token = '';
+    if (IF) IF.signOut().catch(function(){});
     currentUser = null;
     showLogin();
   });
 
   // ==================== INIT ====================
 
-  // 检查自动登录
-  if (token) {
-    apiGet('/auth/me').then(function(res) {
-      if (res.user) {
-        currentUser = res.user;
+  // 检查自动登录（InsForge 会话由 cookie 管理，无需本地 token）
+  function initAuth() {
+    if (!IF) return;
+    IF.getCurrentUser().then(function(user) {
+      if (user) {
+        currentUser = user;
         showMain();
-      } else {
-        localStorage.removeItem('bfyg_token');
-        token = '';
       }
-    }).catch(function() {
-      localStorage.removeItem('bfyg_token');
-      token = '';
-    });
+    }).catch(function(){});
   }
+  if (window.IF) initAuth();
+  else window.addEventListener('IF_READY', initAuth);
 
-  updateCharacter();
+  initAvatarPopup();
 
   // ==================== SCHOOL INTRO (click server header) ====================
 
@@ -1185,22 +2497,32 @@
       info.forEach(function(item) {
         var div = document.createElement('div');
         div.className = 'msg-group';
-        div.innerHTML = '<div class="msg-header"><div class="msg-avatar" style="background:linear-gradient(135deg,#7c5cfc,#5a3de0)">🏫</div><span class="msg-author">系统</span><span class="msg-time">学校资料</span></div><div class="msg-content"><strong>'+item.title+'</strong><br><br>'+item.content+'</div>';
+        div.innerHTML =
+          '<div class="msg-feed-left">'+
+            '<div class="msg-feed-avatar" style="background:linear-gradient(135deg,#7c5cfc,#5a3de0)">🏫</div>'+
+            '<div class="msg-feed-meta">'+
+              '<span class="msg-feed-name">系统</span>'+
+              '<span class="msg-feed-role"><span class="role-badge admin">官方</span></span>'+
+            '</div>'+
+          '</div>'+
+          '<div class="msg-feed-body">'+
+            '<div class="msg-content"><strong>'+item.title+'</strong><br><br>'+item.content+'</div>'+
+            '<div class="msg-interactions">'+
+              '<div class="msg-interactions-left"><span class="msg-view-count">👁 1.2k+</span></div>'+
+              '<div class="msg-interactions-right">'+
+                '<button type="button" class="msg-interact-btn" data-act="like">♥ <span class="msg-interact-count">0</span></button>'+
+                '<button type="button" class="msg-interact-btn" data-act="comment">💬 <span class="msg-interact-count">0</span></button>'+
+                '<button type="button" class="msg-interact-btn" data-act="share">↗</button>'+
+              '</div>'+
+            '</div>'+
+            '<div class="msg-comment-section"></div>'+
+          '</div>';
         messagesArea.appendChild(div);
       });
       messagesArea.scrollTop = messagesArea.scrollHeight;
     });
   }
 
-})();
-
-// ===== SOCKET.IO CLIENT LOADER =====
-(function() {
-  var script = document.createElement('script');
-  script.src = '/socket.io/socket.io.js';
-  script.onload = function() { console.log('[client] Socket.io 客户端已加载'); };
-  script.onerror = function() { console.error('[client] Socket.io 加载失败，实时聊天不可用'); };
-  document.head.appendChild(script);
 })();
 
 // ===== LOGIN CAROUSEL =====
@@ -1268,7 +2590,7 @@
         } else {
           layer.className += ' login-3d-card-back';
           layer.style.transform = 'translateZ(' + zOff + 'px) rotateX(180deg)';
-          var bimg = document.createElement('img'); bimg.src = imgSrc; bimg.alt = '';
+          var bimg = document.createElement('img'); bimg.src = imgSrc; bimg.alt = ''; bimg.loading = 'lazy';
           layer.appendChild(bimg);
         }
         card.appendChild(layer);

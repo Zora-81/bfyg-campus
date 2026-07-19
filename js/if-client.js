@@ -1,0 +1,474 @@
+// ============================================================================
+// 宝丰一高校园频道 — InsForge 前端客户端封装（ESM）
+// 经 esm.sh CDN 直接 import @insforge/sdk（前端无构建链）。
+// anon key 是公开密钥，前端安全由 RLS 保障，可直接放前端。
+// InsForge 项目: baofeng-campus  (API base 见下)
+// ============================================================================
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@insforge/sdk@1.4.4/+esm'
+
+const INS_FORGE_URL = 'https://api.bfgzlt.cc.cd'
+const ANON_KEY = 'anon_a09338fe0bdb3e2a0797c92a73a8431ddae4b38f7b12333fe41ebbeccba6e2ea'
+
+const insforge = createClient({ baseUrl: INS_FORGE_URL, anonKey: ANON_KEY, debug: true })
+
+// ---- 超时包装：DB 请求最多等 ms 毫秒，超时则 resolve(null) 不抛错，避免整条链 hang ----
+function withTimeout(promise, ms) {
+  return Promise.race([
+    promise,
+    new Promise(function (resolve) { setTimeout(function () { resolve(null) }, ms) })
+  ])
+}
+
+// ---- profiles 缓存（小表，会话内全量加载，用于解析消息作者）----
+const profileCache = {}            // id -> { id, username, nickname, avatar_url, role, title, status }
+let newMessageHandler = null       // 当前频道的 realtime 监听器（切换时移除）
+
+// ---------------------------------------------------------------------------
+// profiles
+// ---------------------------------------------------------------------------
+async function loadProfiles() {
+  try {
+    const { data, error } = await insforge.database
+      .from('profiles').select('id, username, nickname, avatar_url, role, title, status, created_at')
+    if (!error && data) data.forEach(p => { profileCache[p.id] = p })
+  } catch (e) { /* 忽略 */ }
+  return profileCache
+}
+
+function resolveAuthor(authorId) {
+  const p = profileCache[authorId]
+  if (p) return p
+  return { id: authorId, username: '未知', nickname: '未知用户', avatar_url: '', title: '' }
+}
+
+function adaptUser(user) {
+  const p = profileCache[user.id] || {}
+  const base = (user.email || '').split('@')[0] || 'user'
+  return {
+    id: user.id,
+    email: user.email,
+    username: p.username || base,
+    nickname: p.nickname || p.username || base,
+    role: p.role || 'student',
+    avatar_url: p.avatar_url || '',
+    title: p.title || '',
+    status: p.status || 'active'
+  }
+}
+
+// 自助更新当前用户资料（昵称 / 称号）。列级 GRANT 限定只能改 nickname/avatar_url/title，
+// 行策略 "profiles update self" 限定只能改自己那一行。更新成功后同步本地缓存。
+async function updateMyProfile(userId, fields) {
+  const patch = {}
+  if (typeof fields.nickname === 'string') patch.nickname = fields.nickname.trim()
+  if (typeof fields.title === 'string')    patch.title = fields.title.trim().slice(0, 12)
+  if (typeof fields.avatar_url === 'string') patch.avatar_url = fields.avatar_url
+  if (Object.keys(patch).length === 0) return profileCache[userId]
+  const { error } = await insforge.database
+    .from('profiles').update(patch).eq('id', userId).select()
+  if (error) throw error
+  profileCache[userId] = Object.assign({}, profileCache[userId], patch)
+  return profileCache[userId]
+}
+
+// 注册/登录后确保 profiles 行存在（signUp 可能因邮箱验证而延后建档）
+async function ensureProfile(user, desiredUsername, desiredNickname) {
+  await withTimeout(loadProfiles(), 6000)
+  if (profileCache[user.id]) return adaptUser(user)
+  const base = (user.email || '').split('@')[0] || 'user'
+  const username = desiredUsername || base
+  const nickname = desiredNickname || username
+  const { error } = await withTimeout(
+    insforge.database.from('profiles').insert([{
+      id: user.id, username, nickname, role: 'student', status: 'active'
+    }]).select(),
+    6000
+  )
+  if (!error) {
+    profileCache[user.id] = { id: user.id, username, nickname, avatar_url: '', role: 'student', title: '', status: 'active' }
+  }
+  return adaptUser(user)
+}
+
+// ---------------------------------------------------------------------------
+// auth
+// ---------------------------------------------------------------------------
+async function signIn(email, password) {
+  // 关键：auth 请求本身也加 10s 超时，避免后端无响应时整条链无限 hang。
+  const res = await withTimeout(
+    insforge.auth.signInWithPassword({ email, password }),
+    10000
+  )
+  if (!res || res.error || !res.data || !res.data.user) {
+    throw new Error('登录超时或失败：后端响应缓慢，请稍后重试')
+  }
+  // 不在登录主链上阻塞 profile 建档。auth 一成功立即返回 user，
+  // profile 补全（loadProfiles / insert）改为后台尽力而为，避免后端慢导致整条登录 hang。
+  ensureProfile(res.data.user).catch(function () {})
+  return res.data.user
+}
+
+async function signUp(email, password, username, nickname) {
+  // ★ 直连 REST（已验证返回 {accessToken, requireEmailVerification}），
+  //   绕过 SDK 的 auth.signUp 在浏览器跨域/CORS 边缘情况下把网络错误包成
+  //   {error} 返回而非抛错、导致前端注册流程中断、验证面板弹不出来的问题。
+  function stashPending() {
+    try {
+      localStorage.setItem('bfyg_pending_username', username || '')
+      localStorage.setItem('bfyg_pending_nickname', nickname || username || '')
+    } catch (e) {}
+  }
+  async function afterMaybeSession() {
+    // 极少情况：注册即自动登录（含 accessToken）
+    let cur = null
+    try { cur = await insforge.auth.getCurrentUser() } catch (e) {}
+    if (cur && cur.user) return { user: await ensureProfile(cur.user, username, nickname) }
+    stashPending()
+    return { requireEmailVerification: true, email }
+  }
+  let body = null, ok = false
+  try {
+    const resp = await fetch(`${INS_FORGE_URL}/api/auth/users`, {
+      method: 'POST',
+      headers: {
+        'apikey': ANON_KEY,
+        'Authorization': `Bearer ${ANON_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ email, password, name: nickname || username })
+    })
+    ok = resp.ok
+    try { body = await resp.json() } catch (e) { body = null }
+  } catch (e) {
+    // 网络层失败 → 回退到 SDK 实现
+    const { data, error } = await insforge.auth.signUp({
+      email, password, name: nickname || username
+    })
+    if (error) throw error
+    return await afterMaybeSession()
+  }
+  if (!ok) {
+    const msg = (body && (body.message || body.error || body.error_description || JSON.stringify(body))) || '注册失败'
+    const m = (msg + '').toLowerCase()
+    // 已存在 / 需验证 → 都视为「账号已建、待验证」，弹验证面板
+    if (/already|exists|registered|已注册|已存在|占用|in use|verif|confirm|not confirmed|email/i.test(m)) {
+      stashPending()
+      return { requireEmailVerification: true, email }
+    }
+    throw new Error(msg)
+  }
+  if (body && body.accessToken) return await afterMaybeSession()
+  stashPending()
+  return { requireEmailVerification: true, email }
+}
+
+// 邮箱验证后首次登录时，补全之前暂存的 profile
+async function completePendingProfile(user) {
+  let u = null, n = null
+  try {
+    u = localStorage.getItem('bfyg_pending_username')
+    n = localStorage.getItem('bfyg_pending_nickname')
+  } catch (e) {}
+  const adapted = await ensureProfile(user, u, n)
+  try {
+    localStorage.removeItem('bfyg_pending_username')
+    localStorage.removeItem('bfyg_pending_nickname')
+  } catch (e) {}
+  return adapted
+}
+
+async function signOut() {
+  const { error } = await insforge.auth.signOut()
+  if (error) throw error
+}
+
+// 邮箱验证码登录：验证成功后 SDK 自动建立会话
+// 邮箱验证码登录：验证成功后 SDK 自动建立会话。
+// 若后端验证通过却未返回 session（边缘情况），用 password 兜底登录一次。
+async function verifyEmail(email, otp, password) {
+  const { data, error } = await insforge.auth.verifyEmail({ email, otp })
+  if (error) throw error
+
+  // 正常路径：SDK 已从响应保存 session
+  let cur = null
+  try { cur = await insforge.auth.getCurrentUser() } catch (e) {}
+  if (cur && cur.user) return await ensureProfile(cur.user, null, null)
+
+  // 兜底：验证通过但无 session（如响应结构缺失 accessToken），用密码直接登录
+  if (password) {
+    try {
+      const signInRes = await insforge.auth.signInWithPassword({ email, password })
+      if (signInRes && signInRes.data && signInRes.data.user) {
+        return await ensureProfile(signInRes.data.user, null, null)
+      }
+    } catch (e) {
+      console.warn('[verifyEmail] 兜底登录失败:', e)
+    }
+  }
+
+  throw new Error('验证成功但未获取到用户，请直接返回登录页用邮箱密码登录')
+}
+
+async function resendVerification(email) {
+  const { data, error } = await insforge.auth.resendVerificationEmail({ email })
+  if (error) throw error
+  return data
+}
+
+async function getCurrentUser() {
+  const { data, error } = await insforge.auth.getCurrentUser()
+  if (error || !data || !data.user) return null
+  await loadProfiles()
+  return adaptUser(data.user)
+}
+
+// ---------------------------------------------------------------------------
+// data
+// ---------------------------------------------------------------------------
+async function listChannels() {
+  const { data, error } = await insforge.database
+    .from('channels').select('*').order('created_at', { ascending: true })
+  if (error) throw error
+  return data
+}
+
+async function getMessages(channelId) {
+  const { data, error } = await insforge.database
+    .from('messages').select('*')
+    .eq('channel_id', channelId)
+    .order('created_at', { ascending: true }).limit(500)
+  if (error) throw error
+  return data
+}
+
+async function sendMessage(channelId, content, authorId, parentId) {
+  // 跨国链路（Cloudflare→新加坡 InsForge）偶发抖动，客户端加重试兜底
+  let lastErr = null
+  const MAX = 3
+  for (let attempt = 0; attempt < MAX; attempt++) {
+    const t0 = Date.now()
+    try {
+      const { data, error } = await insforge.database
+        .from('messages')
+        .insert([{ channel_id: channelId, author_id: authorId, content, content_type: 'text', parent_id: parentId || null }])
+        .select()
+      if (error) throw error
+      if (attempt > 0) console.warn(`[sendMessage] 第${attempt + 1}次成功，耗时${Date.now() - t0}ms`)
+      return data && data[0]
+    } catch (e) {
+      lastErr = e
+      const ms = Date.now() - t0
+      console.warn(`[sendMessage] 第${attempt + 1}次失败(${ms}ms):`, e && (e.message || e.name || e))
+      // 最后一次不重试
+      if (attempt < MAX - 1) {
+        await new Promise(r => setTimeout(r, 600 * (attempt + 1))) // 600/1200ms 退避
+      }
+    }
+  }
+  throw lastErr
+}
+
+// AI 自动审核：发帖成功后异步调用 Edge Function，不阻塞 UI
+async function moderateMessage(msg) {
+  try {
+    const { data, error } = await insforge.functions.invoke('moderate-message', {
+      body: {
+        messageId: msg.id,
+        content: msg.content,
+        authorId: msg.author_id,
+        channelId: msg.channel_id,
+      },
+    });
+    if (error) console.warn('[moderate] 调用失败', error);
+    else if (data && data.violation) console.log('[moderate] 命中违纪:', data.reason);
+    return data;
+  } catch (e) {
+    console.warn('[moderate] 异常', e);
+    return null;
+  }
+}
+
+async function listNotifications() {
+  const { data, error } = await insforge.database
+    .from('notifications').select('*').order('created_at', { ascending: false })
+  if (error) throw error
+  return data
+}
+
+async function unreadCount() {
+  const { count, error } = await insforge.database
+    .from('notifications').select('*', { count: 'exact', head: true }).eq('is_read', false)
+  if (error) return 0
+  return count || 0
+}
+
+async function markRead(id) {
+  await insforge.database.from('notifications').update({ is_read: true }).eq('id', id)
+}
+
+async function markAllRead() {
+  await insforge.database.from('notifications').update({ is_read: true }).eq('is_read', false)
+}
+
+// ---------------------------------------------------------------------------
+// storage
+// ---------------------------------------------------------------------------
+async function uploadFile(file) {
+  const { data, error } = await insforge.storage.from('uploads').uploadAuto(file)
+  if (error) throw error
+  // ⚠️ InsForge 返回的 url 指向新加坡直连主机（*.insforge.app 国内不可达），
+  // 必须改写为 Worker 反代域名 api.bfgzlt.cc.cd，否则 <img> 在大陆加载失败（破损图标）。
+  let url = (data && data.url) || ''
+  try {
+    const u = new URL(url)
+    const proxy = new URL(INS_FORGE_URL)
+    u.protocol = proxy.protocol
+    u.hostname = proxy.hostname
+    url = u.toString()
+  } catch (_) {}
+  return { key: data.key, url }
+}
+
+async function sendFileMessage(channelId, authorId, fileMeta) {
+  // fileMeta: { url, name, size, isImage }
+  const content = JSON.stringify({ url: fileMeta.url, name: fileMeta.name, size: fileMeta.size })
+  const { data, error } = await insforge.database
+    .from('messages')
+    .insert([{
+      channel_id: channelId, author_id: authorId, content,
+      content_type: fileMeta.isImage ? 'image' : 'file'
+    }]).select()
+  if (error) throw error
+  return data && data[0]
+}
+
+// ---------------------------------------------------------------------------
+// 消息互动：点赞 / 聚合 / 转发
+//   点赞走独立关联表 message_likes（Flarum 范式），计数前端聚合，规避触发器/RLS 冲突。
+// ---------------------------------------------------------------------------
+
+// 切换点赞：未赞→插入，已赞→删除。返回最新 { liked, total }。
+async function toggleLike(messageId, userId) {
+  const { data: existing } = await insforge.database
+    .from('message_likes').select('message_id')
+    .eq('message_id', messageId).eq('user_id', userId)
+  let liked
+  if (existing && existing.length) {
+    const { error } = await insforge.database
+      .from('message_likes').delete()
+      .eq('message_id', messageId).eq('user_id', userId)
+    if (error) throw error
+    liked = false
+  } else {
+    const { error } = await insforge.database
+      .from('message_likes').insert([{ message_id: messageId, user_id: userId }])
+    if (error) throw error
+    liked = true
+  }
+  // 聚合最新总数（前端计数来源，无计数列）
+  const { count, error: cErr } = await insforge.database
+    .from('message_likes').select('*', { count: 'exact', head: true })
+    .eq('message_id', messageId)
+  return { liked, total: (cErr ? 0 : (count || 0)) }
+}
+
+// 批量聚合某频道所有消息的点赞：{ [messageId]: { total, mine } }
+// 一次查询拿到相关点赞行，前端按 message_id 计数，避免 N 次请求。
+async function getLikeAggregates(messageIds, userId) {
+  const agg = {}
+  if (!messageIds || !messageIds.length) return agg
+  const { data, error } = await insforge.database
+    .from('message_likes').select('message_id, user_id')
+    .in('message_id', messageIds)
+  if (error || !data) return agg
+  data.forEach(function (r) {
+    if (!agg[r.message_id]) agg[r.message_id] = { total: 0, mine: false }
+    agg[r.message_id].total++
+    if (r.user_id === userId) agg[r.message_id].mine = true
+  })
+  return agg
+}
+
+// 转发：插入一条带 forward_from 引用的新消息（HuLa 范式）。
+// 走 messages INSERT → 现有 publish_message_realtime 广播 new_message → 天然实时。
+async function forwardMessage(channelId, authorId, payload) {
+  // payload: { forwardFrom, forwardAuthor, forwardPreview, content }
+  const { data, error } = await insforge.database
+    .from('messages').insert([{
+      channel_id: channelId,
+      author_id: authorId,
+      content: payload.content || (payload.forwardPreview || ''),
+      content_type: 'text',
+      forward_from: payload.forwardFrom || null,
+      forward_author: payload.forwardAuthor || '',
+      forward_preview: payload.forwardPreview || ''
+    }]).select()
+  if (error) throw error
+  return data && data[0]
+}
+
+// ---------------------------------------------------------------------------
+// realtime
+// ---------------------------------------------------------------------------
+let rtConnected = false
+
+async function connectRealtime(channelId, handlers) {
+  // handlers: { onMessage(msg), onPresence(members) }
+  if (!rtConnected) {
+    await insforge.realtime.connect()
+    rtConnected = true
+  }
+
+  // 清掉上一个频道的监听器，避免重复
+  if (newMessageHandler) {
+    insforge.realtime.off('new_message', newMessageHandler)
+    newMessageHandler = null
+  }
+
+  const channel = 'chat:' + channelId
+  const resp = await insforge.realtime.subscribe(channel)
+  if (!resp.ok) {
+    console.warn('[rt] 订阅失败', channel, resp.error)
+    return resp
+  }
+  if (handlers.onPresence && resp.presence) handlers.onPresence(resp.presence.members)
+
+  newMessageHandler = function (payload) {
+    if (payload && payload.channel_id === channelId && handlers.onMessage) {
+      handlers.onMessage(payload)
+    }
+  }
+  insforge.realtime.on('new_message', newMessageHandler)
+  return resp
+}
+
+function unsubscribeChannel(channelId) {
+  try { insforge.realtime.unsubscribe('chat:' + channelId) } catch (e) {}
+}
+
+function disconnectRealtime() {
+  if (newMessageHandler) {
+    try { insforge.realtime.off('new_message', newMessageHandler) } catch (e) {}
+    newMessageHandler = null
+  }
+  try { insforge.realtime.disconnect() } catch (e) {}
+  rtConnected = false
+}
+
+// ---------------------------------------------------------------------------
+// 导出到全局（app.js 是普通脚本，通过 window.IF 调用）
+// ---------------------------------------------------------------------------
+const IF = {
+  insforge,
+  loadProfiles, resolveAuthor, adaptUser, ensureProfile, completePendingProfile, updateMyProfile,
+  signIn, signUp, signOut, getCurrentUser, verifyEmail, resendVerification,
+  listChannels, getMessages, sendMessage, moderateMessage,
+  listNotifications, unreadCount, markRead, markAllRead,
+  uploadFile, sendFileMessage,
+  toggleLike, getLikeAggregates, forwardMessage,
+  connectRealtime, unsubscribeChannel, disconnectRealtime,
+  get isRealtimeConnected() { return rtConnected }
+}
+
+window.IF = IF
+window.dispatchEvent(new Event('IF_READY'))
