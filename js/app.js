@@ -2259,6 +2259,23 @@
     var id = m ? m[1] : '';
     if (id) { doRespond(id); return; }
 
+    function clearStaleNotif() {
+      item.style.opacity = '0.55';
+      var actions = item.querySelector('.notify-actions');
+      if (actions) actions.innerHTML = '<span class="notify-status">已过期</span>';
+      markNotifRead(n.id);
+    }
+
+    function pickByTitle(incoming) {
+      var senderName = (n.title || '').replace(/[[:space:]]*想加你为好友[[:space:]]*$/, '').trim();
+      if (!senderName) return null;
+      var matches = incoming.filter(function(p) {
+        var name = p.other && (p.other.nickname || p.other.username || '');
+        return name && name.indexOf(senderName) !== -1;
+      });
+      return matches.length === 1 ? matches[0] : null;
+    }
+
     if (IF.friendsList) {
       IF.friendsList().then(function(res) {
         var pending = (res && res.pending) || [];
@@ -2266,13 +2283,19 @@
         if (incoming.length === 1) {
           doRespond(incoming[0].id);
         } else if (incoming.length > 1) {
-          if (acceptBtn) acceptBtn.disabled = false;
-          if (rejectBtn) rejectBtn.disabled = false;
-          if (typeof showToast === 'function') showToast('该通知未携带请求ID，请在「好友」列表中操作', 'error', 2500);
+          var picked = pickByTitle(incoming);
+          if (picked) {
+            doRespond(picked.id);
+          } else {
+            if (acceptBtn) acceptBtn.disabled = false;
+            if (rejectBtn) rejectBtn.disabled = false;
+            if (typeof showToast === 'function') showToast('该通知未携带请求ID，请在「好友」列表中操作', 'error', 2500);
+          }
         } else {
+          clearStaleNotif();
           if (acceptBtn) acceptBtn.disabled = false;
           if (rejectBtn) rejectBtn.disabled = false;
-          if (typeof showToast === 'function') showToast('未找到待处理的好友请求', 'error', 2000);
+          if (typeof showToast === 'function') showToast('该请求已处理或已过期，已移除通知', 'error', 2000);
         }
       }).catch(function() {
         if (acceptBtn) acceptBtn.disabled = false;
@@ -2970,33 +2993,6 @@
       }
     }, { passive: true });
 
-    // 流星彩蛋：偶发 DOM 流星划过聊天区
-    function scheduleMeteor(){
-      if (document.body.dataset.theme !== 'starry') { setTimeout(scheduleMeteor, 3000); return; }
-      var delay = (Math.random() * 35 + 22) * 1000; // 22-57 秒
-      setTimeout(function(){
-        if (document.body.dataset.theme !== 'starry') { scheduleMeteor(); return; }
-        spawnMeteorAcrossChat();
-        scheduleMeteor();
-      }, delay);
-    }
-    function spawnMeteorAcrossChat(){
-      var el = document.createElement('div');
-      el.className = 'starry-meteor';
-      var startY = Math.random() * window.innerHeight * 0.65;
-      var endY = startY + Math.random() * 120 + 60;
-      el.style.cssText = 'position:fixed;z-index:2;pointer-events:none;width:220px;height:3px;left:-260px;top:0;opacity:0;transform:rotate(22deg);';
-      el.style.background = 'linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(180,220,255,0.8) 45%, rgba(255,255,255,1) 70%, rgba(255,255,255,0) 100%)';
-      el.style.boxShadow = '0 0 10px 2px rgba(180,230,255,0.55), 0 0 20px 6px rgba(140,200,255,0.25)';
-      document.body.appendChild(el);
-      var dur = Math.random() * 0.7 + 1.0;
-      gsap.fromTo(el,
-        { x: -260, y: startY, opacity: 1 },
-        { x: window.innerWidth + 260, y: endY, duration: dur, ease: 'power1.in',
-          onComplete: function(){ if (el.parentNode) el.parentNode.removeChild(el); } });
-      gsap.to(el, { opacity: 0, duration: 0.35, delay: dur - 0.35, ease: 'power1.in' });
-    }
-    scheduleMeteor();
   }
 
   function initBackgroundSettings(){

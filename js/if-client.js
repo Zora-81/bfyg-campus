@@ -345,12 +345,12 @@ async function notifyMentions({ messageId, authorId, channelId, content }) {
 async function friendsList() {
   const me = await getCurrentUserId()
   if (!me) return { friends: [], pending: [] }
-  const { data, error } = await insforge.database
-    .from('friends').select('*')
-    .or('user_id.eq.' + me + ',friend_id.eq.' + me)
-    .order('created_at', { ascending: false })
-  if (error) throw error
-  const rows = data || []
+  // InsForge SDK 对 OR 条件支持不稳定，拆成两次 eq 查询再合并更可靠
+  const [outgoing, incoming] = await Promise.all([
+    insforge.database.from('friends').select('*').eq('user_id', me),
+    insforge.database.from('friends').select('*').eq('friend_id', me)
+  ]);
+  const rows = [...(outgoing.data || []), ...(incoming.data || [])]
 
   // 关联 profiles 取对方资料（与现有 loadProfiles/getLikeAggregates 的 JS 侧 join 风格一致）
   const otherIds = rows.map(function (r) { return r.user_id === me ? r.friend_id : r.user_id })
