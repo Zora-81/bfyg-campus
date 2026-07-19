@@ -587,7 +587,7 @@
       if (channels.length > 0) { switchChannel(channels[0]); }
       fetchUnreadCount();
       subscribeNotifications();
-    }).catch(function() {
+    }).catch(function(err) {
       channels = []; renderChannels(); renderRightSidebar();
       showToast('加载频道失败，请检查网络', 'error');
     });
@@ -2228,34 +2228,62 @@
   }
 
   function respondToFriendRequest(n, action, item) {
-    if (!IF || !IF.friendRespond || !n.link) {
+    if (!IF || !IF.friendRespond) {
       if (typeof showToast === 'function') showToast('无法操作好友请求', 'error', 2000);
-      return;
-    }
-    var m = n.link.match(/[?&]id=([^&]+)/);
-    var id = m ? m[1] : '';
-    if (!id) {
-      if (typeof showToast === 'function') showToast('缺少请求ID', 'error', 2000);
       return;
     }
     var acceptBtn = item && item.querySelector('.notify-accept');
     var rejectBtn = item && item.querySelector('.notify-reject');
     if (acceptBtn) acceptBtn.disabled = true;
     if (rejectBtn) rejectBtn.disabled = true;
-    IF.friendRespond(id, action)
-      .then(function() {
-        item.style.opacity = '0.55';
-        var actions = item.querySelector('.notify-actions');
-        if (actions) actions.innerHTML = '<span class="notify-status">' + (action === 'accept' ? '已同意' : '已拒绝') + '</span>';
-        markNotifRead(n.id);
-        renderFriends();
-      })
-      .catch(function(err) {
+
+    function doRespond(id) {
+      IF.friendRespond(id, action)
+        .then(function() {
+          item.style.opacity = '0.55';
+          var actions = item.querySelector('.notify-actions');
+          if (actions) actions.innerHTML = '<span class="notify-status">' + (action === 'accept' ? '已同意' : '已拒绝') + '</span>';
+          markNotifRead(n.id);
+          renderFriends();
+        })
+        .catch(function(err) {
+          if (acceptBtn) acceptBtn.disabled = false;
+          if (rejectBtn) rejectBtn.disabled = false;
+          var raw = (err && (err.message || err.error_description || err.msg || String(err))) || '操作失败';
+          if (typeof showToast === 'function') showToast(raw, 'error', 2500);
+        });
+    }
+
+    // 新通知 link 已修复，旧通知 link 为空，兜底从 pending 列表找
+    var m = n.link ? n.link.match(/[?&]id=([^&]+)/) : null;
+    var id = m ? m[1] : '';
+    if (id) { doRespond(id); return; }
+
+    if (IF.friendsList) {
+      IF.friendsList().then(function(res) {
+        var pending = (res && res.pending) || [];
+        var incoming = pending.filter(function(p) { return p.direction === 'in'; });
+        if (incoming.length === 1) {
+          doRespond(incoming[0].id);
+        } else if (incoming.length > 1) {
+          if (acceptBtn) acceptBtn.disabled = false;
+          if (rejectBtn) rejectBtn.disabled = false;
+          if (typeof showToast === 'function') showToast('该通知未携带请求ID，请在「好友」列表中操作', 'error', 2500);
+        } else {
+          if (acceptBtn) acceptBtn.disabled = false;
+          if (rejectBtn) rejectBtn.disabled = false;
+          if (typeof showToast === 'function') showToast('未找到待处理的好友请求', 'error', 2000);
+        }
+      }).catch(function() {
         if (acceptBtn) acceptBtn.disabled = false;
         if (rejectBtn) rejectBtn.disabled = false;
-        var raw = (err && (err.message || err.error_description || err.msg || String(err))) || '操作失败';
-        if (typeof showToast === 'function') showToast(raw, 'error', 2500);
+        if (typeof showToast === 'function') showToast('无法操作好友请求', 'error', 2000);
       });
+    } else {
+      if (acceptBtn) acceptBtn.disabled = false;
+      if (rejectBtn) rejectBtn.disabled = false;
+      if (typeof showToast === 'function') showToast('缺少请求ID', 'error', 2000);
+    }
   }
 
   function markNotifRead(id) {
@@ -3429,11 +3457,7 @@
     });
   }
 
-})();
-
 // ===== LOGIN CAROUSEL =====
-(function() {
-  'use strict';
 
   var CARD_IMAGES = [
     '../images/campus-01.jpg',
