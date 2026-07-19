@@ -992,6 +992,8 @@
   function renderMessages(){
     if(!messagesArea) return;
     var msgs = channelMessages[currentChannel ? currentChannel.id : ''] || [];
+    // 只渲染顶层消息；评论（parent_id 非空）只显示在对应评论区，避免"下发一条真实消息"的错觉
+    msgs = msgs.filter(function(m){ return !m.parent_id; });
     messagesArea.innerHTML='';
 
     if (!currentChannel) return;
@@ -1225,8 +1227,10 @@
               renderCommentList(cSec, msg);
               cSec.scrollIntoView({ behavior:'smooth', block:'nearest' });
               setReply(msg); // 进入回复模式：输入框显示"回复 @X"，发送带 parent_id = msg.id
+              setCommentTarget(msg.id); // 移动端评论模式同步
             } else if (replyingTo && replyingTo.id === msg.id) {
               clearReply();
+              setCommentTarget(null);
             }
           }
           showInputBar();
@@ -1441,54 +1445,10 @@
     // ═══ 移动端评论模式：追加内联评论，不发新消息到频道 ═══
     var cmtId = getCommentTarget();
     if (cmtId) {
-      var cmtSec = document.getElementById('comment-'+cmtId);
-      if (cmtSec) {
-        // 移除"暂无评论"占位文字
-        var placeholder = cmtSec.querySelector('div');
-        if (placeholder && placeholder.textContent.includes('暂无评论')) {
-          placeholder.remove();
-        }
-        // 创建评论条目
-        var cmtItem = document.createElement('div');
-        cmtItem.className = 'msg-comment-item';
-        var userInitial = getInitial(currentUser.nickname || currentUser.username || '?');
-        var userColor = getAvatarColor(currentUser.username || '');
-        var now = new Date();
-        var timeStr = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
-        cmtItem.innerHTML =
-          '<div class="msg-comment-avatar" style="background:'+userColor+'">'+userInitial+'</div>'+
-          '<div class="msg-comment-body">'+
-            '<div class="comment-meta">'+
-              '<span class="comment-author">'+escapeHtml(currentUser.nickname||currentUser.username)+'</span>'+
-              '<span class="comment-time">'+timeStr+'</span>'+
-            '</div>'+
-            '<div class="msg-comment-text">'+escapeHtml(text)+'</div>'+
-          '</div>';
-        cmtSec.appendChild(cmtItem);
-        // 更新评论计数按钮
-        var group = cmtSec.closest('.msg-group');
-        if (group) {
-          var cmtBtn = group.querySelector('[data-act="comment"] .msg-interact-count');
-          if (cmtBtn) {
-            var cur = parseInt(cmtBtn.textContent) || 0;
-            cmtBtn.textContent = cur + 1;
-          }
-        }
-        // 动效
-        if (!REDUCED_MOTION && typeof gsap !== 'undefined') {
-          try { gsap.fromTo(cmtItem, {y:10,opacity:0}, {y:0,opacity:1,duration:0.25,ease:'power2.out'}); } catch(e){}
-        }
-      }
-      msgInput.value='';
-      // 保持评论placeholder（可连续评论）
-      if (msgInput) {
-        msgInput.placeholder = '💬 写下你的评论...';
-      }
-      // 保持输入栏打开（方便连续评论）
-      msgInput.focus();
-      // 滚动到评论区
-      if (cmtSec) cmtSec.scrollIntoView({ behavior:'smooth', block:'nearest' });
-      return; // ← 不执行后续的频道消息发送
+      // 移动端评论与桌面回复模式统一：映射到 replyingTo，确保真实发送并持久化
+      var cmtMsg = findMessageById(currentChannel.id, cmtId);
+      if (cmtMsg) setReply(cmtMsg);
+      setCommentTarget(null);
     }
 
     // ═══ 正常频道消息（非评论模式）═══
