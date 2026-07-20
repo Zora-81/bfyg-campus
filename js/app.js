@@ -222,6 +222,47 @@
     }
   }
 
+  // ── 兜底对账：实时 publish 可能不被服务器转发（客户端广播依赖不确定），
+  //    故用户界面每 5 秒用本地消息 id 去库里问「还在不在」，已不存在的就地移除。
+  //    这样后台删消息（含级联子回复）无需刷新、也无论实时是否生效，都能秒级消失。
+  let deletionSyncTimer = null
+  function startDeletionSync() {
+    stopDeletionSync()
+    deletionSyncTimer = setInterval(runDeletionSync, 5000)
+  }
+  function stopDeletionSync() {
+    if (deletionSyncTimer) { clearInterval(deletionSyncTimer); deletionSyncTimer = null }
+  }
+  let _syncRunning = false
+  async function runDeletionSync() {
+    if (_syncRunning) return
+    if (!IF || !currentChannel || !currentChannel.id) return
+    if (document.hidden) return // 后台标签不查，省流量
+    var chId = currentChannel.id
+    var arr = channelMessages[chId]
+    if (!arr || arr.length === 0) return
+    var ids = arr.map(function (m) { return m.id })
+    _syncRunning = true
+    try {
+      var alive = {}
+      for (var i = 0; i < ids.length; i += 80) {
+        var chunk = ids.slice(i, i + 80)
+        var res = await IF.insforge.database
+          .from('messages').select('id').in('id', chunk).eq('channel_id', chId)
+        if (res && res.data) res.data.forEach(function (r) { alive[r.id] = true })
+      }
+      var removed = ids.filter(function (id) { return !alive[id] })
+      if (removed.length === 0) return
+      var rmSet = {}
+      removed.forEach(function (id) { rmSet[id] = true })
+      // 同时摘除其子回复（本地内存里 parent_id 指向被删父消息的）
+      arr.forEach(function (m) { if (m.parent_id && rmSet[m.parent_id]) rmSet[m.id] = true })
+      channelMessages[chId] = arr.filter(function (m) { return !rmSet[m.id] })
+      if (currentChannel && currentChannel.id === chId) renderMessages()
+    } catch (e) {}
+    finally { _syncRunning = false }
+  }
+
   // 订阅当前频道的实时消息（切换频道时调用）
   function subscribeCurrentChannel() {
     if (!IF || !currentChannel || !currentChannel.id) return;
@@ -235,10 +276,12 @@
         if (onlineEl) onlineEl.textContent = (members ? members.length : 0);
       }
     });
+    startDeletionSync(); // 启动兜底对账（后台删消息无需刷新即消失）
   }
 
   function disconnectRealtime() {
     if (IF) IF.disconnectRealtime();
+    stopDeletionSync(); // 停掉兜底对账定时器
     if (connectionDot) connectionDot.classList.remove('ws-connected');
     // 清理通知订阅：realtime handler、轮询定时器、订阅标记
     if (notifRtHandler && IF && IF.insforge && IF.insforge.realtime) {
@@ -1361,21 +1404,17 @@
   // 构建单条消息 DOM 节点（renderMessages / appendMessageNode / replaceMessageNode 共用）
   function buildMessageGroup(msg) {
     var group = document.createElement('div');
-    group.className = 'msg-group' + (msg.isPending ? ' msg-pending' : '') + (msg.isFailed ? ' msg-failed' : '') + (msg.is_mod ? ' msg-group-mod' : '');
+    group.className = 'msg-group' + (msg.isPending ? ' msg-pending' : '') + (msg.isFailed ? ' msg-failed' : '') + (msg.is_mod ? ' msg-group-mod' : '') + (msg.is_recalled ? ' msg-recalled-admin' : '');
     group.setAttribute('data-msg-id', msg.id || '');
 
     // ── 撤回（软删除）可见性 ──
     // 非管理员：看不到任何已撤回消息（等同彻底删除）。
-    // 管理员：仍可见，渲染为灰色「XXX 撤回了一条消息」占位。
+    // 管理员：仍可见，消息内容显示红色以识别已撤回。
     if (msg.is_recalled) {
-      if (currentUser && currentUser.role === 'admin') {
-        var rAuthor = (IF ? IF.resolveAuthor(msg.recalled_by || msg.author_id) : { nickname: '管理员' });
-        var rName = (rAuthor && (rAuthor.nickname || rAuthor.username)) || '管理员';
-        group.className = 'msg-group msg-recalled-group';
-        group.innerHTML = '<div class="msg-recalled">「' + escapeHtml(rName) + ' 撤回了一条消息」</div>';
-        return group;
+      if (!(currentUser && currentUser.role === 'admin')) {
+        return null; // 非管理员不可见
       }
-      return null; // 非管理员不可见
+      // 管理员继续走正常渲染，className 会加 msg-recalled-admin 标红
     }
 
     if (msg.is_pinned) { group.style.background = 'rgba(240,178,50,0.04)'; group.style.borderRadius = 'var(--r)'; }
@@ -1635,10 +1674,8 @@
     var node = messagesArea ? messagesArea.querySelector('.msg-group[data-msg-id="' + msgId + '"]') : null;
     if (!node) return;
     if (currentUser && currentUser.role === 'admin') {
-      var rAuthor = (IF ? IF.resolveAuthor(recalledBy) : { nickname: '管理员' });
-      var rName = (rAuthor && (rAuthor.nickname || rAuthor.username)) || '管理员';
-      node.className = 'msg-group msg-recalled-group';
-      node.innerHTML = '<div class="msg-recalled">「' + escapeHtml(rName) + ' 撤回了一条消息」</div>';
+      var fresh = buildMessageGroup(target);
+      if (fresh) { node.replaceWith(fresh); } else { node.remove(); }
     } else {
       node.remove();
       if (target) { var idx = arr.indexOf(target); if (idx >= 0) arr.splice(idx, 1); }

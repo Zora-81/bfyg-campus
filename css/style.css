@@ -2029,13 +2029,35 @@ body.main-active #main-dots { display:block; }
   .recall-pop-btn { min-height:44px; } /* 移动端触摸目标 ≥44px */
 }
 
-/* ── 已撤回占位（仅管理员可见）── */
-.msg-recalled {
-  font-size:0.82rem; color:var(--text-dim);
-  opacity:0.72; text-align:center;
-  border-top:1px dashed rgba(255,255,255,0.08);
-  border-bottom:1px dashed rgba(255,255,255,0.08);
-  padding:8px 4px;
+/* ── 已撤回消息（仅管理员可见，红色标识）── */
+.msg-recalled-admin {
+  position: relative;
+}
+.msg-recalled-admin::before {
+  content: '';
+  position: absolute;
+  left: -8px; top: 4px; bottom: 4px;
+  width: 3px;
+  background: linear-gradient(180deg, rgba(239,68,68,0.9), rgba(239,68,68,0.4));
+  border-radius: 2px;
+}
+.msg-recalled-admin .msg-feed-body .msg-content,
+.msg-recalled-admin .msg-feed-body .msg-forward,
+.msg-recalled-admin .msg-feed-body .msg-quote,
+.msg-recalled-admin .msg-feed-body .msg-img-gallery,
+.msg-recalled-admin .msg-feed-body .msg-file-card {
+  color: #ff6b6b !important;
+  border-color: rgba(239,68,68,0.35) !important;
+}
+.msg-recalled-admin .msg-feed-body .msg-content img {
+  opacity: 0.72;
+  filter: grayscale(30%) sepia(15%) hue-rotate(320deg) saturate(1.2);
+}
+.msg-recalled-admin .msg-view-count,
+.msg-recalled-admin .msg-feed-name,
+.msg-recalled-admin .msg-feed-role,
+.msg-recalled-admin .msg-interact-btn {
+  opacity: 0.85;
 }
 
 /* ═══ 内联评论区（完全按参考图：与主消息内容左对齐，无紫色边线） ═══ */
