@@ -1,0 +1,6 @@
+# Cloudflare Pages — 强制浏览器/CDN 不缓存（解决微信 WebView 顽固缓存）
+# 注意：不要加 COEP/COOP，否则会拦截跨域子资源（Google Fonts / cdnjs GSAP / 部分 API），导致页面样式与动画丢失
+/*
+Cache-Control: no-cache, no-store, must-revalidate
+Pragma: no-cache
+Expires: 0

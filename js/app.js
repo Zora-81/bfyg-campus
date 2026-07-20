@@ -215,6 +215,15 @@
   function disconnectRealtime() {
     if (IF) IF.disconnectRealtime();
     if (connectionDot) connectionDot.classList.remove('ws-connected');
+    // 清理通知订阅：realtime handler、轮询定时器、订阅标记
+    if (notifRtHandler && IF && IF.insforge && IF.insforge.realtime) {
+      var rt2 = IF.insforge.realtime;
+      try { rt2.off('new_notification', notifRtHandler); } catch (e) {}
+      try { rt2.unsubscribe('notifications:' + (currentUser ? currentUser.id : '')); } catch (e) {}
+    }
+    notifRtHandler = null;
+    notifRtSubscribed = false;
+    if (_pollUnreadInterval) { clearInterval(_pollUnreadInterval); _pollUnreadInterval = null; }
   }
 
   // ==================== TEXT TYPE ====================
@@ -2579,8 +2588,7 @@
     } catch (e) { console.warn('[notif-rt] connect', e); }
   }
 
-  // 兜底轮询：realtime 未命中时仍刷新未读红点（不破坏现有逻辑）
-  setInterval(function() {
+  var _pollUnreadInterval = setInterval(function() {
     if (document.visibilityState === 'visible' && currentUser && IF && IF.unreadCount) {
       fetchUnreadCount();
     }
