@@ -22,6 +22,8 @@ function withTimeout(promise, ms) {
 // ---- profiles 缓存（小表，会话内全量加载，用于解析消息作者）----
 const profileCache = {}            // id -> { id, username, nickname, avatar_url, role, title, status }
 let newMessageHandler = null       // 当前频道的 realtime 监听器（切换时移除）
+let newDeleteHandler = null        // 当前频道的 realtime 删除监听器（切换时移除）
+let newRecallHandler = null        // 当前频道的 realtime 撤回监听器（切换时移除）
 
 // ---------------------------------------------------------------------------
 // profiles
@@ -430,15 +432,12 @@ async function notifyDm({ messageId, authorId, channelId, friendId, content }) {
   if (error) throw error
 }
 
-// 按昵称或用户名搜索用户（ authenticated 用户可读 profiles，RLS 允许）
+// 按昵称搜索用户（authenticated 用户可读 profiles，RLS 允许）
+// 安全：所有用户输入在后端 SQL 函数中做 LIKE 元字符转义，前端不再拼 % 到查询条件里
 async function searchUsers(keyword, limit) {
   const k = (keyword || '').trim()
-  if (!k) return []
-  const { data, error } = await insforge.database
-    .from('profiles')
-    .select('id, username, nickname, avatar_url')
-    .or('username.ilike.%' + k + '%, nickname.ilike.%' + k + '%')
-    .limit(limit || 5)
+  if (!k || k.length > 30) return []
+  const { data, error } = await insforge.database.rpc('search_users_safe', { p_keyword: k, p_limit: limit || 5 })
   if (error) throw error
   return data || []
 }
@@ -506,19 +505,30 @@ async function toggleLike(messageId, userId) {
 }
 
 // 批量聚合某频道所有消息的点赞：{ [messageId]: { total, mine } }
-// 一次查询拿到相关点赞行，前端按 message_id 计数，避免 N 次请求。
+// InsForge 对超长 IN 查询会 502，这里按 CHUNK 分批拉取。
 async function getLikeAggregates(messageIds, userId) {
   const agg = {}
   if (!messageIds || !messageIds.length) return agg
-  const { data, error } = await insforge.database
-    .from('message_likes').select('message_id, user_id')
-    .in('message_id', messageIds)
-  if (error || !data) return agg
-  data.forEach(function (r) {
-    if (!agg[r.message_id]) agg[r.message_id] = { total: 0, mine: false }
-    agg[r.message_id].total++
-    if (r.user_id === userId) agg[r.message_id].mine = true
-  })
+  // 先建占位，保证 0 赞的消息也显示总数
+  for (var i = 0; i < messageIds.length; i++) {
+    agg[messageIds[i]] = { total: 0, mine: false }
+  }
+  var CHUNK = 48 // PostgREST IN 上限建议 50 以内，留余量
+  for (var i = 0; i < messageIds.length; i += CHUNK) {
+    var slice = messageIds.slice(i, Math.min(i + CHUNK, messageIds.length))
+    try {
+      const { data, error } = await insforge.database
+        .from('message_likes').select('message_id, user_id')
+        .in('message_id', slice)
+      if (!error && data) {
+        data.forEach(function (r) {
+          if (!agg[r.message_id]) agg[r.message_id] = { total: 0, mine: false }
+          agg[r.message_id].total++
+          if (r.user_id === userId) agg[r.message_id].mine = true
+        })
+      }
+    } catch (e) { /* 单批失败不影响其他批次 */ }
+  }
   return agg
 }
 
@@ -557,6 +567,14 @@ async function connectRealtime(channelId, handlers) {
     insforge.realtime.off('new_message', newMessageHandler)
     newMessageHandler = null
   }
+  if (newDeleteHandler) {
+    insforge.realtime.off('delete_message', newDeleteHandler)
+    newDeleteHandler = null
+  }
+  if (newRecallHandler) {
+    insforge.realtime.off('recall_message', newRecallHandler)
+    newRecallHandler = null
+  }
 
   const channel = 'chat:' + channelId
   const resp = await insforge.realtime.subscribe(channel)
@@ -572,11 +590,35 @@ async function connectRealtime(channelId, handlers) {
     }
   }
   insforge.realtime.on('new_message', newMessageHandler)
+
+  // 删除事件：后端无 DELETE 触发器，由删除发起方（如后台）实时广播 delete_message
+  // { id, channel_id }，所有订阅该频道的客户端据此即时移除 DOM 与内存数组。
+  if (handlers.onDelete) {
+    newDeleteHandler = function (payload) {
+      if (payload && payload.channel_id === channelId && handlers.onDelete) {
+        handlers.onDelete(payload)
+      }
+    }
+    insforge.realtime.on('delete_message', newDeleteHandler)
+  }
+
+  // 撤回事件：由撤回发起方实时广播 recall_message { id, channel_id, recalled_by }，
+  // 所有订阅该频道的客户端据此即时隐藏（普通成员）或转「已撤回」占位（管理员）。
+  if (handlers.onRecall) {
+    newRecallHandler = function (payload) {
+      if (payload && payload.channel_id === channelId && handlers.onRecall) {
+        handlers.onRecall(payload)
+      }
+    }
+    insforge.realtime.on('recall_message', newRecallHandler)
+  }
   return resp
 }
 
 function unsubscribeChannel(channelId) {
   try { insforge.realtime.unsubscribe('chat:' + channelId) } catch (e) {}
+  try { if (newDeleteHandler) insforge.realtime.off('delete_message', newDeleteHandler) } catch (e) {}
+  try { if (newRecallHandler) insforge.realtime.off('recall_message', newRecallHandler) } catch (e) {}
 }
 
 function disconnectRealtime() {
@@ -584,8 +626,56 @@ function disconnectRealtime() {
     try { insforge.realtime.off('new_message', newMessageHandler) } catch (e) {}
     newMessageHandler = null
   }
+  if (newDeleteHandler) {
+    try { insforge.realtime.off('delete_message', newDeleteHandler) } catch (e) {}
+    newDeleteHandler = null
+  }
+  if (newRecallHandler) {
+    try { insforge.realtime.off('recall_message', newRecallHandler) } catch (e) {}
+    newRecallHandler = null
+  }
   try { insforge.realtime.disconnect() } catch (e) {}
   rtConnected = false
+}
+
+// 删除广播：由删除发起方（后台）调用，向该频道实时推送 delete_message 事件。
+// 后端无 DELETE 触发器（CLI 拒绝 CREATE FUNCTION），故用客户端 publish 补足实时删除能力。
+async function publishDelete(channelId, id) {
+  try {
+    if (!rtConnected) await insforge.realtime.connect()
+    insforge.realtime.publish('chat:' + channelId, 'delete_message', { id: id, channel_id: channelId })
+  } catch (e) {
+    console.warn('[rt] publishDelete failed', e)
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 撤回：软删除（标记 is_recalled）+ 实时广播 recall_message
+// ---------------------------------------------------------------------------
+
+// 标记消息已撤回：UPDATE is_recalled=true（RLS 会校验「作者1分钟内」或「管理员」）。
+async function recallMessage(channelId, msgId, recalledBy) {
+  const patch = {
+    is_recalled: true,
+    recalled_at: new Date().toISOString(),
+    recalled_by: recalledBy
+  }
+  const { data, error } = await insforge.database
+    .from('messages').update(patch).eq('id', msgId).select()
+  if (error) throw error
+  return data && data[0]
+}
+
+// 实时广播：向该频道推送 recall_message 事件，其他在线客户端据此立即隐藏/占位。
+async function publishRecall(channelId, id, recalledBy) {
+  try {
+    if (!rtConnected) await insforge.realtime.connect()
+    insforge.realtime.publish('chat:' + channelId, 'recall_message', {
+      id: id, channel_id: channelId, recalled_by: recalledBy
+    })
+  } catch (e) {
+    console.warn('[rt] publishRecall failed', e)
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -601,7 +691,8 @@ const IF = {
   findOrCreateDm, notifyDm,
   uploadFile, sendFileMessage,
   toggleLike, getLikeAggregates, forwardMessage,
-  connectRealtime, unsubscribeChannel, disconnectRealtime,
+  connectRealtime, unsubscribeChannel, disconnectRealtime, publishDelete,
+  recallMessage, publishRecall,
   get isRealtimeConnected() { return rtConnected }
 }
 

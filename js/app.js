@@ -34,6 +34,11 @@
     return window.innerWidth <= 900 || ('ontouchstart' in window);
   }
 
+  // 公告栏（announcement 类型频道）仅限管理员发言
+  function isChannelLocked() {
+    return currentChannel && currentChannel.type === 'announcement' && (!currentUser || currentUser.role !== 'admin');
+  }
+
   var currentUser = null; // { id, username, nickname, role, avatar_url }
   var channels = [];     // 服务器频道列表
   var channelMessages = {}; // { channelId: [msg, ...] }
@@ -199,12 +204,32 @@
     }
   }
 
+  // 收到「消息被删除」的实时事件（后台删除时由发起方广播 delete_message）。
+  // 从内存数组摘除该消息及其全部子回复，当前频道则重建 DOM（自动还原已打开的评论区）。
+  function handleIncomingDelete(payload) {
+    if (!payload || !payload.id) return;
+    var chId = payload.channel_id;
+    if (!channelMessages[chId]) return;
+    var delId = payload.id;
+    var toRemove = {};
+    toRemove[delId] = true;
+    channelMessages[chId].forEach(function (m) { if (m.parent_id === delId) toRemove[m.id] = true; });
+    var before = channelMessages[chId].length;
+    channelMessages[chId] = channelMessages[chId].filter(function (m) { return !toRemove[m.id]; });
+    if (channelMessages[chId].length === before) return; // 本频道没有这条，跳过
+    if (currentChannel && currentChannel.id === chId) {
+      renderMessages(); // 重建 DOM，已删消息（含其子回复）不再显示，已打开评论区自动还原
+    }
+  }
+
   // 订阅当前频道的实时消息（切换频道时调用）
   function subscribeCurrentChannel() {
     if (!IF || !currentChannel || !currentChannel.id) return;
     if (connectionDot) connectionDot.classList.add('ws-connected');
     IF.connectRealtime(currentChannel.id, {
       onMessage: handleIncomingMessage,
+      onDelete: handleIncomingDelete,
+      onRecall: handleIncomingRecall,
       onPresence: function(members) {
         var onlineEl = document.getElementById('rp-online-count');
         if (onlineEl) onlineEl.textContent = (members ? members.length : 0);
@@ -876,41 +901,277 @@
 
   // ==================== CHANNELS ====================
 
+  // ── 频道动画映射（GSAP） ──
+  var chAnimMap = {
+    '公告栏':   'typewriter',
+    '综合大厅': 'bounce',
+    '学习园地': 'flip',
+    '生活日常': 'breathe',
+    '二次元世界': 'rainbow'
+  };
+
+  // 骨架屏动画映射
+  var chSkeletonMap = {
+    '公告栏':   'notice',   '综合大厅': 'general',
+    '学习园地': 'study',    '生活日常': 'life',
+    '二次元世界': 'anime'
+  };
+  var _skeletonTL = null;
+
+  function playChannelAnim(item, animType) {
+    var nameEl = item.querySelector('.ch-name');
+    if (!nameEl) return;
+    try {
+      switch(animType) {
+        case 'typewriter':
+          gsap.fromTo(nameEl,
+            { clipPath: 'inset(0 100% 0 0)', opacity: 0.3 },
+            { clipPath: 'inset(0 0% 0 0)', opacity: 1, duration: 0.5, ease: 'power2.inOut' }
+          );
+          var cursor = document.createElement('span');
+          cursor.textContent = '\u252C'; cursor.style.cssText = 'color:var(--accent);animation:sk-blink 0.6s step-end infinite;margin-left:2px;';
+          nameEl.appendChild(cursor);
+          setTimeout(function(){ if(cursor.parentNode) cursor.remove(); }, 800);
+          break;
+        case 'bounce':
+          gsap.fromTo(item,
+            { scale: 0.82, opacity: 0.5 },
+            { scale: 1, opacity: 1, duration: 0.55, ease: 'elastic.out(1, 0.35)' }
+          );
+          var ripple = document.createElement('div');
+          ripple.style.cssText = 'position:absolute;inset:-4px;border-radius:12px;border:2px solid rgba(124,92,252,0.4);pointer-events:none;';
+          item.style.position='relative'; item.appendChild(ripple);
+          gsap.fromTo(ripple, {scale:0.8,opacity:1}, {scale:1.5,opacity:0,duration:0.5,ease:'power2.out',onComplete:function(){ripple.remove();}});
+          break;
+        case 'flip':
+          gsap.fromTo(item,
+            { rotationY: -90, opacity: 0, transformOrigin: 'left center' },
+            { rotationY: 0, opacity: 1, duration: 0.5, ease: 'back.out(1.4)' }
+          );
+          break;
+        case 'breathe':
+          gsap.fromTo(item,
+            { opacity: 0.5, scale: 0.95 },
+            { opacity: 1, scale: 1, duration: 0.45, ease: 'sine.inOut', yoyo: true, repeat: 1 }
+          );
+          var glow = document.createElement('div');
+          glow.style.cssText = 'position:absolute;inset:-4px;border-radius:12px;pointer-events:none;';
+          item.style.position='relative'; item.appendChild(glow);
+          gsap.fromTo(glow, {boxShadow:'0 0 0 rgba(16,185,129,0)'}, {
+            boxShadow: '0 0 20px rgba(16,185,129,0.2)', duration: 0.9, yoyo:true, repeat:1,
+            onComplete:function(){ if(glow.parentNode) glow.remove(); gsap.set(item,{clearProps:'all'}); }
+          });
+          break;
+        case 'rainbow':
+          gsap.to(nameEl, {
+            color: ['#ff6b9d','#c56cf0','#17c0eb','#ffd32a','#ff6b9d'],
+            duration: 0.6, ease: 'none',
+            onComplete: function() { gsap.set(nameEl, { clearProps: 'color' }); }
+          });
+          var star = document.createElement('span'); star.textContent='\u2728';
+          star.style.cssText = 'position:absolute;right:10px;top:50%;translateY(-50%);font-size:14px;pointer-events:none;';
+          item.style.position='relative'; item.appendChild(star);
+          gsap.fromTo(star, {opacity:0,scale:0,rotation:-180},
+            {opacity:1,scale:1.4,rotation:0,duration:0.3,ease:'back.out(2)',
+             yoyo:true,repeat:1,onComplete:function(){star.remove();}});
+          break;
+        default:
+          gsap.fromTo(item, {x:-10,opacity:0.5},{x:0,opacity:1,duration:0.3,ease:'power2.out'});
+      }
+    } catch(e) {
+      item.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
+      item.style.transform = 'scale(1.05)';
+      setTimeout(function(){ item.style.transform=''; }, 300);
+    }
+  }
+
+  // ── 频道图标映射（动态 CSS 动画图标） ──
+  var chIconMap = {
+    '公告栏':   'ch-icon-notice',
+    '综合大厅': 'ch-icon-chat',
+    '学习园地': 'ch-icon-book',
+    '生活日常': 'ch-icon-life',
+    '二次元世界': 'ch-icon-anime'
+  };
+
+  // ── 顶部频道信息卡：主题 key + 大动态图标模板 ──
+  var chHeroMap = {
+    '公告栏':   'notice',
+    '综合大厅': 'chat',
+    '学习园地': 'book',
+    '生活日常': 'life',
+    '二次元世界': 'anime'
+  };
+  var chHeroIcon = {
+    notice: '<span class="hi hi-notice"><i class="hn-horn"></i><i class="hn-wave w1"></i><i class="hn-wave w2"></i><i class="hn-star"></i></span>',
+    chat:   '<span class="hi hi-chat"><i class="hc-bubble b1"></i><i class="hc-bubble b2"></i><i class="hc-dots"></i></span>',
+    book:   '<span class="hi hi-book"><i class="hb-cover"></i><i class="hb-spine"></i><i class="hb-page"></i><i class="hb-pen"></i></span>',
+    life:   '<span class="hi hi-life"><i class="hl-heart"></i><i class="hl-ring r1"></i><i class="hl-ring r2"></i><i class="hl-leaf"></i></span>',
+    anime:  '<span class="hi hi-anime"><i class="ha-star big"></i><i class="ha-ring"></i><i class="ha-star s1"></i><i class="ha-star s2"></i></span>'
+  };
+  var _reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function applyChannelCard(ch){
+    var card = document.getElementById('nav-channel-card');
+    var iconBox = document.getElementById('ch-card-icon');
+    var glow = document.getElementById('ch-card-glow');
+    if(!card || !ch) return;
+    var key = chHeroMap[ch.name] || 'chat';
+    card.setAttribute('data-ch', key);
+    if(iconBox) iconBox.innerHTML = chHeroIcon[key] || chHeroIcon.chat;
+    if(_reduceMotion) { if(glow) glow.style.opacity = '0.55'; return; }
+    try {
+      if(iconBox) gsap.fromTo(iconBox, {scale:0.5, rotation:-14, opacity:0}, {scale:1, rotation:0, opacity:1, duration:0.5, ease:'back.out(1.7)', clearProps:'transform'});
+      if(glow) gsap.fromTo(glow, {opacity:0, x:'-45%'}, {opacity:1, x:'0%', duration:0.5, ease:'power2.out', onComplete:function(){ try{ gsap.to(glow, {opacity:0.55, duration:0.4}); }catch(e){} }});
+      gsap.fromTo(card, {backgroundColor:'rgba(255,255,255,0.05)'}, {backgroundColor:'', duration:0.5, ease:'power2.out', clearProps:'backgroundColor'});
+    } catch(e) {
+      if(glow) glow.style.opacity = '0.55';
+    }
+  }
+
   function renderChannels(){
     if(!sidebarChannels) return;
     sidebarChannels.innerHTML='';
     if (!channels || channels.length === 0) return;
 
-    // 分组：公告 / 聊天 / 生活
     var groups = { announcement: [], public: [] };
     channels.forEach(function(ch) {
       if (ch.type === 'announcement') groups.announcement.push(ch);
       else groups.public.push(ch);
     });
 
-    var cats = [
-      { label: '📢 公告频道', items: groups.announcement },
-      { label: '💬 交流频道', items: groups.public },
-    ];
+    // ═══ 公告频道 — 不折叠 ═══
+    groups.announcement.forEach(function(ch){
+      var item=document.createElement('div');
+      var isActive = currentChannel && currentChannel.id === ch.id;
+      item.className='ch-item ch-notice'+(isActive?' active':''); item.dataset.channel=ch.id;
+      item.innerHTML='<span class="ch-icon '+(chIconMap[ch.name]||'')+'"></span><span class="ch-name">'+escapeHtml(ch.name)+'</span>';
+      item.addEventListener('click',function(){
+        switchChannel(ch);
+        playChannelAnim(this, chAnimMap[ch.name]||'bounce');
+      });
+      sidebarChannels.appendChild(item);
+      if(isActive) playChannelAnim(item, chAnimMap[ch.name]||'bounce');
+    });
 
-    cats.forEach(function(cat) {
-      if (cat.items.length === 0) return;
+    // ═══ 交流频道 — 可折叠 ═══
+    if(groups.public.length > 0){
       var catDiv=document.createElement('div'); catDiv.className='ch-category';
       var title=document.createElement('div'); title.className='ch-category-title';
-      title.innerHTML='<svg viewBox="0 0 12 12"><path d="M2 4l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>'+cat.label;
+      title.innerHTML='<svg viewBox="0 0 12 12"><path d="M2 4l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>\uD83D\uDCAC \u4ea4\u6d41\u9891\u9053';
       var list=document.createElement('div'); list.className='ch-list';
       title.addEventListener('click',function(){ this.classList.toggle('collapsed'); list.style.display=this.classList.contains('collapsed')?'none':''; });
 
-      cat.items.forEach(function(ch){
+      groups.public.forEach(function(ch){
         var item=document.createElement('div');
         var isActive = currentChannel && currentChannel.id === ch.id;
         item.className='ch-item'+(isActive?' active':''); item.dataset.channel=ch.id;
-        item.innerHTML='<span class="ch-icon">#</span><span class="ch-name">'+escapeHtml(ch.name)+'</span>';
-        item.addEventListener('click',function(){ switchChannel(ch); });
+        item.innerHTML='<span class="ch-icon '+(chIconMap[ch.name]||'')+'"></span><span class="ch-name">'+escapeHtml(ch.name)+'</span>';
+        item.addEventListener('click',function(){
+          switchChannel(ch);
+          playChannelAnim(this, chAnimMap[ch.name]||'bounce');
+        });
         list.appendChild(item);
+        if(isActive) playChannelAnim(item, chAnimMap[ch.name]||'bounce');
       });
       catDiv.appendChild(title); catDiv.appendChild(list); sidebarChannels.appendChild(catDiv);
-    });
+    }
+
+    // 入场交错动画
+    var allItems = sidebarChannels.querySelectorAll('.ch-item');
+    if (allItems.length > 0) {
+      try { gsap.fromTo(allItems, {opacity:0,x:-20}, {opacity:1,x:0,duration:0.4,stagger:0.08,ease:'power2.out',overwrite:true}); } catch(e){}
+    }
+  }
+
+  // ==================== 频道专属骨架屏（GSAP） ====================
+
+  function getChannelSkeletonHTML(type) {
+    switch(type) {
+      case 'notice':
+        return '<div class="sk-channel sk-notice"><div class="sk-n-icon">\uD83D\uDCE2</div><div class="sk-n-body">' +
+          '<div class="sk-n-line"><span></span></div><div class="sk-n-line"><span></span></div>' +
+          '<div class="sk-n-line short"><span></span></div><div class="sk-n-line"><span></span></div>' +
+          '<div class="sk-n-line short"><span></span></div></div></div>';
+      case 'general':
+        return '<div class="sk-channel sk-general">' +
+          '<div class="sk-b-row"><div class="sk-b-dot"></div><div class="sk-b-dot"></div><div class="sk-b-dot"></div></div>' +
+          '<div class="sk-p-lines"><div class="sk-pl"></div><div class="sk-pl"></div><div class="sk-pl short"></div></div>' +
+          '<div class="sk-p-lines"><div class="sk-pl short"></div><div class="sk-pl"></div><div class="sk-pl"></div></div>' +
+          '<div class="sk-p-lines"><div class="sk-pl"></div><div class="sk-pl short"></div><div class="sk-pl"></div></div></div>';
+      case 'study':
+        return '<div class="sk-channel sk-study">' +
+          '<div class="sk-book"><div class="sk-bk-spine"></div><div class="sk-bk-page p1"></div><div class="sk-bk-page p2"></div><div class="sk-bk-page p3"></div></div>' +
+          '<div class="sk-t-lines"><div class="sk-tl"></div><div class="sk-tl"></div><div class="sk-tl short"></div></div>' +
+          '<div class="sk-t-lines"><div class="sk-tl short"></div><div class="sk-tl"></div><div class="sk-tl"></div></div>' +
+          '<div class="sk-t-lines"><div class="sk-tl"></div><div class="sk-tl short"></div><div class="sk-tl"></div></div></div>';
+      case 'life':
+        return '<div class="sk-channel sk-life">' +
+          '<div class="sk-w-avatar"><div class="sk-w-ring r1"></div><div class="sk-w-ring r2"></div></div>' +
+          '<div class="sk-br-lines"><div class="sk-bl"></div><div class="sk-bl"></div><div class="sk-bl short"></div></div>' +
+          '<div class="sk-br-lines"><div class="sk-bl short"></div><div class="sk-bl"></div><div class="sk-bl"></div></div>' +
+          '<div class="sk-br-lines"><div class="sk-bl"></div><div class="sk-bl short"></div><div class="sk-bl"></div></div></div>';
+      case 'anime':
+        return '<div class="sk-channel sk-anime">' +
+          '<div class="sk-s-avatar">\u2726</div>' +
+          '<div class="sk-r-lines"><div class="sk-rl"></div><div class="sk-rl"></div><div class="sk-rl short"></div></div>' +
+          '<div class="sk-r-lines"><div class="sk-rl short"></div><div class="sk-rl"></div><div class="sk-rl"></div></div>' +
+          '<div class="sk-r-lines"><div class="sk-rl"></div><div class="sk-rl short"></div><div class="sk-rl"></div></div>' +
+          '<div class="sk-f-stars"><span>\u2726</span><span>\u2727</span><span>\u2726</span></div></div>';
+      default:
+        var h='';
+        for(var i=0;i<5;i++) h+='<div class="msg-skeleton"><div class="sk-avatar"></div><div class="sk-body"><div class="sk-line"></div><div class="sk-line"></div><div class="sk-line"></div></div></div>';
+        return h;
+    }
+  }
+
+  function playSkeletonAnimation(type, container) {
+    try {
+      if (_skeletonTL) { _skeletonTL.kill(); _skeletonTL = null; }
+      var tl = gsap.timeline({ repeat: -1 });
+
+      switch(type) {
+        case 'notice':
+          tl.fromTo(container.querySelectorAll('.sk-n-line span'),{width:'0%'},{width:'100%',duration:0.6,stagger:0.25,ease:'power1.inOut'})
+            .to(container.querySelectorAll('.sk-n-line span'),{opacity:0.4,duration:0.3,stagger:0.15})
+            .to(container.querySelectorAll('.sk-n-line span'),{opacity:1,width:'100%',duration:0.4,stagger:0.15})
+            .to(container.querySelector('.sk-n-icon'),{scale:1.15,duration:0.3,yoyo:true,repeat:1},0);
+          break;
+        case 'general':
+          tl.fromTo('.sk-b-dot',{scale:0,opacity:0},{scale:1,opacity:1,duration:0.4,stagger:0.12,ease:'elastic.out(1,0.5)'})
+            .to('.sk-b-dot',{y:-8,duration:0.25,stagger:0.08,ease:'power2.out',yoyo:true,repeat:1})
+            .fromTo('.sk-pl',{scaleX:0},{scaleX:1,duration:0.5,stagger:0.08,ease:'power2.inOut',transformOrigin:'left'},0.2)
+            .to('.sk-pl',{opacity:0.5,duration:0.4,stagger:0.08},'-=0.2')
+            .to('.sk-pl',{opacity:1,duration:0.4,stagger:0.08});
+          break;
+        case 'study':
+          tl.fromTo('.sk-bk-page',{rotationY:-90,opacity:0},{rotationY:0,opacity:1,duration:0.6,stagger:0.2,ease:'power2.out',transformOrigin:'left center'})
+            .to('.sk-bk-page',{rotationY:5,duration:0.2,yoyo:true,repeat:1},'-=0.3')
+            .fromTo('.sk-tl',{width:'0%'},{width:'100%',duration:0.4,stagger:0.06,ease:'power1.inOut'},0.3)
+            .to('.sk-tl',{opacity:0.6,duration:0.3,stagger:0.06},'-=0.2')
+            .to('.sk-tl',{opacity:1,duration:0.3,stagger:0.06})
+            .to('.sk-bk-spine',{backgroundColor:'#a78bfa',duration:0.5,yoyo:true,repeat:1},0);
+          break;
+        case 'life':
+          tl.to('.sk-w-ring',{scale:1.6,opacity:0,duration:1.2,stagger:0.3,ease:'power2.out',repeat:-1},0)
+            .fromTo('.sk-bl',{width:'30%',opacity:0.4},{width:'100%',opacity:1,duration:0.8,stagger:0.08,ease:'sine.inOut',yoyo:true,repeat:-1},0)
+            .to('.sk-w-avatar',{scale:1.05,duration:1.5,ease:'sine.inOut',yoyo:true,repeat:-1},0);
+          break;
+        case 'anime':
+          tl.fromTo('.sk-rl',{backgroundPosition:'200% 0'},{backgroundPosition:'-200% 0',duration:1.2,stagger:0.15,ease:'none',repeat:-1},0)
+            .to('.sk-s-avatar',{rotation:360,duration:2,ease:'none',repeat:-1},0)
+            .to('.sk-f-stars span',{y:-10,opacity:0,duration:1.5,stagger:0.4,ease:'power1.out',repeat:-1},0);
+          break;
+      }
+      _skeletonTL = tl;
+    } catch(e) { _skeletonTL = null; }
+  }
+
+  function showMessageSkeleton(){
+    if(!messagesArea) return;
+    var type = currentChannel ? (chSkeletonMap[currentChannel.name]||'default') : 'default';
+    messagesArea.innerHTML = '<div class="skeleton-wrapper">'+getChannelSkeletonHTML(type)+'</div>';
+    playSkeletonAnimation(type, messagesArea);
   }
 
   // ── 右侧边栏渲染（贴吧风格：热点话题 + 频道推荐）──
@@ -1017,9 +1278,13 @@
 
     if(channelTitle) channelTitle.textContent=ch.name;
     if(channelDesc) channelDesc.textContent=ch.description||'';
-    if(msgInput) msgInput.placeholder='发送消息到 #'+ch.name;
+    applyChannelCard(ch);
+    updateInputRestriction();
 
     document.querySelectorAll('.ch-item').forEach(function(el){ el.classList.toggle('active', parseInt(el.dataset.channel) === ch.id); });
+
+    // 切频道时收起输入框
+    hideInputBar();
 
     // Load messages from InsForge
     showMessageSkeleton();
@@ -1062,22 +1327,57 @@
     }
   }
 
-  // ==================== MESSAGES ====================
-
-  function showMessageSkeleton(){
-    if(!messagesArea) return;
-    var skeletonHTML = '';
-    for(var i=0;i<5;i++){
-      skeletonHTML += '<div class="msg-skeleton"><div class="sk-avatar"></div><div class="sk-body"><div class="sk-line"></div><div class="sk-line"></div><div class="sk-line"></div></div></div>';
+  // 公告栏（announcement）限制：仅管理员可发言
+  function updateInputRestriction() {
+    var locked = isChannelLocked();
+    var compose = document.getElementById('btn-compose');
+    if (compose) {
+      compose.style.display = locked ? 'none' : '';
+      compose.disabled = locked;
     }
-    messagesArea.innerHTML = skeletonHTML;
+    var inputArea = document.getElementById('message-input-area');
+    if (inputArea) inputArea.classList.toggle('locked-announcement', locked);
+    if (msgInput) {
+      msgInput.disabled = locked;
+      msgInput.placeholder = locked
+        ? '公告频道仅限管理员发言'
+        : ('发送消息到 ' + (currentChannel ? currentChannel.name : ''));
+    }
+    if (btnAttach) btnAttach.disabled = locked;
+    var emojiBtn = document.querySelector('.emoji-btn');
+    if (emojiBtn) emojiBtn.disabled = locked;
+    if (btnSend) btnSend.disabled = locked;
+    if (locked) {
+      hideInputBar();
+      if (channelDesc && currentChannel) {
+        var base = currentChannel.description || '';
+        channelDesc.textContent = base + (base ? ' · ' : '') + '仅管理员可发言';
+      }
+    }
   }
 
-  // 构建单条消息 DOM 节点（renderMessages / appendMessageNode / replaceMessageNode 共用，避免重复逻辑）
+  // ==================== MESSAGES ====================
+
+  // 构建单条消息 DOM 节点（renderMessages / appendMessageNode / replaceMessageNode 共用）
   function buildMessageGroup(msg) {
     var group = document.createElement('div');
     group.className = 'msg-group' + (msg.isPending ? ' msg-pending' : '') + (msg.isFailed ? ' msg-failed' : '') + (msg.is_mod ? ' msg-group-mod' : '');
     group.setAttribute('data-msg-id', msg.id || '');
+
+    // ── 撤回（软删除）可见性 ──
+    // 非管理员：看不到任何已撤回消息（等同彻底删除）。
+    // 管理员：仍可见，渲染为灰色「XXX 撤回了一条消息」占位。
+    if (msg.is_recalled) {
+      if (currentUser && currentUser.role === 'admin') {
+        var rAuthor = (IF ? IF.resolveAuthor(msg.recalled_by || msg.author_id) : { nickname: '管理员' });
+        var rName = (rAuthor && (rAuthor.nickname || rAuthor.username)) || '管理员';
+        group.className = 'msg-group msg-recalled-group';
+        group.innerHTML = '<div class="msg-recalled">「' + escapeHtml(rName) + ' 撤回了一条消息」</div>';
+        return group;
+      }
+      return null; // 非管理员不可见
+    }
+
     if (msg.is_pinned) { group.style.background = 'rgba(240,178,50,0.04)'; group.style.borderRadius = 'var(--r)'; }
 
     if (msg.is_pinned) {
@@ -1199,7 +1499,156 @@
 
     // 绑定互动按钮事件
     bindInteractionButtons(group, msg);
+    // 绑定长按（移动）/右键（桌面）触发浮现撤回按键（仅有权限时）
+    bindRecallTrigger(group, msg);
     return group;
+  }
+
+  // ── 撤回功能 ────────────────────────────────────────────────────────────
+  // 是否有权撤回该消息：管理员随时；自己发的且 1 分钟内
+  function canRecall(msg) {
+    if (!currentUser || !msg) return false;
+    if (currentUser.role === 'admin') return true;
+    if (msg.author_id !== currentUser.id) return false;
+    var ageSec = (Date.now() - new Date(msg.created_at).getTime()) / 1000;
+    return ageSec < 60;
+  }
+
+  // 给消息节点绑定长按（移动）/右键（桌面）触发浮现撤回按键
+  function bindRecallTrigger(group, msg) {
+    if (!canRecall(msg)) return;
+    var timer = null, fired = false, startX = 0, startY = 0;
+
+    var trigger = function (e) {
+      if (fired) return;
+      fired = true;
+      if (e && e.preventDefault) e.preventDefault();
+      if (e && e.stopPropagation) e.stopPropagation();
+      showRecallPop(msg, group);
+    };
+
+    // 桌面：右键弹出
+    group.addEventListener('contextmenu', trigger);
+
+    // 触摸/笔：pointerdown 起 500ms 视为长按
+    group.addEventListener('pointerdown', function (e) {
+      if (e.pointerType === 'mouse') return; // 鼠标走右键
+      startX = e.clientX; startY = e.clientY; fired = false;
+      timer = setTimeout(function () { trigger(e); }, 500);
+    });
+    var cancel = function (e) {
+      if (timer) { clearTimeout(timer); timer = null; }
+      if (e && e.clientX !== undefined &&
+          (Math.abs(e.clientX - startX) > 10 || Math.abs(e.clientY - startY) > 10)) fired = true;
+    };
+    group.addEventListener('pointermove', cancel);
+    group.addEventListener('pointerup', cancel);
+    group.addEventListener('pointercancel', cancel);
+  }
+
+  // 当前已打开的撤回浮层（同一时刻只一个）
+  var _recallPop = null;
+  function closeRecallPop() {
+    if (!_recallPop) return;
+    var el = _recallPop; _recallPop = null;
+    try {
+      if (typeof gsap !== 'undefined' && !REDUCED_MOTION) {
+        gsap.to(el, { opacity: 0, x: 12, duration: 0.14, onComplete: function () { if (el.parentNode) el.parentNode.removeChild(el); } });
+      } else if (el.parentNode) el.parentNode.removeChild(el);
+    } catch (e) { if (el.parentNode) el.parentNode.removeChild(el); }
+  }
+
+  // 在气泡旁浮现「撤回」按键（GSAP 动画）
+  function showRecallPop(msg, group) {
+    closeRecallPop();
+    var pop = document.createElement('div');
+    pop.className = 'recall-pop';
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'recall-pop-btn';
+    btn.textContent = '撤回';
+    pop.appendChild(btn);
+    group.appendChild(pop);
+    _recallPop = pop;
+
+    // 临近 1 分钟过期自动关闭浮层
+    if (currentUser && currentUser.role !== 'admin') {
+      var ageSec = (Date.now() - new Date(msg.created_at).getTime()) / 1000;
+      var left = 60000 - ageSec * 1000;
+      if (left > 0) setTimeout(function () { if (_recallPop === pop) closeRecallPop(); }, left);
+    }
+
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      closeRecallPop();
+      doRecall(msg);
+    });
+
+    if (typeof gsap !== 'undefined' && !REDUCED_MOTION) {
+      gsap.fromTo(pop, { opacity: 0, x: 12, scale: 0.9 }, { opacity: 1, x: 0, scale: 1, duration: 0.22, ease: 'back.out(2)' });
+    }
+
+    // 点击空白/其他消息/滚动时关闭
+    setTimeout(function () {
+      document.addEventListener('click', function onDoc(e) {
+        if (_recallPop === pop && !pop.contains(e.target)) {
+          closeRecallPop();
+          document.removeEventListener('click', onDoc, true);
+        }
+      }, true);
+      if (messagesArea) messagesArea.addEventListener('scroll', function onScroll() {
+        closeRecallPop();
+        messagesArea.removeEventListener('scroll', onScroll);
+      }, { once: true });
+    }, 0);
+  }
+
+  // 执行撤回：乐观更新 + 请求 + 广播
+  function doRecall(msg) {
+    if (!currentChannel || !currentUser || msg._recalling) return;
+    msg._recalling = true;
+    var recalledBy = currentUser.id;
+    applyRecall(msg.id, recalledBy); // 乐观：自己先消失/占位
+    IF.recallMessage(currentChannel.id, msg.id, recalledBy).then(function () {
+      IF.publishRecall(currentChannel.id, msg.id, recalledBy);
+      showToast('已撤回', 'info');
+    }).catch(function () {
+      // 回滚
+      msg._recalling = false;
+      msg.is_recalled = false;
+      var node = messagesArea ? messagesArea.querySelector('.msg-group[data-msg-id="' + msg.id + '"]') : null;
+      if (node) {
+        var fresh = buildMessageGroup(msg);
+        if (fresh) node.replaceWith(fresh); else node.remove();
+      }
+      showToast('撤回失败（可能已超过 1 分钟）', 'error');
+    });
+  }
+
+  // 应用撤回效果到本地：更新内存数组 + DOM
+  function applyRecall(msgId, recalledBy) {
+    if (!currentChannel) return;
+    var arr = channelMessages[currentChannel.id] || [];
+    var target = null;
+    for (var i = 0; i < arr.length; i++) { if (arr[i].id === msgId) { target = arr[i]; break; } }
+    if (target) { target.is_recalled = true; target.recalled_by = recalledBy; }
+    var node = messagesArea ? messagesArea.querySelector('.msg-group[data-msg-id="' + msgId + '"]') : null;
+    if (!node) return;
+    if (currentUser && currentUser.role === 'admin') {
+      var rAuthor = (IF ? IF.resolveAuthor(recalledBy) : { nickname: '管理员' });
+      var rName = (rAuthor && (rAuthor.nickname || rAuthor.username)) || '管理员';
+      node.className = 'msg-group msg-recalled-group';
+      node.innerHTML = '<div class="msg-recalled">「' + escapeHtml(rName) + ' 撤回了一条消息」</div>';
+    } else {
+      node.remove();
+      if (target) { var idx = arr.indexOf(target); if (idx >= 0) arr.splice(idx, 1); }
+    }
+  }
+
+  // 收到他人撤回的实时事件
+  function handleIncomingRecall(payload) {
+    if (!payload || !payload.id) return;
+    applyRecall(payload.id, payload.recalled_by);
   }
 
   // 增量追加单条消息节点（发消息乐观插入 / 实时收到新消息时用），只动新节点、不重建整个频道
@@ -1231,6 +1680,8 @@
 
   function renderMessages(){
     if(!messagesArea) return;
+    // 销毁骨架屏动画（消息加载完毕后）
+    if (_skeletonTL) { _skeletonTL.kill(); _skeletonTL = null; }
     var msgs = channelMessages[currentChannel ? currentChannel.id : ''] || [];
     // 只渲染顶层消息；评论（parent_id 非空）只显示在对应评论区，避免"下发一条真实消息"的错觉
     msgs = msgs.filter(function(m){ return !m.parent_id; });
@@ -1250,8 +1701,20 @@
     if (!currentChannel) return;
 
     var welcome=document.createElement('div'); welcome.className='welcome-card';
-    welcome.innerHTML='<h3># '+escapeHtml(currentChannel.name)+'</h3><p>'+(currentChannel.description||'')+'</p>';
+    var wcKey = chHeroMap[currentChannel.name] || 'chat';
+    welcome.setAttribute('data-ch', wcKey);
+    welcome.innerHTML='<span class="welcome-hero">'+(chHeroIcon[wcKey]||chHeroIcon.chat)+'</span>'+
+      '<div class="welcome-text"><h3>'+escapeHtml(currentChannel.name)+'</h3><p>'+(currentChannel.description||'')+'</p></div>';
     messagesArea.appendChild(welcome);
+
+    // GSAP：欢迎卡入场（图标回弹 + 文字淡入）
+    if (typeof gsap !== 'undefined' && !_reduceMotion) {
+      try {
+        var wh=welcome.querySelector('.welcome-hero'), wt=welcome.querySelector('.welcome-text');
+        if(wh) gsap.fromTo(wh, {scale:0.5, rotation:-12, opacity:0}, {scale:1, rotation:0, opacity:1, duration:0.5, ease:'back.out(1.7)', clearProps:'transform'});
+        if(wt) gsap.fromTo(wt, {opacity:0, x:-12}, {opacity:1, x:0, duration:0.4, ease:'power2.out', clearProps:'transform'});
+      } catch(e){}
+    }
 
     if(msgs.length){
       var divider=document.createElement('div'); divider.className='day-divider'; divider.innerHTML='<span>消息</span>';
@@ -1259,7 +1722,8 @@
     }
 
     msgs.forEach(function(msg) {
-      messagesArea.appendChild(buildMessageGroup(msg));
+      var node = buildMessageGroup(msg);
+      if (node) messagesArea.appendChild(node);
     });
 
     // Auto-scroll only if already at bottom（平滑，避免硬跳）
@@ -1354,6 +1818,7 @@
             showToast('点赞失败，请重试', 'error');
           });
         } else if (act === 'comment') {
+          if (isChannelLocked()) { showToast('公告频道仅限管理员评论', 'error', 4000); return; }
           // 评论 = 真实回复：展开子回复列表 + 进入回复模式（发送带 parent_id）
           var cSec = document.getElementById('comment-'+msg.id);
           if (cSec) {
@@ -1404,18 +1869,33 @@
     var allIds = flat.map(function(item){ return item.c.id; });
 
     function renderAfter(agg) {
+      var DEFAULT_SHOW = 3;
+      var INCREMENT = 6;
+      var total = flat.length;
+      var visibleCount = Math.min(DEFAULT_SHOW, total);
+      var remaining = total - visibleCount;
+
+      var htmlNodes = flat.map(function(item){
+        return renderCommentNode(item.c, all, agg, rootMsg, item.depth);
+      });
+
       sec.innerHTML =
         '<div class="comment-header">'+
           '<span class="comment-title">全部回复</span>'+
-          '<span class="comment-count">'+flat.length+'条</span>'+
+          '<span class="comment-count">'+total+'条</span>'+
         '</div>'+
-        '<div class="comment-list">' + flat.map(function(item){
-          return renderCommentNode(item.c, all, agg, rootMsg, item.depth);
-        }).join('') + '</div>'+
-        '<div class="comment-footer-bar">'+
-          '<span class="comment-more-btn" data-act="comment-more" data-root-id="'+rootMsg.id+'">—— 展开更多</span>'+
-          '<span class="comment-collapse-btn" data-act="comment-collapse" data-root-id="'+rootMsg.id+'">收起 ∧</span>'+
-        '</div>';
+        '<div class="comment-list">' + htmlNodes.slice(0, visibleCount).join('') + '</div>'+
+        (remaining > 0
+          ? '<div class="comment-footer-bar">'+
+              '<span class="comment-more-btn" data-act="comment-more" data-root-id="'+rootMsg.id+'" data-shown="'+visibleCount+'" data-total="'+total+'">—— 展开评论 ('+remaining+'条未显示)</span>'+
+              '<span class="comment-collapse-btn" data-act="comment-collapse" data-root-id="'+rootMsg.id+'">收起 ∧</span>'+
+            '</div>'
+          : '<div class="comment-footer-bar">'+
+              '<span class="comment-collapse-btn" data-act="comment-collapse" data-root-id="'+rootMsg.id+'">收起 ∧</span>'+
+            '</div>');
+
+      // 存储完整 HTML 节点供后续增量展开
+      sec._commentHtmlCache = htmlNodes;
       bindCommentEvents(sec, rootMsg);
     }
 
@@ -1516,6 +1996,7 @@
     sec.querySelectorAll('[data-act="reply-comment"]').forEach(function(btn){
       btn.addEventListener('click', function(e){
         e.stopPropagation();
+        if (isChannelLocked()) { showToast('公告频道仅限管理员评论', 'error', 4000); return; }
         var msgId = btn.getAttribute('data-msg-id');
         var cmt = findMessageById(currentChannel.id, msgId);
         if (cmt) {
@@ -1527,7 +2008,7 @@
       });
     });
 
-    // 评论区底部「收起」关闭当前评论区；「展开更多」当前已展开全部
+    // 评论区底部「收起」关闭当前评论区；「展开评论」每次追加6条
     sec.querySelectorAll('[data-act="comment-collapse"]').forEach(function(btn){
       btn.addEventListener('click', function(e){
         e.stopPropagation();
@@ -1539,7 +2020,37 @@
     sec.querySelectorAll('[data-act="comment-more"]').forEach(function(btn){
       btn.addEventListener('click', function(e){
         e.stopPropagation();
-        showToast('已展开全部回复', 'info', 1200);
+        var rootId = btn.getAttribute('data-root-id');
+        var cSec = document.getElementById('comment-'+rootId);
+        if (!cSec || !cSec._commentHtmlCache) return;
+        var list = cSec.querySelector('.comment-list');
+        if (!list) return;
+
+        var shown = parseInt(btn.getAttribute('data-shown')||'0', 10);
+        var total = parseInt(btn.getAttribute('data-total')||'0', 10);
+        var INCREMENT = 6;
+        var newShown = Math.min(shown + INCREMENT, total);
+
+        // 追加新节点
+        var frag = document.createDocumentFragment();
+        for (var i = shown; i < newShown; i++) {
+          var tmp = document.createElement('div');
+          tmp.innerHTML = cSec._commentHtmlCache[i];
+          var node = tmp.firstElementChild;
+          if (node) frag.appendChild(node);
+        }
+        list.appendChild(frag);
+
+        // 重新绑定新节点的事件
+        bindCommentEvents(list, { id: rootId });
+
+        btn.setAttribute('data-shown', newShown);
+        var remaining = total - newShown;
+        if (remaining <= 0) {
+          btn.style.display = 'none';
+        } else {
+          btn.textContent = '—— 展开评论 ('+remaining+'条未显示)';
+        }
       });
     });
   }
@@ -1635,6 +2146,7 @@
     IF.listChannels().then(function(chs){
       (chs || []).forEach(function(ch){
         if (currentChannel && ch.id === currentChannel.id) return; // 不转发到当前频道
+        if (ch.type === 'announcement' && (!currentUser || currentUser.role !== 'admin')) return; // 公告频道仅管理员可转发
         var b = document.createElement('button');
         b.className = 'forward-ch-item';
         b.textContent = '# ' + ch.name;
@@ -1661,45 +2173,65 @@
   }
 
   // ── 输入栏显隐控制（全平台） ──
-  var fab = null;
+  var fab = null; // FAB 已移除（compose 按钮在头部右上角），保留变量避免报错
   function ensureFab() {
-    if (fab) return;
-    // 创建浮动发消息按钮（桌面右下角 / 移动端左上角由CSS控制位置）
-    fab = document.createElement('button');
-    fab.className = 'msg-fab';
-    fab.id = 'msg-fab';
-    fab.innerHTML = '+';
-    fab.title = '发消息';
-    fab.addEventListener('click', function(e) {
-      e.stopPropagation();
-      // 退出评论模式（FAB = 发新消息，不是评论）
-      setCommentTarget(null);
-      showInputBar();
-      var input = document.getElementById('msg-input');
-      if (input) {
-        // 恢复"发新消息"提示（若之前点过💬会残留评论文案）
-        var orig = input.getAttribute('data-original-placeholder');
-        input.placeholder = orig || ('发送消息到 #' + (currentChannel ? currentChannel.name : ''));
-        input.focus();
-      }
-    });
-    document.body.appendChild(fab);
+    // FAB 已废弃：发消息入口改为头部「+」(btn-compose) 按钮
+    return;
+  }
+  // 点输入框以外的空白区域收起输入框（捕获阶段监听，避免误关）
+  var docClickBound = false;
+  function onDocClickOutside(e) {
+    var ia = document.getElementById('message-input-area');
+    if (!ia) return;
+    if (ia.classList.contains('input-visible') && !ia.contains(e.target)) {
+      hideInputBar();
+    }
   }
   function showInputBar() {
+    if (isChannelLocked()) { showToast('公告频道仅限管理员发言', 'error', 4000); return; }
     var ia = document.getElementById('message-input-area');
     if (ia) {
       ia.classList.add('input-visible');
-      // 隐藏FAB（避免遮挡）
-      if (fab) fab.style.display = 'none';
+    }
+    updateComposeBtn(true);
+    // 延迟到本次点击完成后再绑定，避免"打开这次点击"被误判为空白点击
+    if (!docClickBound) {
+      docClickBound = true;
+      setTimeout(function(){ document.addEventListener('click', onDocClickOutside, true); }, 0);
     }
   }
   function hideInputBar() {
     var ia = document.getElementById('message-input-area');
     if (ia) {
       ia.classList.remove('input-visible');
-      // 恢复FAB
-      if (fab) fab.style.display = '';
     }
+    // 更新 compose 按钮状态
+    updateComposeBtn(false);
+    if (docClickBound) {
+      docClickBound = false;
+      document.removeEventListener('click', onDocClickOutside, true);
+    }
+  }
+  function toggleInputBar() {
+    var ia = document.getElementById('message-input-area');
+    if (!ia) return;
+    if (ia.classList.contains('input-visible')) {
+      hideInputBar();
+    } else {
+      setCommentTarget(null); // 退出评论模式，发新消息
+      showInputBar();
+      var input = document.getElementById('msg-input');
+      if (input) {
+        var orig = input.getAttribute('data-original-placeholder');
+        input.placeholder = orig || ('发送消息到 #' + (currentChannel ? currentChannel.name : ''));
+        setTimeout(function(){ input.focus(); }, 100);
+      }
+    }
+  }
+  function updateComposeBtn(active) {
+    var btn = document.getElementById('btn-compose');
+    if (!btn) return;
+    btn.classList.toggle('compose-active', active);
   }
 
   function formatFileSize(bytes) {
@@ -1753,6 +2285,7 @@
 
   function setReply(msg) {
     if (!msg) return;
+    if (isChannelLocked()) { showToast('公告频道仅限管理员评论', 'error', 4000); return; }
     buildReplyBar();
     if (!replyBar) return;
     replyingTo = msg;
@@ -1791,6 +2324,7 @@
   function sendMessage(){
     if(!msgInput||!currentUser||!currentChannel||!IF) return;
     var text=msgInput.value.trim(); if(!text) return;
+    if (isChannelLocked()) { showToast('公告频道仅限管理员发言', 'error', 4000); return; }
 
     // ═══ 移动端评论模式：追加内联评论，不发新消息到频道 ═══
     var cmtId = getCommentTarget();
@@ -1961,6 +2495,7 @@
 
   function handleFileUpload() {
     if(!fileInput.files || !fileInput.files[0] || !currentChannel) return;
+    if (isChannelLocked()) { showToast('公告频道仅限管理员上传文件', 'error', 4000); fileInput.value=''; return; }
     var file = fileInput.files[0];
 
     // 文件大小检查 (10MB)
@@ -2347,11 +2882,26 @@
   if (btnNotify) btnNotify.addEventListener('click', function(e){ if (e) e.stopPropagation(); openNotifDropdown(); });
   if (notifyMarkAll) notifyMarkAll.addEventListener('click', markAllRead);
 
+  // Compose (+) button: toggle input bar
+  var btnCompose = document.getElementById('btn-compose');
+  if (btnCompose) btnCompose.addEventListener('click', function(e){
+    e.stopPropagation();
+    toggleInputBar();
+  });
+
   // Close dropdown on outside click
   document.addEventListener('click', function(e) {
     if (notifyDropdown && notifyDropdown.style.display === 'block' &&
         !e.target.closest('#notify-wrap')) {
       hideNotifDropdown();
+    }
+  });
+
+  // Esc 关闭输入框
+  document.addEventListener('keydown', function(e){
+    if (e.key === 'Escape') {
+      var ia = document.getElementById('message-input-area');
+      if (ia && ia.classList.contains('input-visible')) hideInputBar();
     }
   });
 

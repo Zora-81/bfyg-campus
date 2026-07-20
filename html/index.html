@@ -16,7 +16,7 @@
 
     (function(){
 
-      var v = '20260720a';
+      var v = '1.2.24';
 
       try {
 
@@ -38,7 +38,11 @@
 
   </script>
 
-  <link rel="icon" type="image/png" href="../images/school-badge-new.png" />
+  <!-- Favicon: 多尺寸适配，浏览器自动选最清晰的 -->
+  <link rel="icon" type="image/png" sizes="32x32" href="../images/favicon-32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="../images/favicon-16.png" />
+  <link rel="icon" type="image/x-icon" href="../images/favicon.ico" />
+  <link rel="apple-touch-icon" sizes="180x180" href="../images/apple-touch-icon.png" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
 
@@ -46,7 +50,7 @@
 
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap" rel="stylesheet" />
 
-  <link rel="stylesheet" href="../css/style.css?v=20260720a" />
+  <link rel="stylesheet" href="../css/style.css?v=1.2.24" />
 
 </head>
 
@@ -504,19 +508,29 @@
 
           </div>
 
-          <div class="nav-channel-info">
+          <div class="nav-channel-info" id="nav-channel-card" data-ch="chat">
 
-            <span class="nav-hash">#</span>
+            <span class="ch-card-bar" id="ch-card-bar"></span>
 
-            <h2 class="nav-channel-title" id="channel-title">综合交流</h2>
+            <div class="ch-card-icon" id="ch-card-icon"></div>
 
-            <span class="nav-channel-desc" id="channel-desc">自由聊天，分享日常</span>
+            <div class="ch-card-text">
+              <h2 class="nav-channel-title" id="channel-title">综合大厅</h2>
+              <span class="nav-channel-desc" id="channel-desc">自由聊天，分享日常</span>
+            </div>
+
+            <div class="ch-card-glow" id="ch-card-glow"></div>
 
           </div>
 
         </div>
 
         <div class="nav-right">
+
+          <!-- Compose (+) button: toggle message input -->
+          <button class="icon-btn nav-icon-btn" id="btn-compose" title="发消息">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" width="20" height="20"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </button>
 
           <!-- Notification bell -->
 
@@ -952,17 +966,292 @@
 
 
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.15.0/gsap.min.js?v=20260720a" defer></script>
+  <script src="../js/lib/gsap.min.js?v=1.2.24" defer></script>
 
-  <script src="../js/shooting-stars.js?v=20260720a"></script>
+  <script src="../js/shooting-stars.js?v=1.2.24"></script>
 
-  <script src="../js/main-bg.js?v=20260720a"></script>
+  <script src="../js/main-bg.js?v=1.2.24"></script>
 
   <!-- InsForge SDK 客户端（ESM，CDN 引入），注入 window.IF 并派发 IF_READY -->
 
-  <script type="module" src="../js/if-client.js?v=20260720a"></script>
+  <script type="module" src="../js/if-client.js?v=1.2.24"></script>
 
-  <script src="../js/app.js?v=20260720a" defer></script>
+  <script src="../js/app.js?v=1.2.24" defer></script>
+
+  <!-- ════════════════════════════════════════════
+       学校介绍弹窗：点击侧栏校徽/校园频道 触发
+       Phase 1 → 校徽动画(慢速) → Phase 2 → GSAP 学校介绍页
+       ════════════════════════════════════════════ -->
+  <div id="school-intro-overlay" class="school-overlay" aria-hidden="true">
+
+    <!-- 关闭按钮 -->
+    <button class="school-close-btn" id="school-close-btn" aria-label="关闭">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="22" height="22"><line x1="6" y1="6" x2="18" y2="18"/><line x1="6" y1="18" x2="18" y2="6"/></svg>
+    </button>
+
+    <!-- ===== Phase 1: 校徽动画（居中，暗底，慢速）===== -->
+    <div id="school-phase-logo" class="phase-logo">
+      <div class="logo-stage">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="-300 -300 600 600"
+             role="img" aria-label="宝丰一高级中学校徽" class="intro-logo-svg">
+          <defs>
+            <path id="i-topArc" d="M -130,-37 A 134,134 0 0 1 130,-37"/>
+            <path id="i-botArc" d="M -150,30 A 153,153 0 0 0 150,30"/>
+          </defs>
+          <g id="i-ring-outer">
+            <circle cx="0" cy="0" r="179" fill="#FFF"/>
+            <circle cx="0" cy="0" r="170" fill="#8B0000"/>
+          </g>
+          <g id="i-text-band-bg">
+            <circle cx="0" cy="0" r="165" fill="#FFFFFF"/>
+            <circle cx="0" cy="0" r="132" fill="none" stroke="#D4A017" stroke-width="3.5"/>
+          </g>
+          <g class="i-arc-wrap">
+            <text font-family="'Microsoft YaHei','SimHei','Noto Sans SC',sans-serif"
+                  font-size="31" font-weight="bold" fill="#000" letter-spacing="4">
+              <textPath href="#i-topArc" startOffset="50%" text-anchor="middle">宝丰县第一高级中学</textPath>
+            </text>
+          </g>
+          <g class="i-arc-wrap">
+            <text font-family="'Arial Black',Arial,sans-serif"
+                  font-size="19" font-weight="bold" fill="#000" letter-spacing="0.5">
+              <textPath href="#i-botArc" startOffset="50%" text-anchor="middle">BAOFENG NO.1 SENIOR HIGH SCHOOL</textPath>
+            </text>
+          </g>
+          <circle id="i-inner-field" cx="0" cy="0" r="128" fill="#CC0000"/>
+          <g id="i-mountain">
+            <polygon points="0,-115 -72,35 72,35" fill="#E8B800"/>
+            <polygon points="-1,-109 -55,32 2,32" fill="#FFE55C" opacity="0.26"/>
+            <line x1="0" y1="-115" x2="0" y2="35" stroke="#FFEA80" stroke-width="1.2" opacity="0.32"/>
+          </g>
+          <g id="i-platform">
+            <rect x="-54" y="38" width="108" height="10" rx="3" fill="#00088A"/>
+            <rect x="-76" y="51" width="152" height="10" rx="3" fill="#000780"/>
+            <rect x="-98" y="64" width="196" height="12" rx="3" fill="#000672"/>
+          </g>
+          <text id="i-year-text" x="0" y="110"
+                font-family="'Times New Roman',Georgia,serif"
+                font-size="28" font-weight="bold" fill="#F5E6B8"
+                text-anchor="middle" letter-spacing="2">1956</text>
+        </svg>
+      </div>
+    </div>
+
+    <!-- ===== Phase 2: 学校介绍页面（背景图 + 毛玻璃卡片 + 4段内容）===== -->
+    <div id="school-phase-info" class="phase-info">
+      <div class="info-bg"></div>
+      <div class="info-card-wrap">
+      <div class="info-card">
+        <h2 class="info-title">宝丰县第一高级中学</h2>
+        <p class="info-subtitle">Baofeng No.1 Senior High School · Since 1956</p>
+        <div class="info-sections">
+          <div class="sec-block">
+            <div class="sec-icon">🏫</div>
+            <div class="sec-body">
+              <h3 class="sec-head">学校性质与规模</h3>
+              <p class="sec-text">宝丰县第一高级中学是县教育局管的公立高中，属于省级示范校。学校占地340多亩，建筑面积10.7万平米。现在有99个教学班，在校生大概6000人。教职工422人里，109人有副高级以上职称，60多人是省市级名师或学科带头人，70多位教师有研究生学历。</p>
+            </div>
+          </div>
+          <div class="sec-block">
+            <div class="sec-icon">📜</div>
+            <div class="sec-body">
+              <h3 class="sec-head">历史沿革</h3>
+              <p class="sec-text">学校前身是1951年成立的县第一初中高中班，1956年设了高中部，1960年独立建校。1981年改叫现名，2005年评上省示范性高中。2013年搬到香山路新校区，2025年要建科创楼，新增建筑面积12870平米。</p>
+            </div>
+          </div>
+          <div class="sec-block">
+            <div class="sec-icon">🔬</div>
+            <div class="sec-body">
+              <h3 class="sec-head">设施配备</h3>
+              <p class="sec-text">校园设施挺全，有6栋教学楼和6栋学生公寓，还有人工智能实验室等专用教室。2002年建了千兆校园网，所有老师都配了笔记本电脑，教室全用多媒体。图书馆藏书16万多册，实验设备和体育器材都达标。2025年建的科创楼会进一步改善理化实验条件。</p>
+            </div>
+          </div>
+          <div class="sec-block">
+            <div class="sec-icon">🏆</div>
+            <div class="sec-body">
+              <h3 class="sec-head">荣誉成就</h3>
+              <p class="sec-text">学校得了"省文明校园""全国校园足球特色校"等称号。高考成绩不错，多次排平顶山市第一，2010年进了河南十大名校，2025年有学生考上清华。法治教育方面，2024年学生拿了全国"学宪法"活动二等奖和三等奖。劳动教育和心理健康教育也做得挺好。</p>
+            </div>
+          </div>
+        </div>
+        <div class="info-footer">
+          <span class="info-tag">省级示范性普通高中</span>
+          <span class="info-tag">河南省文明校园</span>
+          <span class="info-tag">全国校园足球特色校</span>
+        </div>
+      </div>
+      </div>
+    </div>
+  </div>
+
+  <style>
+  .school-overlay{position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .35s ease}
+  .school-overlay.active{opacity:1;pointer-events:auto}
+  .school-close-btn{position:absolute;top:20px;right:20px;z-index:10001;width:44px;height:44px;border-radius:50%;border:1.5px solid rgba(255,255,255,.35);background:rgba(15,15,30,.55);backdrop-filter:blur(8px);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;transform:scale(.7)rotate(-90deg)}
+  .phase-logo{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at center,#0d1025 0%,#060812 70%,#020308 100%)}
+  .phase-logo.hidden{display:none}
+  .logo-stage{width:min(65vw,420px)}.logo-stage svg{width:100%;height:auto;display:block;overflow:visible}
+    /* 校徽入场动画改由 GSAP 驱动(playLogoIntro)，每次打开显式重播，可无限重复；
+     无 GSAP 或用户偏好 reduced-motion 时直接静态显示(默认 SVG 即完整可见) */
+  @media(prefers-reduced-motion:reduce){#i-ring-outer,#i-text-band-bg,.i-arc-wrap,#i-inner-field,#i-mountain,#i-platform,#i-year-text{opacity:1!important;transform:none!important;filter:none!important}}
+  /* 校徽入场动画：GSAP 优先；若 GSAP 未加载(网络/WebView 拦截)，用纯 CSS 兜底，保证一定播放，杜绝“直接跳介绍页” */
+  .logo-stage #i-ring-outer,.logo-stage #i-text-band-bg,.logo-stage .i-arc-wrap,.logo-stage #i-inner-field,.logo-stage #i-mountain,.logo-stage #i-platform,.logo-stage #i-year-text{transform-box:fill-box;transform-origin:center}
+  .logo-stage.play #i-ring-outer{animation:iRingIn 1.9s cubic-bezier(.34,1.56,.64,1) both}
+  .logo-stage.play #i-text-band-bg,.logo-stage.play .i-arc-wrap{animation:iBandIn 1.4s ease-out .32s both}
+  .logo-stage.play #i-inner-field{animation:iInnerIn .8s ease-out .45s both}
+  .logo-stage.play #i-mountain{animation:iMtnIn 1.28s cubic-bezier(.34,1.56,.64,1) .6s both}
+  .logo-stage.play #i-platform{animation:iPlatIn 1.12s ease-out .77s both}
+  .logo-stage.play #i-year-text{animation:iYearIn .96s ease-out 1.04s both}
+  @keyframes iRingIn{from{opacity:0;transform:rotate(-60deg) scale(.6)}to{opacity:1;transform:rotate(0) scale(1)}}
+  @keyframes iBandIn{from{opacity:0;transform:scale(.9)}to{opacity:1;transform:scale(1)}}
+  @keyframes iInnerIn{from{opacity:0;transform:scale(.8)}to{opacity:1;transform:scale(1)}}
+  @keyframes iMtnIn{from{opacity:0;transform:translateY(50px) scale(.7)}to{opacity:1;transform:translateY(0) scale(1)}}
+  @keyframes iPlatIn{from{opacity:0;transform:translateY(65px) scale(.85)}to{opacity:1;transform:translateY(0) scale(1)}}
+  @keyframes iYearIn{from{opacity:0;filter:blur(6px)}to{opacity:1;filter:blur(0)}}}
+  .phase-info{position:absolute;inset:0;display:flex;align-items:center;justify-content:flex-start;padding:0;visibility:hidden;opacity:0}.phase-info.visible{visibility:visible}
+  .info-bg{position:absolute;inset:0;background:url('../images/campus-aerial.jpg') center/cover no-repeat;filter:brightness(.45)saturate(.9)}
+  .info-bg::after{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(8,12,35,.78) 0%,rgba(8,12,35,.42) 40%,transparent 65%)}
+  .info-card-wrap{position:absolute;left:max(40px,5vw);top:50%;transform:translateY(-50%)}
+  .info-card{position:relative;z-index:2;width:min(580px,90vw);max-height:calc(100vh - 80px);padding:36px 32px 28px;background:rgba(16,20,42,.58);backdrop-filter:blur(22px)saturate(1.4);-webkit-backdrop-filter:blur(22px)saturate(1.4);border:1px solid rgba(255,255,255,.1);border-radius:18px;box-shadow:0 24px 80px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.08);overflow-y:auto;overscroll-behavior:contain}
+  .info-card::-webkit-scrollbar{width:4px}.info-card::-webkit-scrollbar-thumb{background:rgba(255,255,255,.18);border-radius:4px}
+  .info-title{font-size:26px;font-weight:800;color:#fff;letter-spacing:2px;margin-bottom:4px}
+  .info-subtitle{font-size:13px;color:rgba(180,195,230,.7);margin-bottom:24px;letter-spacing:.5px;font-family:'SF Mono',Consolas,monospace;border-left:3px solid rgba(100,160,255,.55);padding-left:12px;line-height:1.5}
+  .info-sections{display:flex;flex-direction:column;gap:18px}
+  .sec-block{display:flex;gap:14px;padding:16px;background:rgba(255,255,255,.04);border-radius:12px;border:1px solid rgba(255,255,255,.06);transition:background .25s}
+  .sec-block:hover{background:rgba(255,255,255,.07)}
+  .sec-icon{font-size:28px;flex-shrink:0;width:44px;height:44px;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,rgba(100,140,255,.15),rgba(160,80,200,.1));border-radius:11px}
+  .sec-head{font-size:15px;font-weight:700;color:#e8ecff;margin-bottom:6px}
+  .sec-text{font-size:13.5px;color:rgba(190,200,225,.82);line-height:1.75}
+  .info-footer{display:flex;gap:8px;flex-wrap:wrap;margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,.06)}
+  .info-tag{font-size:11.5px;padding:4px 12px;border-radius:999px;background:rgba(80,120,220,.18);color:#a8c0ff;border:1px solid rgba(80,120,220,.25)}
+  .nav-server-badge{cursor:pointer;transition:transform .2s,filter .2s}
+  .nav-server-badge:hover{transform:scale(1.08);filter:brightness(1.15)}
+  .drawer-server{cursor:pointer;transition:background .2s}
+  .drawer-server:hover{background:rgba(255,255,255,.06)}
+  @media(max-width:768px){.info-card{width:min(320px,82vw);padding:20px 16px 18px}.info-title{font-size:19px}.sec-block{padding:10px;gap:8px}.sec-icon{width:36px;font-size:21px}.logo-stage{width:75vw}}
+  </style>
+
+  <script>
+  (function(){
+    var overlay=document.getElementById('school-intro-overlay'),phaseLogo=document.getElementById('school-phase-logo');
+    var phaseInfo=document.getElementById('school-phase-info'),closeBtn=document.getElementById('school-close-btn');
+    var open=false,phase=1,tl=null;
+    function clearInline(){
+      var els=overlay.querySelectorAll('#i-ring-outer,#i-text-band-bg,.i-arc-wrap,#i-inner-field,#i-mountain,#i-platform,#i-year-text');
+      for(var i=0;i<els.length;i++){els[i].style.opacity='';els[i].style.transform='';els[i].style.filter='';}
+      phaseLogo.style.opacity='';phaseLogo.style.transform='';phaseLogo.style.filter='';
+      var ls=overlay.querySelector('.logo-stage');
+      if(ls){ls.style.transform='';ls.style.opacity='';ls.style.filter='';ls.classList.remove('play');}
+      overlay.style.opacity='';
+    }
+    function openSchool(){
+      if(open)return;open=true;phase=1;
+      // 清掉上一次 GSAP 残留的内联样式：phaseLogo 的内联 opacity:0 / 各动画元素内联 transform 若不清除，
+      // 第二次打开时校徽层会保持透明 → 看不到动画，只能干等跳介绍页
+      if(typeof gsap!=='undefined'){gsap.killTweensOf(overlay);gsap.killTweensOf(overlay.querySelector('.logo-stage'));}
+      clearInline();
+      overlay.classList.add('active');overlay.setAttribute('aria-hidden','false');
+      phaseLogo.classList.remove('hidden');phaseInfo.classList.remove('visible');
+      closeBtn.style.opacity='0';closeBtn.style.transform='scale(.7)rotate(-90deg)';
+      phaseInfo.style.opacity='0';phaseInfo.style.visibility='';
+      playLogoIntro();
+    }
+
+    function playLogoIntro(){
+      var stage=overlay.querySelector('.logo-stage');
+      if(!stage)return;
+      // 兜底：万一动画回调未触发，最长 2.4s 后也切到介绍页，避免卡在动画阶段
+      var fbTimer=setTimeout(function(){if(open)toPhase2();},2400);
+      if(window.matchMedia&&window.matchMedia('(prefers-reduced-motion:reduce)').matches){
+        // 减少动效：静态展示校徽，短暂停留后切介绍页
+        setTimeout(function(){clearTimeout(fbTimer);if(open)toPhase2();},1200);
+        return;
+      }
+      if(typeof gsap!=='undefined'){
+        var ring=stage.querySelector('#i-ring-outer'),
+            band=stage.querySelectorAll('#i-text-band-bg, .i-arc-wrap'),
+            inner=stage.querySelector('#i-inner-field'),
+            mtn=stage.querySelector('#i-mountain'),
+            plat=stage.querySelector('#i-platform'),
+            yr=stage.querySelector('#i-year-text');
+        gsap.killTweensOf([ring,band,inner,mtn,plat,yr]);
+        // 动画播完(onComplete)立刻切介绍页，无缝衔接，不再用固定延时截断动画
+        tl=gsap.timeline({onComplete:function(){clearTimeout(fbTimer);if(open)toPhase2();}})
+          .fromTo(ring,{opacity:0,rotation:-60,scale:.6,transformOrigin:'50% 50%'},{opacity:1,rotation:0,scale:1,duration:1.9,ease:'back.out(1.6)'},0)
+          .fromTo(band,{opacity:0,scale:.9},{opacity:1,scale:1,duration:1.4,ease:'power2.out'},.32)
+          .fromTo(inner,{opacity:0,scale:.8},{opacity:1,scale:1,duration:.8,ease:'power2.out'},.45)
+          .fromTo(mtn,{opacity:0,y:50,scale:.7,transformOrigin:'50% 100%'},{opacity:1,y:0,scale:1,duration:1.28,ease:'back.out(1.7)'},.6)
+          .fromTo(plat,{opacity:0,y:65,scale:.85,transformOrigin:'50% 100%'},{opacity:1,y:0,scale:1,duration:1.12,ease:'power2.out'},.77)
+          .fromTo(yr,{opacity:0,filter:'blur(6px)'},{opacity:1,filter:'blur(0px)',duration:.96,ease:'power1.out'},1.04);
+      }else{
+        // CSS 兜底：GSAP 未加载时也能播放校徽动画。监听最后一个动画(i-year-text, 2.0s 结束)的 animationend 切换到介绍页
+        stage.classList.remove('play');
+        void stage.offsetWidth;
+        stage.classList.add('play');
+        var yrEl=stage.querySelector('#i-year-text');
+        if(yrEl){
+          yrEl.addEventListener('animationend',function onEnd(){
+            yrEl.removeEventListener('animationend',onEnd);
+            clearTimeout(fbTimer);if(open)toPhase2();
+          },{once:true});
+        }
+      }
+    }
+    function toPhase2(){
+      if(phase===2)return;  // 已切换过，避免 onComplete/animationend/兜底定时器重复触发导致重播
+      phase=2;if(typeof gsap==='undefined'){fallback();return;}
+      tl=gsap.timeline({onComplete:function(){if(phaseLogo)phaseLogo.classList.add('hidden');}});
+      // 一切过渡从动画结束这一刻(t=0)同时启动
+      tl.to(closeBtn,{opacity:1,scale:1,rotation:0,duration:.3,ease:'back.out(2)'},0);
+      var logoStage=overlay.querySelector('.logo-stage');
+      if(logoStage) tl.to(logoStage,{scale:.5,opacity:0,duration:.25,ease:'power2.in'},0);
+      // 校徽层用 GSAP 淡出(与介绍页背景同步)，【不要】瞬间 display:none —— 否则空窗会透出主界面
+      if(phaseLogo) tl.to(phaseLogo,{opacity:0,duration:.3,ease:'power2.inOut'},0);
+      phaseInfo.style.visibility='visible';
+      // 介绍页整体立即显示(opacity:1)，只淡入卡片/文字，避免背景空窗透出主界面
+      phaseInfo.style.opacity='1';
+      var card=phaseInfo.querySelector('.info-card');
+      if(card) tl.fromTo(card,{y:18,opacity:0},{y:0,opacity:1,duration:.3,ease:'power2.out'},.03);
+      var secs=phaseInfo.querySelectorAll('.sec-block');
+      if(secs.length) tl.fromTo(secs,{y:10,opacity:0},{y:0,opacity:1,stagger:.04,duration:.26,ease:'power2.out'},.07);
+      var footer=phaseInfo.querySelector('.info-footer');
+      if(footer) tl.fromTo(footer,{y:6,opacity:0},{y:0,opacity:1,duration:.26},.14);
+    }
+    function fallback(){
+      closeBtn.style.opacity='1';closeBtn.style.transform='scale(1)rotate(0deg)';
+      phaseLogo.classList.add('hidden');phaseInfo.classList.add('visible');phaseInfo.style.opacity='1';phase=2;
+    }
+    function closeSchool(){
+      if(!open)return;open=false;if(tl){tl.kill();tl=null;}
+      // × 号点击退出时的旋转反馈（GSAP）
+      if(typeof gsap!=='undefined')gsap.to(closeBtn,{rotation:180,scale:.7,duration:.25,ease:'power2.in'});
+      if(typeof gsap!=='undefined'){
+        gsap.to(overlay,{opacity:0,duration:.3,ease:'power2.in',onComplete:function(){overlay.classList.remove('active');overlay.setAttribute('aria-hidden','true');reset()}});
+      }else{overlay.classList.remove('active');overlay.setAttribute('aria-hidden','true');reset();}
+    }
+    function reset(){phaseLogo.classList.remove('hidden');phaseInfo.classList.remove('visible');phaseInfo.style.opacity='';phaseInfo.style.visibility='';clearInline();closeBtn.style.opacity='';closeBtn.style.transform='';cardCollapsed=false;var card=phaseInfo.querySelector('.info-card');if(card)card.style.opacity='';}
+    // 介绍页阶段：点击任意位置 → 收起/展开【介绍卡片】(不是退出介绍页)；再点一次展开
+    var cardCollapsed=false;
+    function toggleCard(){
+      var card=phaseInfo.querySelector('.info-card');if(!card)return;
+      cardCollapsed=!cardCollapsed;
+      if(typeof gsap==='undefined'){card.style.opacity=cardCollapsed?'0':'1';return;}
+      gsap.to(card,{opacity:cardCollapsed?0:1,y:cardCollapsed?24:0,scale:cardCollapsed?.96:1,duration:.32,ease:'power2.out'});
+    }
+    document.querySelector('.nav-server-badge').addEventListener('click',openSchool);
+    var ds=document.querySelector('.drawer-server');if(ds)ds.addEventListener('click',function(e){if(e.target===ds||e.target.closest('.drawer-server-name'))openSchool()});
+    closeBtn.addEventListener('click',closeSchool);
+    // × 号 hover 旋转(GSAP 动画)
+    if(typeof gsap!=='undefined'){
+      closeBtn.addEventListener('mouseenter',function(){gsap.to(closeBtn,{rotation:90,scale:1.15,duration:.3,ease:'back.out(2)'});});
+      closeBtn.addEventListener('mouseleave',function(){gsap.to(closeBtn,{rotation:0,scale:1,duration:.3,ease:'power2.out'});});
+    }
+    overlay.addEventListener('click',function(e){if(e.target===overlay)closeSchool()});
+    // 点击介绍页任意位置：toggle 收起/展开卡片（× 号区域不触发，由 closeBtn 自己处理退出）
+    if(phaseInfo)phaseInfo.addEventListener('click',function(e){if(e.target===closeBtn)return;e.stopPropagation();toggleCard();});
+    document.addEventListener('keydown',function(e){if(e.key==='Escape'&&open)closeSchool()});
+  })();
+  </script>
 
 </body>
 
