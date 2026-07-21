@@ -69,6 +69,11 @@ router.post('/:channelId', authRequired, (req, res) => {
   if (!channelId || !content || (type === 'text' && content.trim().length === 0)) {
     return res.status(400).json({ error: '内容和频道不能为空' });
   }
+  // 公告频道仅限管理员发言
+  const ch = db.get('SELECT type FROM channels WHERE id = ?', [channelId]);
+  if (ch && ch.type === 'announcement' && req.user.role !== 'admin') {
+    return res.status(403).json({ error: '公告频道仅限管理员发言' });
+  }
   if (!checkPostRateLimit(req.user.id, channelId)) {
     return res.status(429).json({ error: '发送太快，请稍候' });
   }

@@ -131,20 +131,15 @@ button, a, .ch-item, .quick-action, .member-item, .msg-author,
 /* ══════════════════════════════════════════════════
    LOGIN BACKGROUND LAYERS
    ══════════════════════════════════════════════════ */
+/* 登录页已改用聊天界面默认主题背景(#main-bg + #main-dots)，旧学校/星空图背景停用 */
 #school-bg {
-  position:fixed; inset:0; z-index:0;
-  background:url('../images/school-night.jpg') center/cover no-repeat;
-  filter:brightness(0.62) saturate(0.88) contrast(1.08); transform:scale(1.0);
+  display:none !important;
 }
 #school-glow {
-  position:fixed; inset:0; z-index:1; pointer-events:none;
-  background:
-    radial-gradient(ellipse 80% 15% at 50% 92%, rgba(255,180,120,0.25) 0%, rgba(255,140,80,0.12) 25%, rgba(255,100,50,0.04) 50%, transparent 70%),
-    linear-gradient(to top, rgba(255,200,150,0.10) 0%, rgba(20,25,50,0.03) 40%, transparent 65%),
-    linear-gradient(to bottom, rgba(2,4,18,0.35) 0%, transparent 30%);
+  display:none !important;
 }
 #stars-canvas {
-  position:fixed; inset:0; z-index:4; width:100vw; height:100vh; pointer-events:none;
+  display:none !important;
 }
 .vignette-overlay {
   position:fixed; inset:0; z-index:2; pointer-events:none;
@@ -364,7 +359,7 @@ body.main-active #monster-login { display:none !important; }
 }
 
 #main-bg {
-  display:none; position:fixed; inset:0; z-index:0; pointer-events:none;
+  display:block; position:fixed; inset:0; z-index:0; pointer-events:none;
   background:
     var(--main-bg-overlay),
     var(--main-bg-image,
@@ -386,12 +381,10 @@ body.main-active #monster-login { display:none !important; }
   background: radial-gradient(ellipse at 50% 0%, transparent 30%, rgba(5,8,22,var(--main-bg-dim)) 100%);
   pointer-events:none;
 }
-body.main-active #main-bg { display:block; }
 
 #main-dots {
-  display:none; position:fixed; inset:0; z-index:1; pointer-events:none;
+  display:block; position:fixed; inset:0; z-index:1; pointer-events:none;
 }
-body.main-active #main-dots { display:block; }
 
 /* ══════════════════════════════════════════════════
    LOGIN FLOW (BobZhang 同款：welcome → loading → monster-login)
@@ -2842,6 +2835,12 @@ body.main-active #main-dots { display:block; }
   }
   .avatar-popup.open { transform:translateY(0); }
   .popup-handle { display:block; } /* drag handle visible on mobile */
+
+  /* 移动端：avatar-popup 里用热门话题替换频道信息 */
+  #popup-channel-info { display:none; }
+  #popup-hot-topics { display:block; }
+  #popup-hot-topics .sidebar-list { padding:0; }
+  #popup-hot-topics .hot-card { padding:10px 8px; margin:0 -4px; }
 
   /* ═══★ MOBILE FEED (贴吧极简流) ★═══ */
   /* 两栏→单栏：隐藏右侧边栏，feed满宽 */

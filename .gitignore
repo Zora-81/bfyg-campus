@@ -3,16 +3,30 @@ server/data.db
 server/data.db-journal
 server/data.db-wal
 server/data.db-shm
+server/data.db.bak
 server/uploads/*
 !server/uploads/.gitkeep
 
+# 服务日志
+server/__server.log
+server/server_stdout.log
+server/server_stderr.log
+
 # 依赖
+node_modules/
 server/node_modules/
 
 # 环境变量与密钥
 .env
 .env.local
 .env.*.local
+
+# Cloudflare Wrangler 本地状态
+.wrangler/
+worker/.wrangler/
+
+# 构建产物（当前 web_build 由 _build.mjs 生成，可重建）
+web_build/
 
 # Windows 误生成的空设备文件
 nul

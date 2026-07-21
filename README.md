@@ -1,90 +1,83 @@
 # 宝丰一高校园频道
 
-校园社交平台 —— 登录(银河背景+3D轮播+流星雨) + QQ频道风格实时聊天 + 后台管理。
+校园社交平台 —— 登录页（学校夜景 + 动漫流星雨）+ QQ 频道风格实时聊天 + 后台管理。
+
+线上地址：**https://bfgzlt.cc.cd**
 
 ## 技术栈
 
-| 层 | 技术 |
-|---|------|
-| 前端 | 原生 HTML/CSS/JS + Socket.io 客户端 |
-| 后端 | Node.js + Express + Socket.io |
-| 数据库 | SQLite (sql.js WASM) |
-| 认证 | JWT + bcrypt |
-| 部署 | Docker + Nginx |
+| 层 | 技术 | 说明 |
+|---|---|---|
+| 前端 | 原生 HTML/CSS/JS | `html/` `css/` `js/` `images/`，构建后输出到 `web_build/` |
+| 前端部署 | Cloudflare Pages | `bfgzlt.cc.cd` |
+| API 代理 | Cloudflare Worker | `api.bfgzlt.cc.cd`，转发到 InsForge 并做内容审核 |
+| 实时聊天 | Express + Socket.io | `server/` 提供房间、@提醒、通知推送 |
+| 数据 & 认证 | InsForge (Postgres + Auth + Storage) | 用户/频道/消息/文件存储；Express 本地 DB 正在逐步迁移 |
+| 构建 | Node.js + `_build.mjs` | 拉平路径、文件名加版本哈希、复制 `_headers` |
 
 ## 项目结构
 
 ```
 ├── html/
-│   ├── index.html          # 主页面（登录+频道聊天）
-│   └── admin.html          # 后台管理（用户/帖子/看板）
+│   ├── index.html            # 主页面（登录 + 频道聊天）
+│   └── admin.html            # 后台管理
 ├── css/
-│   ├── style.css           # 主样式 + 设计 token 体系
-│   └── admin.css           # 后台管理专属样式
+│   ├── style.css             # 主样式
+│   └── admin.css             # 后台样式
 ├── js/
-│   ├── app.js              # 主逻辑（聊天/认证/轮播/通知）
-│   ├── admin.js            # 后台管理逻辑
-│   ├── shooting-stars.js   # 登录页流星雨动画
-│   └── main-bg.js          # 聊天背景漂浮光点
-├── images/
-│   ├── school-badge-new.png  # 校徽
-│   ├── school-night.jpg     # 学校夜景（登录页背景）
-│   └── campus-01~04.jpg     # 校园风光（登录轮播卡片）
-├── server/
-│   ├── index.js            # Express + Socket.io 主入口
-│   ├── db.js               # SQLite 数据库封装
-│   ├── seed-auto.js        # 自动种子数据
-│   ├── middleware/auth.js   # JWT 鉴权中间件
-│   └── routes/             # REST API 路由
-│       ├── auth.js         # 注册/登录
-│       ├── channels.js     # 频道管理
-│       ├── messages.js     # 消息收发
-│       ├── upload.js       # 图片/文件上传
-│       ├── notifications.js # 通知系统
-│       └── admin.js        # 后台管理 API
-├── Dockerfile
-├── docker-compose.yml
-├── nginx.conf
+│   ├── app.js                # 主逻辑（聊天/认证/轮播/通知）
+│   ├── admin.js              # 后台管理逻辑
+│   ├── if-client.js          # InsForge SDK 封装（Auth/DB/Storage/Realtime）
+│   ├── shooting-stars.js     # 登录页流星雨动画
+│   └── main-bg.js            # 聊天背景漂浮光点
+├── images/                   # 校徽、校园照片、图标
+├── server/                   # Express + Socket.io + SQLite 服务
+│   ├── index.js              # 服务入口
+│   ├── db.js                 # SQLite 封装
+│   ├── seed-auto.js          # 初始化数据
+│   ├── middleware/auth.js    # JWT 鉴权
+│   └── routes/               # REST API 路由
+├── worker/                   # Cloudflare Worker 反代
+│   ├── index.js
+│   └── wrangler.toml
+├── _build.mjs                # 前端构建脚本
+├── deploy.sh / deploy.bat    # 一键部署脚本
 └── docs/
-    └── 2026-06-26-production-architecture.md
+    ├── plans/                # 进行中/待实现的设计方案
+    └── archive/              # 过期文档与调研产物
 ```
 
-## 功能
-
-- 注册/登录（JWT 认证，支持中文用户名）
-- 多频道实时文字聊天（Socket.io）
-- 图片/文件上传预览
-- @成员提醒 + 通知系统（铃铛未读）
-- 响应式设计（移动端折叠侧栏）
-- 后台管理：用户管理 / 帖子审核 / 数据看板
-
-## 本地运行
+## 本地开发
 
 ```bash
+# 1. 启动 Express 后端（端口 3000）
 cd server
 npm install
 node index.js
-# 访问 http://localhost:3000
+
+# 2. 直接打开 html/index.html 即可预览前端
+#    登录后前端会连到 localhost:3000
 ```
 
-默认管理账号：`admin` / `admin123`
+## 部署上线
 
-## 部署
-
-> ⚠️ 部署前必须准备 `.env` 文件：复制 `.env.example` 为 `.env`，并设置一个足够强且随机的 `JWT_SECRET`。仓库内的 `docker-compose.yml` 不再硬编码密钥。
+> 需要 `CLOUDFLARE_API_TOKEN` 环境变量（不提交到仓库）。
 
 ```bash
-cp .env.example .env      # 编辑并填入真实 JWT_SECRET
-docker-compose up -d --build
+# 方式一：一键脚本
+CLOUDFLARE_API_TOKEN=xxx ./deploy.sh
+
+# 方式二：分步执行
+node _build.mjs
+wrangler pages deploy web_build --project-name=baofeng-campus --branch main
+cd worker && wrangler deploy
 ```
 
-- Nginx 接管 80 端口，静态文件 + API 反向代理 + WebSocket 升级。
-- 数据库 `data.db` 与上传文件 `uploads/` 通过命名卷 `server-data` 持久化到 `/app/data`，
-  **不会**再覆盖容器内应用代码（旧配置挂载到 `/app` 会导致启动失败）。
-- 升级时重新 `docker-compose up -d --build` 即可，数据卷不受影响。
+部署完成后：
+- 前端 `bfgzlt.cc.cd`：浏览器**硬刷新**（Ctrl/Cmd+Shift+R）看效果。
+- Worker `api.bfgzlt.cc.cd`：秒级生效，通常无需刷新。
 
-### 健康检查
+## 设计/规划文档
 
-```bash
-curl http://localhost/health   # 应返回 {"status":"ok",...}
-```
+- 进行中方案：`docs/plans/`
+- 过期归档：`docs/archive/`

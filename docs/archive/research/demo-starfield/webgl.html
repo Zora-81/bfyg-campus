@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WebGL 点云星系 demo</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { width:100%; height:100%; overflow:hidden; background:#020207; }
+  #gl-canvas { position:fixed; inset:0; z-index:1; }
+  #ui {
+    position:fixed; bottom:22px; left:50%; transform:translateX(-50%);
+    z-index:10; display:flex; align-items:center; gap:14px;
+    background:rgba(10,12,28,0.78); border:1px solid rgba(120,140,255,0.22);
+    padding:12px 18px; border-radius:999px; backdrop-filter: blur(14px);
+    font-family: system-ui, sans-serif; color:#e8ecff; font-size:13px;
+  }
+  #ui label { display:flex; align-items:center; gap:8px; }
+  #ui input[type=range] { width:110px; }
+  #hint {
+    position:fixed; top:18px; left:18px; z-index:10; color:#a5b4fc; font-family:system-ui; font-size:13px;
+    max-width:420px; line-height:1.6; background:rgba(0,0,0,0.45); padding:12px 14px; border-radius:10px;
+  }
+</style>
+</head>
+<body>
+<canvas id="gl-canvas"></canvas>
+  <div id="hint">WebGL 点云：模拟从银河系内部仰望的星空。星点分布在屏幕内，核球居中、光带横贯、散星铺满；勾选「自转」时仅轻微摇摆，不会转出界面。鼠标移动有轻微视差。</div>
+<div id="ui">
+  <label>点数:<span id="pt-count">25000</span><input type="range" id="count-range" min="5000" max="60000" step="5000" value="25000"></label>
+  <label>自转:<input type="checkbox" id="rotate-chk" checked></label>
+  <label>旋臂:<input type="checkbox" id="arm-chk" checked></label>
+</div>
+<script src="webgl.js"></script>
+</body>
+</html>

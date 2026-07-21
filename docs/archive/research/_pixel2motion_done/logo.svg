@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 宝丰一高校徽 — Phase 2 v5 (最终拟合版) -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-300 -300 600 600">
+  <defs>
+    <!-- 文字弧路径：半径 156（白带中央偏外） -->
+    <!-- 上弧：y=-98 → 约39°仰角，跨约144° -->
+    <!-- 下弧：y=+95 → 约37°俯角，跨约146° -->
+    <path id="topTextArc"
+          d="M -121,-97 A 156,156 0 0 1 121,-97"/>
+    <path id="bottomTextArc"
+          d="M -123,94 A 156,156 0 0 0 123,94"/>
+  </defs>
+
+  <!-- #ring-outer -->
+  <g id="ring-outer">
+    <circle cx="0" cy="0" r="179" fill="#FFFFFF"/>
+    <circle cx="0" cy="0" r="170" fill="#8B0000"/>
+  </g>
+
+  <!-- #text-band-bg -->
+  <g id="text-band-bg">
+    <circle cx="0" cy="0" r="165" fill="#FFFFFF"/>
+    <circle cx="0" cy="0" r="130" fill="none" stroke="#D4A017" stroke-width="4"/>
+  </g>
+
+  <!-- #text-band-top — 中文 -->
+  <text font-family="'Microsoft YaHei','SimHei','Noto Sans SC','SimSun',sans-serif"
+        font-size="39" font-weight="bold" fill="#000000"
+        letter-spacing="5">
+    <textPath href="#topTextArc" startOffset="50%" text-anchor="middle">宝丰县第一高级中学</textPath>
+  </text>
+
+  <!-- #text-band-bottom — 英文 -->
+  <text font-family="'Arial Black','Arial',sans-serif"
+        font-size="16.5" font-weight="bold" fill="#000000"
+        letter-spacing="0.4">
+    <textPath href="#bottomTextArc" startOffset="50%" text-anchor="middle">BAOFENG NO.1 SENIOR HIGH SCHOOL</textPath>
+  </text>
+
+  <!-- #inner-field -->
+  <circle id="inner-field" cx="0" cy="0" r="130" fill="#CC0000"/>
+
+  <!-- #mountain -->
+  <g id="mountain">
+    <polygon points="0,-92 -72,55 72,55" fill="#E8B800"/>
+    <polygon points="-1,-89 -55,52 2,52" fill="#FFE55C" opacity="0.28"/>
+    <line x1="0" y1="-92" x2="0" y2="55" stroke="#FFEA80" stroke-width="1.2" opacity="0.35"/>
+  </g>
+
+  <!-- #platform -->
+  <g id="platform">
+    <rect x="-58"  y="58"  width="116" height="13" rx="3" fill="#00088A"/>
+    <rect x="-85"  y="74"  width="170" height="13" rx="3" fill="#000780"/>
+    <rect x="-120" y="90"  width="240" height="15" rx="3" fill="#000672"/>
+  </g>
+
+  <!-- #year-text -->
+  <text id="year-text" x="0" y="138"
+        font-family="'Times New Roman','Georgia',serif"
+        font-size="30" font-weight="bold"
+        fill="#F5E6B8" text-anchor="middle"
+        letter-spacing="2">1956</text>
+</svg>

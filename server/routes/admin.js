@@ -1,5 +1,6 @@
 // 管理后台路由
 const express = require('express');
+const bcrypt = require('bcryptjs');
 const db = require('../db');
 const { authRequired, adminRequired } = require('../middleware/auth');
 
@@ -71,6 +72,22 @@ router.patch('/users/:id', authRequired, adminRequired, (req, res) => {
   );
   console.log(`[admin] ${req.user.username} 修改了用户 ${updated.username}: status=${status} role=${role}`);
   res.json({ user: updated });
+});
+
+// 管理员重置用户密码（无 email/短信体系下的合规密码找回闭环）
+router.post('/users/:id/reset-password', authRequired, adminRequired, (req, res) => {
+  const userId = parseInt(req.params.id);
+  const newPassword = req.body && req.body.newPassword;
+  if (!newPassword || String(newPassword).length < 6) {
+    return res.status(400).json({ error: '新密码至少 6 位' });
+  }
+  const user = db.get('SELECT * FROM users WHERE id = ?', [userId]);
+  if (!user) return res.status(404).json({ error: '用户不存在' });
+
+  const hash = bcrypt.hashSync(String(newPassword), 12);
+  db.run('UPDATE users SET password_hash = ? WHERE id = ?', [hash, userId]);
+  console.log(`[admin] ${req.user.username} 重置了用户 ${user.username} 的密码`);
+  res.json({ success: true });
 });
 
 // 数据看板统计

@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>星空主题设计研究 — 校园频道</title>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0b0d17;
+      --surface: #15182a;
+      --elevated: #1e2238;
+      --text: #f0f2ff;
+      --text-sec: #a9b0d0;
+      --text-dim: #6d7499;
+      --accent: #7c5cfc;
+      --accent-2: #00d4ff;
+      --border: rgba(255,255,255,0.08);
+      --r: 14px;
+      --t: 0.2s ease;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 0;
+      font-family: "Noto Sans SC", -apple-system, BlinkMacSystemFont, sans-serif;
+      background:
+        radial-gradient(ellipse 80% 50% at 30% 20%, rgba(124,92,252,0.15), transparent 60%),
+        radial-gradient(ellipse 60% 40% at 70% 60%, rgba(0,212,255,0.10), transparent 60%),
+        var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+      min-height: 100vh;
+    }
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 48px 20px 80px;
+    }
+    header { margin-bottom: 42px; }
+    h1 {
+      font-size: 2.2rem; font-weight: 900; letter-spacing: -0.5px;
+      margin: 0 0 10px;
+      background: linear-gradient(90deg, #fff 0%, #a9b0d0 100%);
+      -webkit-background-clip: text; background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .sub {
+      font-size: 1.05rem; color: var(--text-sec); margin: 0;
+    }
+    .tag {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 0.75rem; font-weight: 700; color: var(--accent-2);
+      background: rgba(0,212,255,0.08); border: 1px solid rgba(0,212,255,0.18);
+      padding: 4px 10px; border-radius: 99px; margin-bottom: 14px;
+    }
+    h2 {
+      font-size: 1.35rem; font-weight: 800; margin: 42px 0 16px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    h2 .num {
+      width: 30px; height: 30px; border-radius: 8px;
+      background: var(--accent); color: #fff; font-size: 0.85rem;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    h3 { font-size: 1.1rem; font-weight: 700; margin: 24px 0 10px; color: #fff; }
+    p { color: var(--text-sec); margin: 0 0 14px; }
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--r); padding: 20px; margin: 0 0 16px;
+      transition: transform var(--t), box-shadow var(--t);
+    }
+    .card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.25); }
+    .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    @media (max-width: 760px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
+    .screenshot {
+      width: 100%; border-radius: 10px; border: 1px solid var(--border);
+      background: var(--elevated); display: block;
+    }
+    .caption {
+      font-size: 0.82rem; color: var(--text-dim); text-align: center; margin-top: 8px;
+    }
+    .swatch {
+      width: 100%; height: 44px; border-radius: 8px; border: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.75rem; font-weight: 700; color: #fff;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.6); margin-bottom: 8px;
+    }
+    ul { margin: 0 0 14px; padding-left: 20px; }
+    li { color: var(--text-sec); margin-bottom: 6px; }
+    a { color: var(--accent-2); text-decoration: none; word-break: break-all; }
+    a:hover { text-decoration: underline; }
+    .highlight {
+      background: rgba(124,92,252,0.12); border-left: 3px solid var(--accent);
+      padding: 12px 16px; border-radius: 0 10px 10px 0; color: var(--text-sec);
+    }
+    .decision {
+      background: var(--elevated); border: 1px solid var(--border); border-radius: var(--r);
+      padding: 20px; margin-top: 24px;
+    }
+    .decision h3 { margin-top: 0; color: var(--accent-2); }
+    .btn-like {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--accent); color: #fff; padding: 8px 14px; border-radius: 8px;
+      font-size: 0.85rem; font-weight: 700; margin-right: 8px; margin-bottom: 8px;
+    }
+    .checklist { list-style: none; padding: 0; }
+    .checklist li {
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 8px 0; border-bottom: 1px solid var(--border);
+    }
+    .checklist li:last-child { border-bottom: none; }
+    .check { width: 20px; height: 20px; border-radius: 6px; background: rgba(74,222,128,0.12); color: #4ade80; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; flex-shrink: 0; }
+    .cross { background: rgba(248,113,113,0.12); color: #f87171; }
+    .option-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--r);
+      padding: 18px; position: relative; overflow: hidden;
+    }
+    .option-card::before {
+      content: ""; position: absolute; top: 0; left: 0; right: 0; height: 4px;
+    }
+    .option-card.rec::before { background: linear-gradient(90deg, #7c5cfc, #00d4ff); }
+    .option-card.alt::before { background: linear-gradient(90deg, #3b82f6, #8b5cf6); }
+    .option-card.alt2::before { background: linear-gradient(90deg, #10b981, #0ea5e9); }
+    .option-title { font-weight: 800; font-size: 1.05rem; margin-bottom: 6px; color: #fff; }
+    .option-desc { font-size: 0.92rem; color: var(--text-sec); margin-bottom: 12px; }
+    .option-meta { font-size: 0.78rem; color: var(--text-dim); }
+    .stars-sample {
+      width: 100%; height: 120px; border-radius: 10px; margin-bottom: 16px;
+      position: relative; overflow: hidden; border: 1px solid var(--border);
+    }
+    .stars-sample.deep {
+      background:
+        radial-gradient(ellipse 80% 60% at 40% 30%, rgba(100,120,255,0.25), transparent 55%),
+        radial-gradient(ellipse 70% 50% at 80% 70%, rgba(180,140,255,0.15), transparent 50%),
+        linear-gradient(180deg, #050714 0%, #0a1028 60%, #050714 100%);
+    }
+    .stars-sample.galaxy {
+      background:
+        radial-gradient(ellipse 90% 50% at 50% 40%, rgba(88,60,220,0.35), transparent 50%),
+        radial-gradient(ellipse 60% 40% at 30% 70%, rgba(236,72,153,0.18), transparent 50%),
+        linear-gradient(180deg, #0a0818 0%, #160d2e 50%, #0a0818 100%);
+    }
+    .stars-sample.fresh {
+      background:
+        radial-gradient(ellipse 80% 55% at 30% 25%, rgba(74,222,128,0.22), transparent 55%),
+        radial-gradient(ellipse 70% 45% at 80% 20%, rgba(45,212,191,0.16), transparent 50%),
+        linear-gradient(180deg, #0f172a 0%, #0c1a2e 50%, #0f172a 100%);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="tag">🌌 设计研究</div>
+      <h1>星空主题设计方案</h1>
+      <p class="sub">将「蓝紫极光」默认主题改为星空风格，并解决全站主题覆盖不全的问题。</p>
+    </header>
+
+    <h2><span class="num">1</span>当前问题</h2>
+    <div class="grid-3">
+      <div>
+        <img class="screenshot" src="theme-current-preview.png" alt="当前主题预览" />
+        <p class="caption">蓝紫极光预览小图</p>
+      </div>
+      <div>
+        <img class="screenshot" src="theme-current-popup.png" alt="当前弹窗" />
+        <p class="caption">背景设置弹窗</p>
+      </div>
+      <div>
+        <img class="screenshot" src="theme-current-drawer.png" alt="当前侧栏" />
+        <p class="caption">左侧频道抽屉</p>
+      </div>
+    </div>
+    <div class="highlight">
+      <strong>问题分析：</strong>从截图看，蓝紫极光主题下弹窗/侧栏底色仍然是深灰/近黑，和背景没有拉开层次；「自然森绿」主题下部分区域（如侧栏）仍显示为默认深色，说明主题变量没有完整覆盖到所有组件。改成星空主题时，需要把背景、面板、强调色、光点全部统一成星空配色。
+    </div>
+
+    <h2><span class="num">2</span>星空主题设计趋势</h2>
+    <div class="grid-2">
+      <div class="card">
+        <h3>🌠 深空暗色 + 星光点缀</h3>
+        <p>2025 年聊天/社交 App 背景不再用纯黑，而是「深海军蓝/紫黑」作为太空底色，叠加低透明度白色光点模拟星星，配合少量流星或星云光晕，降低视觉疲劳。</p>
+      </div>
+      <div class="card">
+        <h3>🪐 银河渐变 + 毛玻璃面板</h3>
+        <p>在星空背景上覆盖 10-20px 背景模糊 + 半透明深色遮罩的卡片，保证文字可读，同时让星光从边缘透出，营造深邃感。</p>
+      </div>
+      <div class="card">
+        <h3>✨ 微动态星光</h3>
+        <p>星星不是静态的：大小呼吸、亮度闪烁、偶尔划过流星。使用 Canvas 绘制 150-300 颗星星，帧率可控， prefers-reduced-motion 下自动暂停。</p>
+      </div>
+      <div class="card">
+        <h3>🌙 场景化主题</h3>
+        <p>参考微信/夜视频聊天等定制主题，把「星空」作为聊天场景，配合水晶质感图标、流星划过消息气泡，增强沉浸感。</p>
+      </div>
+    </div>
+
+    <h2><span class="num">3</span>三个推荐方向</h2>
+    <div class="grid-3">
+      <div class="option-card rec">
+        <div class="stars-sample deep"></div>
+        <div class="option-title">A. 深空星轨（推荐）</div>
+        <div class="option-desc">深蓝紫黑太空底色 + 银白星光 + 淡蓝/紫色星云光晕。面板用半透明深蓝灰毛玻璃，强调色用亮蓝或银白。最接近「星空」概念，沉稳高级。</div>
+        <div class="option-meta">适合：默认深色主题、夜间使用、护眼</div>
+      </div>
+      <div class="option-card alt">
+        <div class="stars-sample galaxy"></div>
+        <div class="option-title">B. 银河紫梦</div>
+        <div class="option-desc">在 A 基础上加入粉紫色星云，强调色用紫/粉。更像现在的蓝紫极光，但把「极光」换成「星云+银河」，更有辨识度。</div>
+        <div class="option-meta">适合：想保留现有紫色调、增强梦幻感</div>
+      </div>
+      <div class="option-card alt2">
+        <div class="stars-sample fresh"></div>
+        <div class="option-title">C. 清新星夜</div>
+        <div class="option-desc">深蓝绿夜空 + 青绿/金色星光，像夏夜星空。和自然森绿是两种不同气质，但同为清新路线。</div>
+        <div class="option-meta">适合：想要清新自然又不落绿色系</div>
+      </div>
+    </div>
+
+    <h2><span class="num">4</span>配色参考</h2>
+    <div class="grid-3">
+      <div>
+        <div class="swatch" style="background:#050714">太空底色 #050714</div>
+        <div class="swatch" style="background:#0a1028">面板底色 #0a1028</div>
+        <div class="swatch" style="background:#1a2040">悬浮面板 #1a2040</div>
+      </div>
+      <div>
+        <div class="swatch" style="background:#7c5cfc">星云紫 #7c5cfc</div>
+        <div class="swatch" style="background:#00d4ff">星光蓝 #00d4ff</div>
+        <div class="swatch" style="background:#e0e7ff">银白文字 #e0e7ff</div>
+      </div>
+      <div>
+        <div class="swatch" style="background:#4ade80">流星绿 #4ade80</div>
+        <div class="swatch" style="background:#f472b6">星云粉 #f472b6</div>
+        <div class="swatch" style="background:#fbbf24">暖星黄 #fbbf24</div>
+      </div>
+    </div>
+
+    <h2><span class="num">5</span>优秀样例</h2>
+    <div class="card">
+      <ul>
+        <li><a href="https://dev.to/usman_awan/how-i-built-a-grok-inspired-starfield-shooting-stars-using-html-canvas-3872" target="_blank">GROK 风格 Starfield + Shooting Stars</a> — 旋转星空 + 流星，纯 Canvas 实现，无依赖。</li>
+        <li><a href="https://css-tricks.com/an-interactive-starry-backdrop-for-content/" target="_blank">CSS-Tricks: Interactive Starry Backdrop</a> — 可交互星空背景，React/GSAP 思路可借鉴。</li>
+        <li><a href="https://blog.csdn.net/weixin_42519772/article/details/161097327" target="_blank">Canvas 动态星空背景工程实践</a> — 300 颗星星 + 闪烁 + 性能优化。</li>
+        <li><a href="https://blog.csdn.net/weixin_47004687/article/details/149854163" target="_blank">动态浪漫星空</a> — 月亮、心形流星、毛玻璃卡片，适合浪漫/社交场景。</li>
+      </ul>
+    </div>
+
+    <h2><span class="num">6</span>技术实现建议</h2>
+    <div class="card">
+      <h3>背景层</h3>
+      <p>用 <code>data-theme="starry"</code> 的 CSS 变量控制：深蓝紫黑渐变 + Canvas 星光层。保留现有的 <code>#main-bg</code> 和 <code>#main-dots</code>，把光点改为白色/蓝色星光，增加流星效果。</p>
+      <h3>全站覆盖检查清单</h3>
+      <ul class="checklist">
+        <li><span class="check">✓</span><div>顶部导航、频道抽屉、右侧边栏已使用 <code>var(--bg-surface)</code></div></li>
+        <li><span class="check">✓</span><div>消息气泡、输入框、卡片已使用主题变量</div></li>
+        <li><span class="check cross">✗</span><div>需检查：用户头像弹窗、通知下拉、loading 页等独立组件是否仍写死颜色</div></li>
+        <li><span class="check cross">✗</span><div>需检查：移动端适配时是否覆盖主题变量</div></li>
+        <li><span class="check cross">✗</span><div>需检查：自定义壁纸主题是否沿用深色星空配色</div></li>
+      </ul>
+    </div>
+
+    <div class="decision">
+      <h3>🎯 下一步决策</h3>
+      <p>请确认以下两点，我再开始改代码：</p>
+      <p><span class="btn-like">1</span>默认主题用哪个方向？<strong>A 深空星轨 / B 银河紫梦 / C 清新星夜</strong></p>
+      <p><span class="btn-like">2</span>星空背景要不要动态流星？<strong>要（电影感）/ 不要（只闪烁星星）</strong></p>
+      <p style="margin-bottom:0; color:var(--text-dim); font-size:0.9rem;">另外我会同步排查「主题没全覆盖」的组件，把头像弹窗、通知下拉、loading 等写死颜色的地方统一改成主题变量。</p>
+    </div>
+  </div>
+</body>
+</html>

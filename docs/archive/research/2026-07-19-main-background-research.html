@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>校园频道 · 主界面背景优化研究</title>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #070914;
+      --panel: rgba(255,255,255,0.045);
+      --panel-border: rgba(255,255,255,0.10);
+      --text: #f0f2ff;
+      --muted: #8b91b3;
+      --accent: #7c6fff;
+      --accent-2: #ff6fb0;
+      --radius: 18px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 0;
+      font-family: "Noto Sans SC", system-ui, sans-serif;
+      background:
+        radial-gradient(ellipse 80% 40% at 20% 10%, rgba(124,111,255,0.18), transparent 60%),
+        radial-gradient(ellipse 60% 35% at 90% 30%, rgba(255,111,176,0.12), transparent 55%),
+        radial-gradient(ellipse 70% 45% at 50% 95%, rgba(60,180,220,0.12), transparent 60%),
+        linear-gradient(180deg, #070914 0%, #0b0e1f 50%, #080a18 100%);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.7;
+    }
+    .wrap { max-width: 920px; margin: 0 auto; padding: 48px 24px 80px; }
+    header { text-align: center; margin-bottom: 48px; }
+    h1 { font-size: clamp(28px, 5vw, 42px); font-weight: 900; margin: 0 0 12px; letter-spacing: -0.5px; }
+    .sub { color: var(--muted); font-size: 16px; max-width: 560px; margin: 0 auto; }
+    .badge {
+      display: inline-block; padding: 4px 12px; border-radius: 999px;
+      background: rgba(124,111,255,0.15); border: 1px solid rgba(124,111,255,0.35);
+      color: #b8b3ff; font-size: 12px; font-weight: 600; margin-bottom: 16px;
+    }
+    h2 { font-size: 22px; font-weight: 800; margin: 48px 0 18px; display: flex; align-items: center; gap: 10px; }
+    h2 .num { width: 32px; height: 32px; border-radius: 50%; background: var(--accent); color: #fff; display: grid; place-items: center; font-size: 14px; }
+    h3 { font-size: 17px; font-weight: 700; margin: 24px 0 10px; color: #e8ebff; }
+    p { color: #c5cbe6; margin: 0 0 14px; }
+    a { color: #a29bfe; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .card {
+      background: var(--panel); border: 1px solid var(--panel-border);
+      border-radius: var(--radius); padding: 22px 24px; margin-bottom: 18px;
+      backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+      box-shadow: 0 10px 40px rgba(0,0,0,0.25);
+    }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+    .tag { display: inline-block; padding: 3px 10px; border-radius: 6px; background: rgba(255,255,255,0.08); color: var(--muted); font-size: 12px; margin-right: 6px; margin-bottom: 6px; }
+    .pros-cons { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .pros, .cons { padding: 14px; border-radius: 12px; }
+    .pros { background: rgba(46,213,115,0.08); border: 1px solid rgba(46,213,115,0.18); }
+    .cons { background: rgba(255,71,87,0.08); border: 1px solid rgba(255,71,87,0.18); }
+    .pros h4, .cons h4 { margin: 0 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .pros h4 { color: #7bed9f; }
+    .cons h4 { color: #ff7675; }
+    .pros ul, .cons ul { margin: 0; padding-left: 18px; font-size: 14px; color: #c5cbe6; }
+    .pros li, .cons li { margin-bottom: 5px; }
+    .recommend { border: 1px solid rgba(124,111,255,0.45); background: rgba(124,111,255,0.10); }
+    .recommend .badge-rec { background: var(--accent); color: #fff; padding: 3px 10px; border-radius: 6px; font-size: 12px; font-weight: 700; margin-bottom: 10px; display: inline-block; }
+    .code { background: rgba(0,0,0,0.35); border-radius: 10px; padding: 14px 16px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; color: #d7d9ff; overflow-x: auto; margin: 10px 0; }
+    .screenshot { width: 100%; border-radius: 12px; border: 1px solid rgba(255,255,255,0.08); margin: 10px 0; }
+    .sample-link { display: block; padding: 10px 12px; border-radius: 10px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07); margin-bottom: 8px; transition: background 0.2s; }
+    .sample-link:hover { background: rgba(255,255,255,0.08); text-decoration: none; }
+    .sample-link strong { color: #e8ebff; display: block; margin-bottom: 2px; }
+    .sample-link span { color: var(--muted); font-size: 13px; }
+    table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 14px; }
+    th, td { padding: 12px 14px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.08); }
+    th { color: #a29bfe; font-weight: 700; background: rgba(255,255,255,0.03); }
+    td { color: #c5cbe6; }
+    .action { margin-top: 40px; padding: 22px; border-radius: var(--radius); background: rgba(124,111,255,0.12); border: 1px solid rgba(124,111,255,0.25); }
+    .action h3 { margin-top: 0; color: #fff; }
+    footer { text-align: center; color: var(--muted); font-size: 13px; margin-top: 60px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="badge">RESEARCH REPORT</div>
+      <h1>校园频道 · 主界面背景优化研究</h1>
+      <p class="sub">基于全网聊天应用 UI 趋势与爆款案例，为「背景太灰」问题提供可落地、可自定义的设计方案。</p>
+    </header>
+
+    <section class="card">
+      <h2><span class="num">1</span>当前问题诊断</h2>
+      <img class="screenshot" src="main-bg-current.png" alt="当前主界面截图" />
+      <p>从现有主界面截图可见，背景存在以下问题：</p>
+      <ul style="color:#c5cbe6;">
+        <li><strong>色调过灰：</strong>当前 <code>#main-bg</code> 使用 <code>#0a0c1a → #0e1025 → #0d0f22</code> 的线性渐变，三个色阶非常接近，整体发灰、发闷。</li>
+        <li><strong>层次不足：</strong>仅通过 3 个低透明度径向渐变和 30 个微小白点营造层次，在 1920×1080 屏幕上几乎不可见。</li>
+        <li><strong>缺乏品牌色：</strong>背景没有呼应「校园频道」的品牌蓝紫调，也没有与登录页流星/夜景形成视觉延续。</li>
+        <li><strong>不可更换：</strong>背景写死在 CSS 中，用户无法按个人喜好切换壁纸或风格。</li>
+      </ul>
+      <p><strong>结论：</strong>需要在保持可读性的前提下，引入更丰富的色彩层次、可感知的动态元素，以及「用户可自定义背景」的能力。</p>
+    </section>
+
+    <section class="card">
+      <h2><span class="num">2</span>2025 聊天界面背景 6 大趋势</h2>
+      <p>综合 Dribbble、Behance、Discord 主题社区、QQ 频道设计指南等来源，提炼出以下方向：</p>
+      <table>
+        <tr><th>趋势</th><th>关键词</th><th>适合校园频道的理由</th></tr>
+        <tr><td>低饱和深色 + 彩色光晕</td><td>深夜暖灯、蓝紫极光、暗调</td><td>护眼、不抢聊天内容风头，同时打破单调</td></tr>
+        <tr><td>毛玻璃面板</td><td>backdrop-filter、玻璃拟物</td><td>让消息卡片与背景自然分离，提升层次感</td></tr>
+        <tr><td>极光 / 网格渐变</td><td>mesh gradient、aurora</td><td>背景有流动感，比纯色渐变更高级</td></tr>
+        <tr><td>可自定义壁纸</td><td>上传图片、亮度/模糊调节</td><td>直接满足用户「随意更换」需求</td></tr>
+        <tr><td>克制动态粒子</td><td>呼吸光点、微流星、雨滴</td><td>增加氛围感，但避免过度动效干扰阅读</td></tr>
+        <tr><td>主题化底纹</td><td>校园、星空、几何、国风</td><td>贴合「宝丰一高」校园场景，增强归属感</td></tr>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2><span class="num">3</span>爆款优秀样例</h2>
+      <a class="sample-link" href="https://discord-themes.com/theme/4" target="_blank">
+        <strong>Midnight（Discord 主题）</strong>
+        <span>暗色圆角主题，支持自定义背景图、透明度与模糊度，是 Discord 社区下载量最高的主题之一。</span>
+      </a>
+      <a class="sample-link" href="https://github.com/refact0r/midnight-discord" target="_blank">
+        <strong>refact0r/midnight-discord</strong>
+        <span>开源 CSS，提供 --background-image、--panel-blur、--transparency-tweaks 等变量，实现背景可配置。</span>
+      </a>
+      <a class="sample-link" href="https://blog.csdn.net/gitblog_00042/article/details/142012252" target="_blank">
+        <strong>Comfy（Discord 主题美化指南）</strong>
+        <span>深色背景 + 蓝紫色渐变元素，强调「Stay comfy」的舒适聊天体验，配色非常适合校园社区。</span>
+      </a>
+      <a class="sample-link" href="https://dribbble.com/shots/24281290-Kenn-Food-Processor-Landing-Page" target="_blank">
+        <strong>Dribbble · 暗色模式优秀作品</strong>
+        <span>2025 年暗色界面趋势：柔和深灰 + 淡彩光晕，避免纯黑配白字的刺眼感。</span>
+      </a>
+      <a class="sample-link" href="https://dribbble.com/shots/26465200-Mobile-App-Screenshot-Design-Fantasy-Chat-Dating" target="_blank">
+        <strong>Fantasy Chat & Dating（Dribbble）</strong>
+        <span>暗色聊天 UI，梦幻渐变 + 动漫视觉，对年轻用户群体极具吸引力。</span>
+      </a>
+      <a class="sample-link" href="https://www.xiaoyuxitong.com/cjwt/185012.html" target="_blank">
+        <strong>2025 最新 QQ 背景图设置指南</strong>
+        <span>主流风格：极简毛玻璃、动态壁纸/AI 生成艺术、沉浸式全景，均支持用户自定义。</span>
+      </a>
+    </section>
+
+    <section class="card">
+      <h2><span class="num">4</span>「背景可随意更换」的 3 种技术方案</h2>
+      <h3>方案 A：CSS 变量 + 多套预设主题</h3>
+      <div class="code">:root {
+  --main-bg-gradient: linear-gradient(180deg,#0a0c1a 0%,#12142e 100%);
+  --main-bg-image: none;
+  --main-bg-blur: 0px;
+  --main-bg-dim: 0.55;
+}
+#main-bg {
+  background: var(--main-bg-gradient);
+}</div>
+      <p>优点：实现简单、切换无延迟、性能最好。缺点：用户只能用系统提供的几张图/色。</p>
+
+      <h3>方案 B：localStorage + 用户上传 Base64 图片</h3>
+      <div class="code">const reader = new FileReader();
+reader.onload = e => localStorage.setItem('campus_bg', e.target.result);
+reader.readAsDataURL(file);
+
+// 启动时应用
+const bg = localStorage.getItem('campus_bg');
+if (bg) document.documentElement.style.setProperty('--main-bg-image', `url(${bg})`);</div>
+      <p>优点：完全自定义、离线可用、无需后端。缺点：大图片会撑满 localStorage（上限约 5MB）。</p>
+
+      <h3>方案 C：后端 Storage 存储图片 URL</h3>
+      <div class="code">// 上传到 InsForge Storage，返回公开 URL
+const { data } = await IF.storage.from('wallpapers').uploadAuto(file);
+document.documentElement.style.setProperty('--main-bg-image', `url(${data.url})`);</div>
+      <p>优点：可跨设备同步、支持大文件/视频壁纸。缺点：需要后端接口和存储空间。</p>
+    </section>
+
+    <section class="card recommend">
+      <div class="badge-rec">RECOMMENDED</div>
+      <h2><span class="num">5</span>推荐综合方案：B + A 的组合</h2>
+      <p>针对「背景太灰」+「随意更换」两个需求，建议采用：<strong>默认提供多套高质量主题（A）+ 用户可上传自定义壁纸（B）</strong>。</p>
+      <p>默认主题建议：</p>
+      <div class="grid">
+        <div>
+          <span class="tag">默认</span>
+          <strong>蓝紫极光</strong><br/>
+          <span style="color:var(--muted);font-size:13px;">深蓝紫渐变 + 缓慢流动的极光光带，呼应登录页流星。</span>
+        </div>
+        <div>
+          <span class="tag">校园</span>
+          <strong>深夜教室</strong><br/>
+          <span style="color:var(--muted);font-size:13px;">暖黄灯光从底部晕染，营造晚自习氛围。</span>
+        </div>
+        <div>
+          <span class="tag">极简</span>
+          <strong>深空黑</strong><br/>
+          <span style="color:var(--muted);font-size:13px;">接近纯黑 + 极淡星点，适合专注学习场景。</span>
+        </div>
+        <div>
+          <span class="tag">自定义</span>
+          <strong>我的壁纸</strong><br/>
+          <span style="color:var(--muted);font-size:13px;">用户上传图片，自动叠加暗角/模糊/亮度蒙版。</span>
+        </div>
+      </div>
+
+      <h3>关键实现细节</h3>
+      <div class="code">/* 背景容器 */
+#main-bg {
+  position: fixed; inset: 0; z-index: 0;
+  background:
+    var(--main-bg-overlay, linear-gradient(180deg, rgba(7,9,20,0.35), rgba(7,9,20,0.75))),
+    var(--main-bg-image, var(--main-bg-gradient));
+  background-size: cover;
+  background-position: center;
+  filter: blur(var(--main-bg-blur, 0px));
+}
+
+/* 在背景图上再叠一层暗角/色罩，保证文字可读 */
+#main-bg::after {
+  content: "";
+  position: absolute; inset: 0;
+  background: rgba(7,9,20, var(--main-bg-dim, 0.55));
+}</div>
+
+      <h3>设置入口建议</h3>
+      <p>在头像弹窗的「快捷操作」区域新增「<strong>更换背景</strong>」按钮，点击后弹出设置面板，提供：主题选择、上传图片、模糊度/暗度滑块、恢复默认。</p>
+    </section>
+
+    <section class="card">
+      <h2><span class="num">6</span>方案对比</h2>
+      <table>
+        <tr><th>方案</th><th>视觉提升</th><th>自定义能力</th><th>实现成本</th><th>推荐度</th></tr>
+        <tr><td>A 仅预设主题</td><td>中</td><td>低</td><td>低</td><td>⭐⭐⭐</td></tr>
+        <tr><td>B 用户上传</td><td>高</td><td>高</td><td>中</td><td>⭐⭐⭐⭐⭐</td></tr>
+        <tr><td>C 后端同步</td><td>高</td><td>高</td><td>高</td><td>⭐⭐⭐⭐</td></tr>
+        <tr><td><strong>A+B 组合</strong></td><td><strong>高</strong></td><td><strong>高</strong></td><td><strong>中</strong></td><td><strong>⭐⭐⭐⭐⭐</strong></td></tr>
+      </table>
+    </section>
+
+    <section class="action">
+      <h3>下一步行动</h3>
+      <p>请确认以下问题，我将据此进入具体实现：</p>
+      <ol style="color:#c5cbe6;">
+        <li>是否采用「默认主题 + 用户上传壁纸」组合方案？</li>
+        <li>默认主题希望聚焦哪种风格：蓝紫极光 / 深夜教室 / 深空黑 / 其他？</li>
+        <li>背景设置入口放在头像弹窗的「快捷操作」里，还是独立设置页？</li>
+        <li>是否需要视频/动态壁纸支持，还是先只做静态图片 + CSS 动画？</li>
+      </ol>
+    </section>
+
+    <footer>
+      生成时间：2026-07-19 · 校园频道项目 · 仅供内部参考
+    </footer>
+  </div>
+</body>
+</html>

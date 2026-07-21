@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>宝丰一高 校徽动画</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2rem;
+      background: #fff;
+      font-family: -apple-system, "Helvetica Neue", Arial, sans-serif;
+    }
+    .logo-wrap { width: min(85vw, 400px); }
+    .logo-wrap svg { width: 100%; height: auto; display: block; overflow: visible; }
+    .controls { display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; justify-content: center; }
+    button {
+      font: 13px/1 inherit; letter-spacing: 0.04em;
+      padding: 8px 20px; border: 1px solid #ddd; border-radius: 999px;
+      background: #fff; cursor: pointer;
+    }
+    button.primary { background: #222; color: #fff; border-color: #222; }
+    button:hover { opacity: 0.85; }
+
+    @media (prefers-reduced-motion: no-preference) {
+
+      @keyframes ringIn {
+        0%   { opacity: 0; transform: rotate(-60deg) scale(0.6); }
+        55%  { opacity: 1; transform: rotate(-5deg) scale(1.05); }
+        100% { opacity: 1; transform: rotate(0deg) scale(1); }
+      }
+      #ring-outer { animation: ringIn 1200ms cubic-bezier(.34,1.56,.64,1) both; transform-origin: center; }
+
+      @keyframes fadeScale {
+        0%   { opacity: 0; transform: scale(0.9); }
+        100% { opacity: 1; transform: scale(1); }
+      }
+      #text-band-bg,
+      .arc-text-wrap { animation: fadeScale 900ms 200ms ease-out both; transform-origin: center; }
+
+      @keyframes popIn {
+        0%   { opacity: 0; transform: scale(0.8); }
+        100% { opacity: 1; transform: scale(1); }
+      }
+      #inner-field { animation: popIn 500ms 280ms ease both; transform-origin: center; }
+
+      @keyframes riseUp {
+        0%   { opacity: 0; transform: translateY(50px) scale(0.7); }
+        55%  { opacity: 1; transform: translateY(-8px) scale(1.04); }
+        85%  { transform: translateY(3px) scale(0.99); }
+        100% { opacity: 1; transform: translateY(0) scale(1); }
+      }
+      #mountain { animation: riseUp 800ms 380ms cubic-bezier(.175,.885,.32,1.275) both; transform-origin: center bottom; }
+
+      @keyframes slideUp {
+        0%   { opacity: 0; transform: translateY(65px) scale(0.85); }
+        60%  { opacity: 1; transform: translateY(-4px) scale(1.02); }
+        100% { opacity: 1; transform: translateY(0) scale(1); }
+      }
+      #platform { animation: slideUp 700ms 480ms ease-out both; transform-origin: center bottom; }
+
+      @keyframes glowIn {
+        0%   { opacity: 0; filter: blur(6px); }
+        50%  { opacity: 1; filter: drop-shadow(0 0 10px rgba(245,230,184,0.9)); }
+        100% { opacity: 1; filter: none; }
+      }
+      #year-text { animation: glowIn 600ms 650ms ease both; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      * { animation: none !important; transition: none !important; }
+      #ring-outer, #text-band-bg, .arc-text-wrap,
+      #inner-field, #mountain, #platform, #year-text { opacity: 1; transform: none; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="logo-wrap">
+  <!--
+    ════════════════════════════════════════════
+    几何设计说明（基于源图精确测量 + 弧长验算）:
+    ════════════════════════════════════════════
+    ViewBox: -300 -300 600 600 (中心原点)
+
+    外环: r_out=179 白色, r_in=170 深红(#8B0000)
+    白带: r_outer=165 白色, r_inner=132 + 金线 stroke #D4A017
+    内圆: r=128 红色(#CC0000)
+
+    ── 关键修复 ──
+    之前失败原因: textPath 弧长 < 文字总宽度 → 首尾字符被裁切
+
+    弧长验算 (基于 v7 PNG 已验证正确的参数):
+      中文 "宝丰县第一高级中学" 9字 × 38px(含letter-spacing) ≈ 342px
+      英文 "BAOFENG NO.1 SENIOR HIGH SCHOOL" 29字 × 15px ≈ 435px
+
+    上弧(topArc): r=148, 跨150°(195°→345°), 端点y=-38
+      弧长 = 148 × 150×π/180 = 387px > 342px ✅ 余量 +13%
+
+    下弧(botArc): r=148, 跨170°(185°→355°), 端点y=+13 (SVG Y轴向下)
+      弧长 = 148 × 170×π/180 = 439px ≈ 435px ✅ 刚好够
+  -->
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="-300 -300 600 600"
+       role="img" aria-label="宝丰一高级中学校徽">
+
+    <defs>
+      <!-- 上半弧(中文): 基线r=134, 端点x=±130,y=-37(上移2px), 跨152°, 弧长358px, 9字×35≈311px → 充满上环且字顶正好到外缘(r=165)不溢出 -->
+      <path id="topArc"
+            d="M -130,-37 A 134,134 0 0 1 130,-37"/>
+      <!-- 下半弧(英文): r=153, 端点y=+30(再下移1px), 跨170°, 弧长454px -->
+      <path id="botArc"
+            d="M -150,30 A 153,153 0 0 0 150,30"/>
+    </defs>
+
+    <!-- ① 外环 -->
+    <g id="ring-outer">
+      <circle cx="0" cy="0" r="179" fill="#FFF"/>
+      <circle cx="0" cy="0" r="170" fill="#8B0000"/>
+    </g>
+
+    <!-- ② 白带 + 金线 -->
+    <g id="text-band-bg">
+      <circle cx="0" cy="0" r="165" fill="#FFFFFF"/>
+      <circle cx="0" cy="0" r="132" fill="none" stroke="#D4A017" stroke-width="3.5"/>
+    </g>
+
+    <!-- ③ 上半弧 中文 -->
+    <g class="arc-text-wrap">
+      <text font-family="'Microsoft YaHei','SimHei','Noto Sans SC',sans-serif"
+            font-size="31" font-weight="bold" fill="#000" letter-spacing="4">
+        <textPath href="#topArc" startOffset="50%" text-anchor="middle">宝丰县第一高级中学</textPath>
+      </text>
+    </g>
+
+    <!-- ④ 下半弧 英文 -->
+    <g class="arc-text-wrap">
+      <text font-family="'Arial Black',Arial,sans-serif"
+            font-size="19" font-weight="bold" fill="#000" letter-spacing="0.5">
+        <textPath href="#botArc" startOffset="50%" text-anchor="middle">BAOFENG NO.1 SENIOR HIGH SCHOOL</textPath>
+      </text>
+    </g>
+
+    <!-- ⑤ 内红圆 -->
+    <circle id="inner-field" cx="0" cy="0" r="128" fill="#CC0000"/>
+
+    <!-- ⑥ 山峰：恢复原高度150px(底边y=35不动，顶点上拉到-115)，保持原图又高又尖的比例 -->
+    <g id="mountain">
+      <polygon points="0,-115 -72,35 72,35" fill="#E8B800"/>
+      <polygon points="-1,-109 -55,32 2,32" fill="#FFE55C" opacity="0.26"/>
+      <line x1="0" y1="-115" x2="0" y2="35" stroke="#FFEA80" stroke-width="1.2" opacity="0.32"/>
+    </g>
+
+    <!-- ⑦ 三层平台（紧贴山峰底边y=35） -->
+    <g id="platform">
+      <rect x="-54" y="38" width="108" height="10" rx="3" fill="#00088A"/>
+      <rect x="-76" y="51" width="152" height="10" rx="3" fill="#000780"/>
+      <rect x="-98" y="64" width="196" height="12" rx="3" fill="#000672"/>
+    </g>
+
+    <!-- ⑧ 年份 -->
+    <text id="year-text" x="0" y="110"
+          font-family="'Times New Roman',Georgia,serif"
+          font-size="28" font-weight="bold" fill="#F5E6B8"
+          text-anchor="middle" letter-spacing="2">1956</text>
+
+  </svg>
+</div>
+
+<!-- 控件 -->
+<div class="controls">
+  <button class="primary" type="button" onclick="replay()">重播</button>
+  <span style="font-size:12px;color:#999">点击校徽也可重播</span>
+</div>
+
+<script>
+function replay() {
+  const svg = document.querySelector('.logo-wrap svg');
+  const clone = svg.cloneNode(true);
+  svg.replaceWith(clone);
+}
+document.querySelector('.logo-wrap').addEventListener('click', replay);
+</script>
+
+</body>
+</html>

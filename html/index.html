@@ -16,7 +16,7 @@
 
     (function(){
 
-      var v = '1.2.55';
+      var v = '1.2.57';
 
       try {
 
@@ -50,7 +50,7 @@
 
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap" rel="stylesheet" />
 
-  <link rel="stylesheet" href="../css/style.css?v=1.2.55" />
+  <link rel="stylesheet" href="../css/style.css?v=1.2.57" />
 
 </head>
 
@@ -824,79 +824,13 @@
 
 
 
-        <!-- Background settings -->
-
-        <div class="popup-section">
-
-          <h3 class="popup-title">🎨 背景设置</h3>
-
-          <div class="bg-themes" id="bg-themes">
-
-            <button class="bg-theme active" data-theme="starry" title="星空" aria-label="星空">
-
-              <span class="bg-theme-preview starry"></span>
-
-              <span class="bg-theme-name">星空</span>
-
-            </button>
-
-            <button class="bg-theme" data-theme="light" title="白昼极简" aria-label="白昼极简">
-
-              <span class="bg-theme-preview light"></span>
-
-              <span class="bg-theme-name">白昼极简</span>
-
-            </button>
-
-            <button class="bg-theme" data-theme="classroom" title="自然森绿" aria-label="自然森绿">
-
-              <span class="bg-theme-preview classroom"></span>
-
-              <span class="bg-theme-name">自然森绿</span>
-
-            </button>
-
-            <button class="bg-theme" data-theme="custom" title="我的壁纸" aria-label="上传我的壁纸">
-
-              <span class="bg-theme-preview custom"><span class="bg-upload-icon">+</span></span>
-
-              <span class="bg-theme-name">我的壁纸</span>
-
-            </button>
-
-          </div>
-
-          <input type="file" id="bg-file-input" accept="image/*" style="display:none" />
-
-          <div class="bg-sliders" id="bg-sliders" style="display:none">
-
-            <div class="bg-slider-row">
-
-              <span>模糊</span>
-
-              <input type="range" id="bg-blur" min="0" max="20" value="0" />
-
-            </div>
-
-            <div class="bg-slider-row">
-
-              <span>暗角</span>
-
-              <input type="range" id="bg-dim" min="0" max="80" value="38" />
-
-            </div>
-
-          </div>
-
-          <button class="bg-reset" id="bg-reset">恢复默认</button>
-
-        </div>
+        <!-- 背景设置已迁移至 ⚙️ 设置面板 -->
 
 
 
-        <!-- Channel info -->
+        <!-- Channel info (desktop avatar-popup) -->
 
-        <div class="popup-section">
+        <div class="popup-section" id="popup-channel-info">
 
           <h3 class="popup-title">📡 频道信息</h3>
 
@@ -911,6 +845,18 @@
             <div class="info-row"><span class="info-label">在线成员</span><span class="info-value" id="rp-online-count">0</span></div>
 
           </div>
+
+        </div>
+
+
+
+        <!-- Hot topics (mobile avatar-popup; desktop uses right sidebar) -->
+
+        <div class="popup-section" id="popup-hot-topics">
+
+          <h3 class="popup-title">🔥 热门话题</h3>
+
+          <ul class="sidebar-list" id="hot-topics-mobile"></ul>
 
         </div>
 
@@ -1086,7 +1032,7 @@
 
             <span class="settings-info-label">版本</span>
 
-            <span class="settings-info-value">v1.2.55</span>
+            <span class="settings-info-value">v1.2.57</span>
 
           </div>
 
@@ -1118,17 +1064,17 @@
 
 
 
-  <script src="../js/lib/gsap.min.js?v=1.2.55" defer></script>
+  <script src="../js/lib/gsap.min.js?v=1.2.57" defer></script>
 
-  <script src="../js/shooting-stars.js?v=1.2.55"></script>
+  <script src="../js/shooting-stars.js?v=1.2.57"></script>
 
-  <script src="../js/main-bg.js?v=1.2.55"></script>
+  <script src="../js/main-bg.js?v=1.2.57"></script>
 
   <!-- InsForge SDK 客户端（ESM，CDN 引入），注入 window.IF 并派发 IF_READY -->
 
-  <script type="module" src="../js/if-client.js?v=1.2.55"></script>
+  <script type="module" src="../js/if-client.js?v=1.2.57"></script>
 
-  <script src="../js/app.js?v=1.2.55" defer></script>
+  <script src="../js/app.js?v=1.2.57" defer></script>
 
   <!-- ════════════════════════════════════════════
        学校介绍弹窗：点击侧栏校徽/校园频道 触发

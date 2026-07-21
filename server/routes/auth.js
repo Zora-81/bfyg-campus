@@ -1,4 +1,4 @@
-// 认证路由 — 注册 / 登录 / 获取当前用户
+﻿// 认证路由 — 注册 / 登录 / 获取当前用户
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
@@ -108,16 +108,26 @@ router.post('/login', loginLimiter, (req, res) => {
   });
 });
 
-// 获取当前用户
+// 获取当前用户（含统计）
 router.get('/me', authRequired, (req, res) => {
   const user = db.get(
     'SELECT id, username, nickname, avatar_url, role, status FROM users WHERE id = ?',
     [req.user.id]
   );
   if (!user) return res.status(404).json({ error: '用户不存在' });
-  res.json({ user });
-});
 
+  // 统计：加入的频道数、消息总数
+  const joinedChannels = db.get('SELECT COUNT(*) as cnt FROM channel_members WHERE user_id = ?', [user.id]);
+  const msgCount = db.get('SELECT COUNT(*) as cnt FROM messages WHERE author_id = ?', [user.id]);
+
+  res.json({
+    user,
+    stats: {
+      joinedChannels: joinedChannels.cnt,
+      messageCount: msgCount.cnt
+    }
+  });
+});
 // 修改个人资料（昵称 / 头像）
 router.patch('/me', authRequired, (req, res) => {
   const { nickname, avatar_url } = req.body || {};

@@ -1,0 +1,99 @@
+/* 宝丰一高校徽 — Motion CSS
+ * Personality: noble, steady, radiant
+ * Duration: 1800ms | Golden Ratio: 20% ant / 50% act / 30% settle
+ *
+ * All keyframe easings are LITERAL (not var() references).
+ * Wrapped by animate_svg_showcase.py into media query
+ */
+:root {
+  --p2m-duration: 1800ms;
+}
+
+/* ── 1. Ring outer: rotate-in + scale pop with overshoot ── */
+@keyframes ringReveal {
+  0%   { opacity: 0; transform: rotate(-45deg) scale(0.72); }
+  50%  { opacity: 0.85; transform: rotate(-6deg) scale(1.06); }
+  100% { opacity: 1; transform: rotate(0deg) scale(1); }
+}
+#ring-outer {
+  animation-name: ringReveal;
+  animation-duration: var(--p2m-duration);
+  animation-timing-function: cubic-bezier(0.4, 0.0, 0.2, 1);
+  animation-fill-mode: both;
+  transform-origin: center;
+}
+
+/* ── 2. Text band bg + text: fade in with slight scale ── */
+@keyframes textFadeIn {
+  0%   { opacity: 0; transform: scale(0.92); }
+  100% { opacity: 1; transform: scale(1); }
+}
+#text-band-bg,
+#text-band-top,
+#text-band-bottom {
+  animation-name: textFadeIn;
+  animation-duration: calc(var(--p2m-duration) - 200ms);
+  animation-timing-function: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  animation-delay: 180ms;
+  animation-fill-mode: both;
+  transform-origin: center;
+}
+
+/* ── 3. Inner field: simple pop ── */
+@keyframes innerFieldPop {
+  0%   { opacity: 0; }
+  100% { opacity: 1; }
+}
+#inner-field {
+  animation-name: innerFieldPop;
+  animation-duration: 320ms;
+  animation-timing-function: cubic-bezier(0.25, 0.1, 0.25, 1);
+  animation-delay: 160ms;
+  animation-fill-mode: both;
+}
+
+/* ── 4. Mountain: rise from below with overshoot ── */
+@keyframes mountainRise {
+  0%   { opacity: 0; transform: translateY(55px) scale(0.68); }
+  50%  { opacity: 1; transform: translateY(-10px) scale(1.06); }
+  82%  { transform: translateY(3px) scale(0.98); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+#mountain {
+  animation-name: mountainRise;
+  animation-duration: 760ms;
+  animation-timing-function: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  animation-delay: 320ms;
+  animation-fill-mode: both;
+  transform-origin: center;
+}
+
+/* ── 5. Platform: slide up with staggered weight feel ── */
+@keyframes platformRise {
+  0%   { opacity: 0; transform: translateY(75px) scale(0.84); }
+  60%  { opacity: 1; transform: translateY(-5px) scale(1.03); }
+  85%  { transform: translateY(2px) scale(0.99); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+#platform {
+  animation-name: platformRise;
+  animation-duration: 700ms;
+  animation-timing-function: cubic-bezier(0.25, 0.1, 0.25, 1.0);
+  animation-delay: 420ms;
+  animation-fill-mode: both;
+  transform-origin: center;
+}
+
+/* ── 6. Year text: glow pulse ── */
+@keyframes yearPulse {
+  0%   { opacity: 0; filter: blur(6px); }
+  42%  { opacity: 1; filter: drop-shadow(0 0 12px rgba(245,230,184,0.85)); }
+  100% { opacity: 1; filter: none; }
+}
+#year-text {
+  animation-name: yearPulse;
+  animation-duration: 620ms;
+  animation-timing-function: cubic-bezier(0.4, 0.0, 0.2, 1);
+  animation-delay: 960ms;
+  animation-fill-mode: both;
+}

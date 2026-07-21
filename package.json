@@ -1,0 +1,20 @@
+{
+  "name": "baofeng-campus",
+  "version": "1.1.0",
+  "description": "宝丰一高校园频道 — 前端 + Worker + Express 后端",
+  "private": true,
+  "scripts": {
+    "build": "node _build.mjs",
+    "deploy:pages": "wrangler pages deploy web_build --project-name=baofeng-campus --branch main",
+    "deploy:worker": "cd worker && wrangler deploy",
+    "deploy": "npm run build && npm run deploy:pages && npm run deploy:worker",
+    "dev:server": "cd server && node index.js",
+    "seed:server": "cd server && node seed-auto.js"
+  },
+  "devDependencies": {
+    "wrangler": "^4.x"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

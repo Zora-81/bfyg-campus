@@ -159,6 +159,13 @@ async function start() {
       const type = contentType || 'text';
       if (!channelId || !content || (type === 'text' && content.trim().length === 0)) return;
 
+      // 公告频道仅限管理员发言
+      const ch = db.get('SELECT type FROM channels WHERE id = ?', [channelId]);
+      if (ch && ch.type === 'announcement' && socket.userRole !== 'admin') {
+        socket.emit('error-msg', '公告频道仅限管理员发言');
+        return;
+      }
+
       // 频率限制
       if (!checkRateLimit(userId, channelId)) {
         socket.emit('error-msg', '发送太快，请稍候');
