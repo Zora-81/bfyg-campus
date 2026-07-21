@@ -4670,7 +4670,7 @@
     var resetBtn = document.getElementById('settings-bg-reset');
 
     // Sync active state from current theme
-    syncThemeActiveState(themes || document.getElementById('bg-themes'));
+    syncThemeActiveState(themes);
 
     if (themes) {
       // Remove any previous listener by cloning approach not needed (fresh on each open)
@@ -4684,9 +4684,8 @@
           currentBg.theme = theme;
           saveBackgroundSettings();
           applyTheme(theme, true);
-          // Sync both panels
+          // Sync settings panel
           syncThemeActiveState(themes);
-          syncThemeActiveState(document.getElementById('bg-themes'));
         }
       });
     }
@@ -4705,7 +4704,6 @@
           applyTheme('custom', true);
           showToast('壁纸已应用 ✅');
           syncThemeActiveState(document.getElementById('settings-bg-themes'));
-          syncThemeActiveState(document.getElementById('bg-themes'));
         };
         reader.readAsDataURL(file);
       });
