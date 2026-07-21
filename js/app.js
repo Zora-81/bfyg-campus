@@ -567,8 +567,17 @@
 
   function isLoggedIn() { return !!currentUser; } // InsForge 迁移后 token 废弃（cookie 会话），仅检查 currentUser
 
+  // 彻底关闭登录页所有浮层，防止它们泄漏到主界面/个人主页之上
+  function hideLoginOverlays(){
+    if(welcomeScreen){ welcomeScreen.classList.remove('active'); welcomeScreen.setAttribute('aria-hidden','true'); }
+    if(loadingStage){ loadingStage.classList.remove('active','phase-rotating','phase-merging','phase-star','phase-flying'); loadingStage.setAttribute('aria-hidden','true'); }
+    if(loginSubmitLoader){ loginSubmitLoader.classList.remove('active'); loginSubmitLoader.setAttribute('aria-hidden','true'); loginSubmitLoader.style.opacity = ''; }
+    if(monsterLogin){ monsterLogin.classList.remove('active'); stopMonsterEyes && stopMonsterEyes(); }
+  }
+
   function showMain() {
     _fromWelcome = false;
+    hideLoginOverlays();
     viewLogin.classList.remove('active');
     viewLogin.setAttribute('aria-hidden','true');
     viewMain.classList.add('active');
@@ -615,8 +624,8 @@
   // ── 带 GSAP 过渡动画的 showMain（登录成功后调用）──
   function showMainWithTransition(){
     _fromWelcome = false;
-    // 1. 关闭登录弹窗（小怪兽登录界面），眼睛跟随停止
-    if(monsterLogin){ monsterLogin.classList.remove('active'); stopMonsterEyes(); }
+    // 1. 彻底关闭登录页所有浮层（welcome/loading/submit-loader/monster）
+    hideLoginOverlays();
 
     // 2. 切换视图状态
     viewLogin.classList.remove('active');
@@ -706,6 +715,7 @@
   }
 
   function showProfile() {
+    hideLoginOverlays();
     viewMain.classList.remove('active');
     viewLogin.classList.remove('active');
     if(viewProfile) viewProfile.classList.add('active');
@@ -716,6 +726,7 @@
   function backToMain() {
     if(!isLoggedIn()){ showLogin(); return; }
     // 完整恢复主界面状态（与 showMain 保持一致）
+    hideLoginOverlays();
     viewProfile.classList.remove('active');
     if(viewProfile) viewProfile.setAttribute('aria-hidden','true');
     viewLogin.classList.remove('active');
