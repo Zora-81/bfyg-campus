@@ -336,7 +336,7 @@ body.main-active #monster-login { display:none !important; }
   --sh-lg: 0 16px 48px rgba(0,0,0,0.50);
   --sh-card: 0 4px 12px rgba(0,0,0,0.45);
 
-  --main-bg-image: url('../images/starry-nebula.png');
+  /* --main-bg-image 已移除：主界面恢复纯深色渐变背景，不再显示星空大图 */
   --main-bg-overlay: linear-gradient(180deg, rgba(4,6,16,0.00) 0%, rgba(2,4,12,0.18) 100%);
   --main-bg-blur: 0px;
   --main-bg-dim: 0.04;
@@ -2191,17 +2191,6 @@ body.main-active #main-dots { display:block; }
   object-fit:cover;
 }
 .msg-file-broken { padding:20px 32px; color:var(--text-muted); font-size:0.85rem; }
-
-/* Image hint (compact placeholder, no inline image preview) */
-.msg-image-hint {
-  display:inline-flex; align-items:center; gap:8px;
-  padding:8px 12px; margin-top:2px;
-  background:var(--bg-elevated); border:1px solid var(--border);
-  border-radius:var(--r); color:var(--text-muted);
-  font-size:0.88rem; user-select:none;
-}
-.msg-image-hint-icon { font-size:1.1rem; line-height:1; }
-.msg-image-hint-text { white-space:nowrap; }
 
 /* File card */
 .msg-file-card {

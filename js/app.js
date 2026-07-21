@@ -1566,9 +1566,18 @@
         var imgData = JSON.parse(msg.content);
         imgs = Array.isArray(imgData) ? imgData : [imgData];
       } catch(e) {}
-      // 图片消息：不直接渲染大图，仅显示紧凑占位
-      var imgHint = '<div class="msg-image-hint" title="图片消息"><span class="msg-image-hint-icon">&#x1F5BC;</span><span class="msg-image-hint-text">图片</span></div>';
-      contentBlock = '<div class="msg-content">' + imgHint + '</div>';
+      if (imgs.length === 0) {
+        contentBlock = '<div class="msg-content">[image]</div>';
+      } else if (imgs.length > 1) {
+        var ghtml = imgs.map(function(im){
+          var url = im.url || im;
+          return '<div class="msg-img-wrap" onclick="window.openImg(\''+escapeHtml(url)+'\')"><img src="'+escapeHtml(url)+'" alt="图片" loading="lazy" onerror="this.parentElement.innerHTML=\'<div class=msg-file-broken>image broken</div>\'"></div>';
+        }).join('');
+        contentBlock = '<div class="msg-img-gallery">'+ghtml+'</div>';
+      } else {
+        var oneUrl = imgs[0].url || imgs[0];
+        contentBlock = '<div class="msg-content"><div class="msg-img-wrap" onclick="window.openImg(\''+escapeHtml(oneUrl)+'\')"><img src="'+escapeHtml(oneUrl)+'" alt="图片" loading="lazy" onerror="this.parentElement.innerHTML=\'<div class=msg-file-broken>image broken</div>\'"></div></div>';
+      }
     } else if (msg.content_type === 'file') {
       try {
         var fileData = JSON.parse(msg.content);
