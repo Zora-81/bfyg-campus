@@ -16,7 +16,7 @@
 
     (function(){
 
-      var v = '1.2.51';
+      var v = '1.2.52';
 
       try {
 
@@ -50,7 +50,7 @@
 
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap" rel="stylesheet" />
 
-  <link rel="stylesheet" href="../css/style.css?v=1.2.51" />
+  <link rel="stylesheet" href="../css/style.css?v=1.2.52" />
 
 </head>
 
@@ -499,6 +499,14 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="24" height="24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
 
           </button>
+
+          <!-- Server badge -->
+
+          <div class="nav-server-badge" title="校园频道">
+
+            <img src="../images/school-badge-new.png" alt="" class="nav-server-icon" />
+
+          </div>
 
           <div class="nav-channel-info" id="nav-channel-card" data-ch="chat">
 
@@ -958,17 +966,17 @@
 
 
 
-  <script src="../js/lib/gsap.min.js?v=1.2.51" defer></script>
+  <script src="../js/lib/gsap.min.js?v=1.2.52" defer></script>
 
-  <script src="../js/shooting-stars.js?v=1.2.51"></script>
+  <script src="../js/shooting-stars.js?v=1.2.52"></script>
 
-  <script src="../js/main-bg.js?v=1.2.51"></script>
+  <script src="../js/main-bg.js?v=1.2.52"></script>
 
   <!-- InsForge SDK 客户端（ESM，CDN 引入），注入 window.IF 并派发 IF_READY -->
 
-  <script type="module" src="../js/if-client.js?v=1.2.51"></script>
+  <script type="module" src="../js/if-client.js?v=1.2.52"></script>
 
-  <script src="../js/app.js?v=1.2.51" defer></script>
+  <script src="../js/app.js?v=1.2.52" defer></script>
 
   <!-- ════════════════════════════════════════════
        学校介绍弹窗：点击侧栏校徽/校园频道 触发
@@ -1116,6 +1124,8 @@
   .sec-text{font-size:13.5px;color:rgba(190,200,225,.82);line-height:1.75}
   .info-footer{display:flex;gap:8px;flex-wrap:wrap;margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,.06)}
   .info-tag{font-size:11.5px;padding:4px 12px;border-radius:999px;background:rgba(80,120,220,.18);color:#a8c0ff;border:1px solid rgba(80,120,220,.25)}
+  .nav-server-badge{cursor:pointer;transition:transform .2s,filter .2s}
+  .nav-server-badge:hover{transform:scale(1.08);filter:brightness(1.15)}
   .drawer-server{cursor:pointer;transition:background .2s}
   .drawer-server:hover{background:rgba(255,255,255,.06)}
   @media(max-width:768px){.info-card{width:min(320px,82vw);padding:20px 16px 18px}.info-title{font-size:19px}.sec-block{padding:10px;gap:8px}.sec-icon{width:36px;font-size:21px}.logo-stage{width:75vw}}
@@ -1228,8 +1238,8 @@
       if(typeof gsap==='undefined'){card.style.opacity=cardCollapsed?'0':'1';return;}
       gsap.to(card,{opacity:cardCollapsed?0:1,y:cardCollapsed?24:0,scale:cardCollapsed?.96:1,duration:.32,ease:'power2.out'});
     }
-    // 左上角校徽+校园频道文字 → 播放校徽动画
-    var ds=document.querySelector('.drawer-server');if(ds)ds.addEventListener('click',function(e){openSchool()});
+    document.querySelector('.nav-server-badge').addEventListener('click',openSchool);
+    var ds=document.querySelector('.drawer-server');if(ds)ds.addEventListener('click',function(e){if(e.target===ds||e.target.closest('.drawer-server-name'))openSchool()});
     closeBtn.addEventListener('click',closeSchool);
     // × 号 hover 旋转(GSAP 动画)
     if(typeof gsap!=='undefined'){
