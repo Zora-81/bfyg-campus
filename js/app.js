@@ -187,12 +187,13 @@
       if (messagesArea.querySelector('.msg-group[data-msg-id="' + msg.id + '"]')) {
         return;
       }
-      var wasAtBottom = isNearBottom();
+      // 倒序流：最新在最顶，跟随判断改为"是否已在顶部附近"
+      var wasAtTop = isNearTop();
       // 增量追加这条新消息：他人的消息淡入；自己发的（已乐观显示）实时回显不播动画，避免闪烁
       var isSelfMsg = currentUser && msg.author_id === currentUser.id;
       appendMessageNode(msg, !isSelfMsg);
-      if (wasAtBottom || (currentUser && msg.author_id === currentUser.id)) {
-        messagesArea.scrollTop = messagesArea.scrollHeight;
+      if (wasAtTop || (currentUser && msg.author_id === currentUser.id)) {
+        messagesArea.scrollTop = 0;
       } else {
         showScrollBtn(msg);
       }
@@ -1056,16 +1057,12 @@
 
   function applyChannelCard(ch){
     var card = document.getElementById('nav-channel-card');
-    var iconBox = document.getElementById('ch-card-icon');
     var glow = document.getElementById('ch-card-glow');
     if(!card || !ch) return;
     var key = chHeroMap[ch.name] || 'chat';
     card.setAttribute('data-ch', key);
-    if(iconBox) iconBox.innerHTML = chHeroIcon[key] || chHeroIcon.chat;
     if(_reduceMotion) { if(glow) glow.style.opacity = '0.55'; return; }
     try {
-      if(iconBox) gsap.fromTo(iconBox, {scale:0.5, rotation:-14, opacity:0}, {scale:1, rotation:0, opacity:1, duration:0.5, ease:'back.out(1.7)', clearProps:'transform'});
-      if(glow) gsap.fromTo(glow, {opacity:0, x:'-45%'}, {opacity:1, x:'0%', duration:0.5, ease:'power2.out', onComplete:function(){ try{ gsap.to(glow, {opacity:0.55, duration:0.4}); }catch(e){} }});
       gsap.fromTo(card, {backgroundColor:'rgba(255,255,255,0.05)'}, {backgroundColor:'', duration:0.5, ease:'power2.out', clearProps:'backgroundColor'});
     } catch(e) {
       if(glow) glow.style.opacity = '0.55';
@@ -1220,53 +1217,13 @@
   // ── 右侧边栏渲染（贴吧风格：热点话题 + 频道推荐）──
   function renderRightSidebar() {
     var hotEl = document.getElementById('hot-topics');
+    var popupHotEl = document.getElementById('hot-topics-mobile');
     var recEl = document.getElementById('rec-channels');
     if (!hotEl || !recEl) return;
 
-    // ① 热点话题：取最近消息的频道+内容作为"热点"
-    hotEl.innerHTML = '';
-    var allMsgs = [];
-    Object.keys(channelMessages).forEach(function(chId) {
-      var msgs = channelMessages[chId] || [];
-      msgs.forEach(function(m) { if(!m.parent_id) allMsgs.push(m); }); // 只取原始消息，排除评论/回复
-    });
-    // 按时间倒序，取前7条
-    allMsgs.sort(function(a,b){ return new Date(b.created_at) - new Date(a.created_at); });
-    var hotItems = allMsgs.slice(0, 7);
-
-    if (hotItems.length === 0) {
-      hotEl.innerHTML = '<li style="padding:10px;color:var(--text-muted);font-size:0.82rem;">暂无热点话题</li>';
-    } else {
-      hotItems.forEach(function(msg, i) {
-        var li = document.createElement('li');
-        var rank = i + 1;
-        var rankCls = rank <= 3 ? 'top3' : '';
-        // 截取内容作为标题
-        var title = msg.content_type === 'text' ? msg.content.slice(0, 30) : '[图片]';
-        if (title.length >= 30) title += '...';
-        // 热度标签
-        var isHot = rank <= 2;
-        var tag = isHot ? '热' : (rank <= 4 ? '新' : '');
-        var tagCls = isHot ? 'hot' : 'new';
-
-        // 找到频道名
-        var chName = '?';
-        var ch = channels.find(function(c){ return c.id == msg.channel_id; });
-        if (ch) chName = ch.name;
-
-        li.innerHTML =
-          '<span class="hot-rank '+rankCls+'">'+rank+'</span>'+
-          '<span class="hot-text">'+escapeHtml(title)+'</span>'+
-          (tag ? '<span class="hot-tag '+tagCls+'">'+tag+'</span>' : '');
-        li.addEventListener('click', function() {
-          if (ch) switchChannel(ch);
-          // 高亮对应消息
-          var msgEl = document.querySelector('[data-msg-id="'+msg.id+'"]');
-          if (msgEl) msgEl.scrollIntoView({ behavior:'smooth', block:'center' });
-        });
-        hotEl.appendChild(li);
-      });
-    }
+    var hotItems = computeHotItems();
+    buildHotCards(hotEl, hotItems);
+    if (popupHotEl) buildHotCards(popupHotEl, hotItems);
 
     // ② 频道推荐：显示非公告频道
     recEl.innerHTML = '';
@@ -1299,6 +1256,105 @@
     }
   }
 
+  // 计算热度榜（评论数 + 48h 时间衰减）
+  function computeHotItems() {
+    var allMsgs = [];
+    var commentCounts = {}; // 顶层消息 id -> 评论/回复数
+    Object.keys(channelMessages).forEach(function(chId) {
+      var msgs = channelMessages[chId] || [];
+      msgs.forEach(function(m) {
+        if (m.parent_id) {
+          commentCounts[m.parent_id] = (commentCounts[m.parent_id] || 0) + 1; // 统计评论
+        } else {
+          allMsgs.push(m); // 只取原始消息（话题）
+        }
+      });
+    });
+    // 热度分：评论权重高（每条 +10），时间衰减（48h 半衰期，0~5）
+    var nowTs = Date.now();
+    allMsgs.forEach(function(m) {
+      var ageH = (nowTs - new Date(m.created_at).getTime()) / 3600000;
+      if (isNaN(ageH) || ageH < 0) ageH = 0;
+      var timeScore = Math.exp(-ageH / 48);
+      var cc = commentCounts[m.id] || 0;
+      m._heat = cc * 10 + timeScore * 5;
+      m._comments = cc;
+    });
+    allMsgs.sort(function(a, b){ return b._heat - a._heat; });
+    return allMsgs.slice(0, 7);
+  }
+
+  // 渲染一组热门话题卡片（桌面侧栏 + 移动端 popup 复用）
+  function buildHotCards(listEl, hotItems) {
+    listEl.innerHTML = '';
+    if (hotItems.length === 0) {
+      listEl.innerHTML = '<li style="padding:10px;color:var(--text-muted);font-size:0.82rem;">暂无热点话题</li>';
+      return;
+    }
+    hotItems.forEach(function(msg, i) {
+      var li = document.createElement('li');
+      var rank = i + 1;
+      // 截取内容作为标题
+      var title = msg.content_type === 'text' ? msg.content.slice(0, 30) : '[图片]';
+      if (title.length >= 30) title += '...';
+      var cc = msg._comments || 0;
+      // 频道名
+      var chName = '?';
+      var ch = channels.find(function(c){ return c.id == msg.channel_id; });
+      if (ch) chName = ch.name;
+      // 相对时间
+      var ageStr = (typeof formatRelativeTime === 'function') ? formatRelativeTime(msg.created_at) : '';
+      // 热度条宽度：相对榜首归一化（最小 14% 保证可见）
+      var maxHeat = hotItems.length ? hotItems[0]._heat : 1;
+      var pct = maxHeat > 0 ? Math.round((msg._heat / maxHeat) * 100) : 0;
+      pct = Math.max(14, Math.min(100, pct));
+
+      li.className = 'hot-card';
+      li.innerHTML =
+        '<span class="hot-card-rank'+(rank<=3?' top3':'')+'">'+rank+'</span>'+
+        '<div class="hot-card-body">'+
+          '<div class="hot-card-title">'+escapeHtml(title)+'</div>'+
+          '<div class="hot-card-meta">'+escapeHtml(chName)+' · '+cc+' 讨论</div>'+
+          '<div class="hot-card-foot">'+
+            '<span class="hot-card-time">'+escapeHtml(ageStr)+'</span>'+
+            '<span class="hot-heat-track"><span class="hot-heat-fill" style="width:'+pct+'%"></span></span>'+
+          '</div>'+
+        '</div>';
+      li.style.animationDelay = (i * 55) + 'ms'; // 交错入场
+      li.title = (ch ? '#'+chName+' · ' : '') + cc + ' 条讨论 · ' + ageStr;
+      li.addEventListener('click', function() {
+        if (!ch) return;
+        // 关键修复：切频道是异步加载，等消息渲染完（onAfterRender）再滚动+高亮，
+        // 否则 querySelector 找不到元素，只会切频道不滚到消息。
+        pendingJumpMsgId = msg.id; // 告知 switchChannel 把该消息纳入渲染窗口（即使是很早的消息）
+        switchChannel(ch, function() {
+          var msgEl = messagesArea
+            ? messagesArea.querySelector('.msg-group[data-msg-id="'+msg.id+'"]')
+            : null;
+          if (msgEl) {
+            requestAnimationFrame(function(){
+              msgEl.scrollIntoView({ behavior:'auto', block:'center' });
+              if (typeof hideScrollBtn === 'function') hideScrollBtn();
+              // B+C：主题色描边呼吸 + 顶部「来自热门话题」标签
+              msgEl.classList.add('msg-hot-highlight');
+              var existing = msgEl.querySelector('.msg-hot-badge');
+              if (existing) existing.remove();
+              var badge = document.createElement('span');
+              badge.className = 'msg-hot-badge';
+              badge.textContent = '🔥 来自热门话题';
+              msgEl.appendChild(badge);
+              setTimeout(function(){
+                msgEl.classList.remove('msg-hot-highlight');
+                if (badge.parentNode) badge.remove();
+              }, 3600);
+            });
+          }
+        });
+      });
+      listEl.appendChild(li);
+    });
+  }
+
   // 简单哈希（用于稳定随机色）
   function hashCode(str) {
     var hash = 0;
@@ -1307,10 +1363,12 @@
   }
 
   function switchChannel(ch, onAfterRender){
+    var prevChannel = currentChannel; // 切换前频道，用于缓存/订阅判断
+    renderWinEnd = RENDER_WIN; // 进入频道重置渲染窗口（pendingJumpMsgId 由调用方在 switchChannel 前设置）
     // Mark previous as read
-    if (currentChannel && currentChannel.id !== ch.id) {
-      lastReadTimestamps[currentChannel.id] = Date.now();
-      unreadCounts[currentChannel.id] = 0;
+    if (prevChannel && prevChannel.id !== ch.id) {
+      lastReadTimestamps[prevChannel.id] = Date.now();
+      unreadCounts[prevChannel.id] = 0;
       updateChannelBadges();
     }
 
@@ -1329,33 +1387,55 @@
     // 切频道时收起输入框
     hideInputBar();
 
-    // Load messages from InsForge
-    showMessageSkeleton();
-    IF.getMessages(ch.id).then(function(list) {
-      channelMessages[ch.id] = list || [];
-      var ids = (list || []).map(function(m){ return m.id; });
-      var afterAgg = function() {
-        renderMessages();
-        if (messagesArea) { messagesArea.scrollTop = 0; } // 进入频道停在顶部，自然一些
-        hideScrollBtn();
-        if (typeof onAfterRender === 'function') {
-          try { onAfterRender(); } catch (e) {}
-        }
-      };
-      // 聚合本频道所有消息的点赞（一次查询，前端计数；无触发器/无计数列/无 RLS 冲突）
-      if (ids.length && currentUser && IF.getLikeAggregates) {
-        IF.getLikeAggregates(ids, currentUser.id).then(function(agg){
-          likeAgg = agg || {};
-          afterAgg();
-        }).catch(function(){ likeAgg = {}; afterAgg(); });
+    // ── 跳转性能优化：避免每次都重新拉取 + 全量重渲染 ──
+    if (prevChannel && prevChannel.id === ch.id) {
+      // 已在目标频道：若目标消息不在当前 DOM（窗口外），先扩展窗口重渲染；否则零重渲染直接定位
+      if (pendingJumpMsgId && messagesArea && !messagesArea.querySelector('.msg-group[data-msg-id="'+pendingJumpMsgId+'"]')) {
+        renderMessages(); // 内部会清空 pendingJumpMsgId
       } else {
-        likeAgg = {};
-        afterAgg();
+        pendingJumpMsgId = null; // 目标已在 DOM，手动清空，避免污染后续渲染
       }
-    }).catch(function() {
-      renderMessages();
       if (typeof onAfterRender === 'function') { try { onAfterRender(); } catch (e) {} }
-    });
+    } else if (channelMessages[ch.id] && channelMessages[ch.id].length) {
+      // 缓存命中：跳过网络拉取，直接复用已加载消息渲染
+      renderMessages();
+      hideScrollBtn();
+      if (typeof onAfterRender === 'function') { try { onAfterRender(); } catch (e) {} }
+    } else {
+      // 首次加载：拉取消息 + 点赞聚合
+      showMessageSkeleton();
+      IF.getMessages(ch.id).then(function(list) {
+        channelMessages[ch.id] = list || [];
+        var ids = (list || []).map(function(m){ return m.id; });
+        var afterAgg = function() {
+          renderMessages();
+          if (messagesArea) { messagesArea.scrollTop = 0; } // 进入频道停在顶部，自然一些
+          hideScrollBtn();
+          if (typeof onAfterRender === 'function') {
+            try { onAfterRender(); } catch (e) {}
+          }
+        };
+        // 聚合本频道所有消息的点赞（一次查询，前端计数；无触发器/无计数列/无 RLS 冲突）
+        if (ids.length && currentUser && IF.getLikeAggregates) {
+          IF.getLikeAggregates(ids, currentUser.id).then(function(agg){
+            likeAgg = agg || {};
+            // 一致性兜底：自己点过赞的消息至少 total=1
+            for (var mid in likeAgg) {
+              if (likeAgg.hasOwnProperty(mid) && likeAgg[mid].mine && likeAgg[mid].total <= 0) {
+                likeAgg[mid].total = 1;
+              }
+            }
+            afterAgg();
+          }).catch(function(){ likeAgg = {}; afterAgg(); });
+        } else {
+          likeAgg = {};
+          afterAgg();
+        }
+      }).catch(function() {
+        renderMessages();
+        if (typeof onAfterRender === 'function') { try { onAfterRender(); } catch (e) {} }
+      });
+    }
 
     if(pinBar) pinBar.classList.remove('visible');
     if(annBanner) annBanner.classList.remove('visible');
@@ -1363,8 +1443,8 @@
 
     // Realtime 订阅当前频道
     if (IF) {
-      if (currentChannel && currentChannel.id && currentChannel.id !== ch.id) {
-        IF.unsubscribeChannel(currentChannel.id);
+      if (prevChannel && prevChannel.id && prevChannel.id !== ch.id) {
+        IF.unsubscribeChannel(prevChannel.id);
       }
       subscribeCurrentChannel();
     }
@@ -1501,14 +1581,15 @@
     if (msg.isPending) statusHtml = '<span class="msg-status">(发送中...)</span>';
     else if (msg.isFailed) statusHtml = '<span class="msg-status">(发送失败)</span>';
 
-    // 互动栏（贴吧风格：👁浏览 ❤点赞 💬评论 🔁转发）
-    var viewCount = simulateViews(msg.created_at);
+    // 互动栏（贴吧风格：发送时间 ❤点赞 💬评论 🔁转发）
     var la = likeAgg[msg.id] || { total: 0, mine: false };
+    // 一致性兜底：若 mine=true 但 total=0，说明聚合/状态不同步，至少显示 1（自己）
+    if (la.mine && la.total <= 0) la.total = 1;
     var replyCount = (channelMessages[currentChannel.id] || []).filter(function(m){ return m.parent_id === msg.id; }).length;
     var interactionsHtml =
       '<div class="msg-interactions">'+
         '<div class="msg-interactions-left">'+
-          '<span class="msg-view-count">👁 '+viewCount+'</span>'+
+          createTimeCharsHtml(msg.created_at, msg.id)+
         '</div>'+
         '<div class="msg-interactions-right">'+
           '<button type="button" class="msg-interact-btn'+(la.mine?' liked':'')+'" data-act="like" data-msg-id="'+msg.id+'">♥ <span class="msg-interact-count">'+ la.total +'</span></button>'+
@@ -1664,6 +1745,91 @@
     });
   }
 
+  // ── 评论删除（自己或管理员，无时间限制）──
+  function canDeleteComment(comment) {
+    if (!currentUser || !comment) return false;
+    if (currentUser.role === 'admin') return true;
+    return comment.author_id === currentUser.id;
+  }
+  var _commentDelPop = null;
+  function closeCommentDelPop() {
+    if (!_commentDelPop) return;
+    var el = _commentDelPop; _commentDelPop = null;
+    try {
+      if (typeof gsap !== 'undefined' && !REDUCED_MOTION) {
+        gsap.to(el, { opacity: 0, x: 12, duration: 0.14, onComplete: function () { if (el.parentNode) el.parentNode.removeChild(el); } });
+      } else if (el.parentNode) el.parentNode.removeChild(el);
+    } catch (e) { if (el.parentNode) el.parentNode.removeChild(el); }
+  }
+  function showCommentDeletePop(comment, item) {
+    closeCommentDelPop();
+    var pop = document.createElement('div');
+    pop.className = 'recall-pop';
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'recall-pop-btn';
+    btn.textContent = '删除';
+    pop.appendChild(btn);
+    item.appendChild(pop);
+    _commentDelPop = pop;
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      closeCommentDelPop();
+      doDeleteComment(comment);
+    });
+    if (typeof gsap !== 'undefined' && !REDUCED_MOTION) {
+      gsap.fromTo(pop, { opacity: 0, x: 12, scale: 0.9 }, { opacity: 1, x: 0, scale: 1, duration: 0.22, ease: 'back.out(2)' });
+    }
+    setTimeout(function () {
+      document.addEventListener('click', function onDoc(e) {
+        if (_commentDelPop === pop && !pop.contains(e.target)) { closeCommentDelPop(); document.removeEventListener('click', onDoc, true); }
+      }, true);
+    }, 0);
+  }
+  function bindCommentDelete(item, comment) {
+    if (!canDeleteComment(comment)) return;
+    var fired = false;
+    var trigger = function (e) {
+      if (fired) return; fired = true;
+      if (e && e.preventDefault) e.preventDefault();
+      if (e && e.stopPropagation) e.stopPropagation();
+      showCommentDeletePop(comment, item);
+    };
+    item.addEventListener('contextmenu', trigger);
+    item.addEventListener('pointerdown', function (e) {
+      if (e.pointerType === 'mouse') return;
+      var sx = e.clientX, sy = e.clientY; fired = false;
+      var t = setTimeout(function () { trigger(e); }, 500);
+      var c = function (ev) {
+        clearTimeout(t);
+        if (ev && ev.clientX !== undefined && (Math.abs(ev.clientX - sx) > 10 || Math.abs(ev.clientY - sy) > 10)) fired = true;
+      };
+      item.addEventListener('pointermove', c);
+      item.addEventListener('pointerup', c);
+      item.addEventListener('pointercancel', c);
+    });
+  }
+  function doDeleteComment(comment) {
+    if (!currentChannel || !currentUser || comment._deleting) return;
+    comment._deleting = true;
+    var node = document.querySelector('.msg-comment-item[data-comment-id="' + comment.id + '"]');
+    if (node) node.style.opacity = '0.4';
+    IF.recallMessage(currentChannel.id, comment.id, currentUser.id).then(function () {
+      IF.publishRecall(currentChannel.id, comment.id, currentUser.id);
+      var arr = channelMessages[currentChannel.id] || [];
+      var idx = arr.findIndex(function (m) { return m.id === comment.id; });
+      if (idx >= 0) arr.splice(idx, 1);
+      // 同步点赞聚合
+      if (likeAgg[comment.id]) delete likeAgg[comment.id];
+      if (node) node.remove();
+      showToast('已删除评论', 'info');
+    }).catch(function () {
+      comment._deleting = false;
+      if (node) node.style.opacity = '';
+      showToast('删除失败，请重试', 'error');
+    });
+  }
+
   // 应用撤回效果到本地：更新内存数组 + DOM
   function applyRecall(msgId, recalledBy) {
     if (!currentChannel) return;
@@ -1692,12 +1858,15 @@
   function appendMessageNode(msg, animate) {
     if (!messagesArea) return;
     var node = buildMessageGroup(msg);
-    messagesArea.appendChild(node);
+    // 倒序流：新消息插到列表最顶（而非底部）
+    messagesArea.prepend(node);
     if (animate && typeof gsap !== 'undefined' && !REDUCED_MOTION) {
       gsap.killTweensOf(node);
       gsap.fromTo(node, { scale: 0.92, opacity: 0 },
         { scale: 1, opacity: 1, duration: 0.45, ease: 'elastic.out(1,0.75)', clearProps: 'opacity,transform' });
     }
+    // 发送时间字符逐显动画（无论是否启用入场动画，时间文字都按 GSAP 字符动画处理）
+    if (node) animateTimeChars(node);
   }
 
   // 就地替换 pending 节点为真实消息节点（不重建整个频道），只更新这一个节点
@@ -1705,15 +1874,21 @@
     if (!messagesArea) return;
     var old = messagesArea.querySelector('.msg-group[data-msg-id="' + tempId + '"]');
     if (!old) { renderMessages(); return; } // 找不到（如已被其他路径重建）则退化为整页渲染
-    var wasAtBottom = isNearBottom();
+    // 倒序流：跟随判断改为"是否已在顶部附近"
+    var wasAtTop = isNearTop();
     var newNode = buildMessageGroup(realMsg);
     old.replaceWith(newNode);
-    // 替换后若原本在底部，平滑贴底：避免 pending 与真实节点高度差导致内容瞬间上跳
-    if (wasAtBottom) {
-      messagesArea.scrollTo({ top: messagesArea.scrollHeight, behavior: 'smooth' });
+    // 替换后若原本在顶部，平滑贴顶：避免 pending 与真实节点高度差导致内容瞬间下跳
+    if (wasAtTop) {
+      messagesArea.scrollTo({ top: 0, behavior: 'smooth' });
     }
-    // 无缝替换：不再播入场动画，避免 pending→真实切换时节点"闪一下/刷新"的错觉
+    // 无缝替换：不播整体入场动画，但发送时间按 GSAP 字符逐显重播一次
+    if (newNode) animateTimeChars(newNode);
   }
+
+  var RENDER_WIN = 80;           // 单次渲染消息上限，避免大频道全量重建 DOM 卡顿
+  var renderWinEnd = RENDER_WIN; // 当前已渲染到（从最新起的条数）
+  var pendingJumpMsgId = null;   // 跳转到指定消息时，renderMessages 需把它纳入渲染窗口
 
   function renderMessages(){
     if(!messagesArea) return;
@@ -1758,14 +1933,33 @@
       messagesArea.appendChild(divider);
     }
 
-    msgs.forEach(function(msg) {
-      var node = buildMessageGroup(msg);
+    // 渲染窗口：倒序流最新在顶；默认渲染最近 RENDER_WIN 条，避免大频道全量重建 DOM
+    var dispMsgs = msgs.slice().reverse(); // 最新在前（顶），最旧在后（底）
+    var jumping = !!pendingJumpMsgId;
+    if (pendingJumpMsgId) {
+      for (var _k=0; _k<dispMsgs.length; _k++){ if (dispMsgs[_k].id === pendingJumpMsgId){ if (_k >= renderWinEnd) renderWinEnd = Math.min(dispMsgs.length, _k + 20); break; } }
+    }
+    var renderCount = Math.min(renderWinEnd, dispMsgs.length);
+    for (var _i=0; _i<renderCount; _i++){
+      var node = buildMessageGroup(dispMsgs[_i]);
       if (node) messagesArea.appendChild(node);
-    });
+    }
+    // 仍有更早消息：底部「加载更早」按钮（纯前端分页，数据已在缓存中，无后端开销）
+    if (renderCount < dispMsgs.length) {
+      var _more = document.createElement('div');
+      _more.className = 'load-earlier';
+      _more.textContent = '↑ 加载更早消息';
+      _more.addEventListener('click', function(){
+        renderWinEnd = Math.min(dispMsgs.length, renderWinEnd + RENDER_WIN);
+        renderMessages();
+      });
+      messagesArea.appendChild(_more);
+    }
+    pendingJumpMsgId = null; // 消费后清空，避免影响后续渲染
 
-    // Auto-scroll only if already at bottom（平滑，避免硬跳）
-    if (isNearBottom()) {
-      messagesArea.scrollTo({ top: messagesArea.scrollHeight, behavior: 'smooth' });
+    // Auto-scroll only if already at top（倒序流：最新在最顶，跟随顶部）；跳转时跳过，交给 onAfterRender 定位
+    if (!jumping && isNearTop()) {
+      messagesArea.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
     // GSAP：消息交错进场（stagger）—— 用 fromTo 显式终点 opacity:1 + clearProps 兜底，绝不留在 opacity:0
@@ -1785,6 +1979,16 @@
         gsap.killTweensOf(wc);
         gsap.fromTo(wc, { opacity: 0, y: -10, scale: 0.96 },
           { opacity: 1, y: 0, scale: 1, duration: 0.5, ease: 'back.out(1.6)', clearProps: 'opacity,transform' });
+      }
+      // 发送时间字符逐显：历史消息加载时也逐个淡入，避免只有新消息才有动效
+      var timeChars = messagesArea.querySelectorAll('.msg-time-char');
+      if (timeChars.length) {
+        gsap.killTweensOf(timeChars);
+        gsap.fromTo(timeChars,
+          { opacity: 0, y: 5 },
+          { opacity: 1, y: 0, duration: 0.3, ease: 'power2.out',
+            stagger: { each: 0.02, start: 0.08 },
+            clearProps: 'opacity,transform' });
       }
     }
     // 更新右侧边栏（消息变化后刷新热点）
@@ -1837,14 +2041,18 @@
           if (!likeAgg[msg.id]) likeAgg[msg.id] = { total: lCur, mine: false };
           likeAgg[msg.id].total = lNext;
           likeAgg[msg.id].mine = lIsLiked;
-          // GSAP 微动效
-          if (!REDUCED_MOTION && typeof gsap !== 'undefined') {
-            try { gsap.fromTo(lBtn, {scale:1.25}, {scale:1, duration:0.3, ease:'elastic.out(1,0.6)'}); } catch(e){}
-          }
+          // 粒子爆裂特效（仅点赞时迸发；取消赞只做颜色回退）
+          if (lIsLiked) burstHeart(lBtn, lCount);
           IF.toggleLike(msg.id, currentUser.id).then(function(res){
-            if (res && typeof res.total === 'number') {
-              lCount.textContent = res.total;
-              likeAgg[msg.id].total = res.total;
+            if (res) {
+              // 同步后端返回的真实状态，防止 liked=true 但 total=0 的显示不一致
+              var realTotal = (typeof res.total === 'number') ? res.total : lNext;
+              var realLiked = !!res.liked;
+              if (realLiked && realTotal <= 0) realTotal = 1;
+              lBtn.classList.toggle('liked', realLiked);
+              lCount.textContent = realTotal;
+              likeAgg[msg.id].total = realTotal;
+              likeAgg[msg.id].mine = realLiked;
             }
           }).catch(function(){
             // 失败回滚到之前状态
@@ -1946,6 +2154,8 @@
           var cid = node.getAttribute('data-comment-id');
           var la = agg[cid];
           if (la) {
+            // 一致性兜底：自己点过赞至少算 1
+            if (la.mine && la.total <= 0) la.total = 1;
             var btn = node.querySelector('.comment-like-btn');
             var cnt = node.querySelector('.comment-like-count');
             if (btn) { btn.textContent = la.mine ? '♥' : '♡'; btn.classList.toggle('liked', !!la.mine); }
@@ -1969,6 +2179,8 @@
     var color = getAvatarColor(a.username || '?');
     var init = getInitial(name);
     var la = agg[comment.id] || { total: 0, mine: false };
+    // 一致性兜底：自己点过赞至少算 1
+    if (la.mine && la.total <= 0) la.total = 1;
     var timeStr = formatTime(comment.created_at);
     var text = getCommentText(comment);
 
@@ -2006,6 +2218,12 @@
   }
 
   function bindCommentEvents(sec, rootMsg) {
+    // 评论删除：右键/长按浮现「删除」浮层（自己或管理员）
+    sec.querySelectorAll('.msg-comment-item').forEach(function(item){
+      var cid = item.getAttribute('data-comment-id');
+      var c = findMessageById(currentChannel.id, cid);
+      if (c) bindCommentDelete(item, c);
+    });
     sec.querySelectorAll('[data-act="like-comment"]').forEach(function(btn){
       btn.addEventListener('click', function(e){
         e.stopPropagation();
@@ -2018,10 +2236,14 @@
         btn.classList.toggle('liked', !wasLiked);
         if (countEl) countEl.textContent = Math.max(0, cur + (wasLiked ? -1 : 1));
         btn.innerHTML = btn.classList.contains('liked') ? '♥' : '♡';
+        if (!wasLiked) burstHeart(btn, countEl); // 点赞迸发特效
         IF.toggleLike(msgId, currentUser.id).then(function(res){
-          btn.classList.toggle('liked', res.liked);
-          if (countEl) countEl.textContent = res.total;
-          btn.innerHTML = res.liked ? '♥' : '♡';
+          var realTotal = (typeof res.total === 'number') ? res.total : (cur + (wasLiked ? -1 : 1));
+          var realLiked = !!res.liked;
+          if (realLiked && realTotal <= 0) realTotal = 1;
+          btn.classList.toggle('liked', realLiked);
+          if (countEl) countEl.textContent = realTotal;
+          btn.innerHTML = realLiked ? '♥' : '♡';
         }).catch(function(){
           btn.classList.toggle('liked', wasLiked);
           if (countEl) countEl.textContent = cur;
@@ -2161,38 +2383,50 @@
   // ── 转发弹窗：选目标频道 → 发带 forward_from 的新消息（HuLa 范式）──
   var forwardModal = null;
   function openForwardModal(msg) {
-    if (!currentUser || !IF || !IF.forwardMessage) return;
+    if (!currentUser || !IF) return;
     closeForwardModal();
     var fAuthor = (IF ? IF.resolveAuthor(msg.author_id) : { nickname:'未知' });
     var fName = fAuthor.nickname || fAuthor.username || '未知';
     var fPreview = msg.content_type === 'text' ? msg.content : (msg.content_type === 'image' ? '[图片]' : '[文件]');
-    if (fPreview && fPreview.length > 100) fPreview = fPreview.slice(0, 100) + '…';
+    if (fPreview && fPreview.length > 120) fPreview = fPreview.slice(0, 120) + '…';
+    var shareUrl = 'https://bfgzlt.cc.cd';
+    var shareText = fName + '：' + fPreview;
+
     forwardModal = document.createElement('div');
     forwardModal.className = 'modal-mask';
     forwardModal.id = 'forward-modal';
     forwardModal.innerHTML =
       '<div class="modal-box forward-box">'+
-        '<div class="modal-title">转发消息</div>'+
+        '<div class="modal-title">转发 / 分享</div>'+
         '<div class="forward-preview">'+escapeHtml(fPreview)+'</div>'+
-        '<div class="forward-hint">选择转发到：</div>'+
+        '<div class="forward-section-title">转发到站内频道</div>'+
         '<div class="forward-channels" id="forward-channels"></div>'+
+        '<div class="forward-section-title">分享到其他平台</div>'+
+        '<div class="share-grid" id="share-grid">'+
+          (navigator.share ? '<button class="share-item" data-share="web">📱 系统分享</button>' : '')+
+          '<button class="share-item" data-share="wechat">💬 微信</button>'+
+          '<button class="share-item" data-share="weibo">🐦 微博</button>'+
+          '<button class="share-item" data-share="qq">🐧 QQ</button>'+
+          '<button class="share-item" data-share="copy">🔗 复制链接</button>'+
+          '<button class="share-item" data-share="card">🖼 生成卡片</button>'+
+        '</div>'+
+        '<div id="share-extra"></div>'+
         '<div class="modal-actions"><button class="btn-cancel" id="forward-cancel">取消</button></div>'+
       '</div>';
     document.body.appendChild(forwardModal);
+
+    // 站内频道列表
     var chWrap = forwardModal.querySelector('#forward-channels');
     IF.listChannels().then(function(chs){
       (chs || []).forEach(function(ch){
-        if (currentChannel && ch.id === currentChannel.id) return; // 不转发到当前频道
-        if (ch.type === 'announcement' && (!currentUser || currentUser.role !== 'admin')) return; // 公告频道仅管理员可转发
+        if (currentChannel && ch.id === currentChannel.id) return;
+        if (ch.type === 'announcement' && (!currentUser || currentUser.role !== 'admin')) return;
         var b = document.createElement('button');
         b.className = 'forward-ch-item';
         b.textContent = '# ' + ch.name;
         b.addEventListener('click', function(){
           IF.forwardMessage(ch.id, currentUser.id, {
-            forwardFrom: msg.id,
-            forwardAuthor: fName,
-            forwardPreview: fPreview,
-            content: fPreview
+            forwardFrom: msg.id, forwardAuthor: fName, forwardPreview: fPreview, content: fPreview
           }).then(function(){
             closeForwardModal();
             showToast('已转发到 #' + ch.name);
@@ -2202,8 +2436,92 @@
       });
       if (!chs || !chs.length) chWrap.innerHTML = '<div class="forward-hint">暂无其他频道</div>';
     }).catch(function(){ chWrap.innerHTML = '<div class="forward-hint">加载频道失败</div>'; });
+
+    // 站外分享
+    var grid = forwardModal.querySelector('#share-grid');
+    var extra = forwardModal.querySelector('#share-extra');
+    grid.addEventListener('click', function(e){
+      var btn = e.target.closest('.share-item'); if (!btn) return;
+      handleShare(btn.getAttribute('data-share'), { url: shareUrl, text: shareText, preview: fPreview, author: fName, msg: msg }, extra);
+    });
+
     forwardModal.querySelector('#forward-cancel').addEventListener('click', closeForwardModal);
     forwardModal.addEventListener('click', function(e){ if (e.target === forwardModal) closeForwardModal(); });
+  }
+  function handleShare(kind, data, extra) {
+    var url = data.url, text = data.text, preview = data.preview;
+    if (kind === 'web') {
+      if (navigator.share) navigator.share({ title:'宝丰一高校园频道', text:text, url:url }).catch(function(){});
+      return;
+    }
+    if (kind === 'copy') { copyText(url); showToast('链接已复制', 'info'); return; }
+    if (kind === 'weibo') { window.open('https://service.weibo.com/share/share.php?url='+encodeURIComponent(url)+'&title='+encodeURIComponent(text), '_blank'); return; }
+    if (kind === 'qq') { window.open('https://connect.qq.com/widget/shareqq/index.html?url='+encodeURIComponent(url)+'&title='+encodeURIComponent(text), '_blank'); return; }
+    if (kind === 'wechat') {
+      extra.innerHTML = '<div class="share-tip">长按或扫码，在微信中打开</div><div id="wx-qr" class="wx-qr"></div>';
+      var qrBox = document.getElementById('wx-qr');
+      if (typeof qrcode !== 'undefined') {
+        try {
+          var qr = qrcode(0, 'M'); qr.addData(url); qr.make();
+          var img = document.createElement('img'); img.src = qr.createDataURL(6); img.alt = '二维码';
+          qrBox.innerHTML = ''; qrBox.appendChild(img);
+        } catch(e){ qrBox.textContent = url; }
+      } else { qrBox.textContent = url; }
+      return;
+    }
+    if (kind === 'card') { genShareCard(data); return; }
+  }
+  function copyText(t) {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t);
+      else { var ta=document.createElement('textarea'); ta.value=t; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); }
+    } catch(e){}
+  }
+  function wrapCardText(ctx, text, x, y, maxW, lh) {
+    var chars = (text||'').split(''); var line=''; var yy=y;
+    for (var i=0;i<chars.length;i++){
+      var test = line + chars[i];
+      if (ctx.measureText(test).width > maxW && line) { ctx.fillText(line, x, yy); line = chars[i]; yy += lh; }
+      else line = test;
+      if (yy > 280) break;
+    }
+    ctx.fillText(line, x, yy);
+  }
+  function genShareCard(data) {
+    var W=600, H=340, canvas=document.createElement('canvas');
+    canvas.width=W; canvas.height=H;
+    var ctx=canvas.getContext('2d');
+    var g=ctx.createLinearGradient(0,0,W,H);
+    g.addColorStop(0,'#1a1a2e'); g.addColorStop(1,'#221a3e');
+    ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+    ctx.fillStyle='#a78bfa'; ctx.beginPath(); ctx.arc(44,46,24,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#fff'; ctx.font='bold 24px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText((data.author||'匿').slice(0,1), 44, 46);
+    ctx.textAlign='left'; ctx.fillStyle='#e7e9f5'; ctx.font='bold 19px sans-serif';
+    ctx.fillText(data.author||'匿名', 80, 38);
+    ctx.fillStyle='#8b90b5'; ctx.font='13px sans-serif';
+    ctx.fillText('宝丰一高校园频道', 80, 58);
+    ctx.fillStyle='#fff'; ctx.font='17px sans-serif';
+    wrapCardText(ctx, data.preview, 32, 108, W-64, 27);
+    ctx.fillStyle='#8b90b5'; ctx.font='13px sans-serif';
+    ctx.fillText('来自 bfgzlt.cc.cd', 32, H-26);
+    var finish = function(){
+      var extra=document.getElementById('share-extra'); if(!extra) return;
+      var box=document.createElement('div'); box.className='card-preview-box';
+      canvas.className='card-preview-img';
+      var dl=document.createElement('a'); dl.className='share-item'; dl.textContent='⬇ 保存图片';
+      dl.href=canvas.toDataURL('image/png'); dl.download='share-card.png';
+      box.appendChild(canvas); box.appendChild(dl); extra.innerHTML=''; extra.appendChild(box);
+    };
+    if (typeof qrcode !== 'undefined') {
+      try {
+        var qr = qrcode(0, 'M'); qr.addData(data.url); qr.make();
+        var img = new Image();
+        img.onload = function(){ ctx.drawImage(img, W-112, H-112, 92, 92); finish(); };
+        img.onerror = finish;
+        img.src = qr.createDataURL(4);
+      } catch(e){ finish(); }
+    } else { finish(); }
   }
   function closeForwardModal() {
     if (forwardModal) { forwardModal.remove(); forwardModal = null; }
@@ -2293,6 +2611,67 @@
     }
     return (d.getMonth()+1)+'/'+d.getDate()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
   }
+
+  // 相对时间（用于消息发送时间）：刚刚 / x分钟前 / x小时前 / 昨天 / 月/日 时:分
+  function formatRelativeTime(ts) {
+    if (!ts) return '';
+    var d = new Date(ts);
+    var nowMs = Date.now();
+    var diff = nowMs - d.getTime();
+    var sec = Math.floor(diff / 1000);
+    if (sec < 60) return '刚刚';
+    var min = Math.floor(sec / 60);
+    if (min < 60) return min + '分钟前';
+    var hour = Math.floor(min / 60);
+    if (hour < 24) return hour + '小时前';
+    var today = new Date();
+    var todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+    var yesterdayStart = todayStart - 24*60*60*1000;
+    var dDayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+    if (dDayStart === yesterdayStart) {
+      return '昨天 ' + String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+    }
+    return (d.getMonth()+1) + '/' + d.getDate() + ' ' + String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+  }
+
+  // 把相对时间拆成单个字符，用于 GSAP 字符逐显动画
+  function createTimeCharsHtml(ts, id) {
+    var text = formatRelativeTime(ts);
+    var chars = text.split('').map(function(c) {
+      return '<span class="msg-time-char">' + (c === ' ' ? '&nbsp;' : escapeHtml(c)) + '</span>';
+    }).join('');
+    return '<span class="msg-send-time" data-timestamp="' + escapeHtml(ts) + '" data-msg-id="' + (id || '') + '">' + chars + '</span>';
+  }
+
+  // 对消息发送时间执行字符逐显动画（仅在新消息增量插入时调用）
+  function animateTimeChars(node) {
+    if (!node) return;
+    var chars = node.querySelectorAll('.msg-time-char');
+    if (!chars.length) return;
+    if (typeof gsap !== 'undefined' && !REDUCED_MOTION) {
+      gsap.killTweensOf(chars);
+      gsap.fromTo(chars,
+        { opacity: 0, y: 6 },
+        { opacity: 1, y: 0, duration: 0.35, ease: 'power2.out', stagger: 0.05, clearProps: 'opacity,transform' });
+    }
+  }
+
+  // 每分钟刷新一次所有相对时间（例如 5分钟前 → 6分钟前）
+  function updateRelativeTimes() {
+    if (!messagesArea) return;
+    messagesArea.querySelectorAll('.msg-send-time[data-timestamp]').forEach(function(node) {
+      var ts = node.getAttribute('data-timestamp');
+      if (!ts) return;
+      var newText = formatRelativeTime(ts);
+      // 只有当文本变化才替换，避免破坏 gsap 正在播放的动画
+      if (node.textContent === newText) return;
+      var chars = newText.split('').map(function(c) {
+        return '<span class="msg-time-char">' + (c === ' ' ? '&nbsp;' : escapeHtml(c)) + '</span>';
+      }).join('');
+      node.innerHTML = chars;
+    });
+  }
+  var _relativeTimeInterval = setInterval(updateRelativeTimes, 60 * 1000);
 
   // ── Reply / quote state ─────────────────────
   var replyingTo = null;
@@ -2404,11 +2783,9 @@
     } else {
       // 普通频道消息：增量追加这条（不重建整个频道），彻底避免全量重渲染卡顿
       appendMessageNode(pendingMsg, false);
-      // 仅在已接近底部时平滑滚到底（跟随自己发出的消息）；否则不打断当前阅读位置
-      if (messagesArea && isNearBottom()) {
-        messagesArea.scrollTo({ top: messagesArea.scrollHeight, behavior: 'smooth' });
-      } else if (messagesArea) {
-        showScrollBtn();
+      // 倒序流：自己发的消息总是滚到顶，确保"发送后消息显示在最上面"
+      if (messagesArea) {
+        messagesArea.scrollTo({ top: 0, behavior: 'smooth' });
       }
     }
 
@@ -3311,9 +3688,39 @@
     }
     return members;
   }
-  function isNearBottom(){
+  // 倒序流：判断用户是否已接近顶部（最新消息在顶部）
+  function isNearTop(){
     if(!messagesArea) return true;
-    return messagesArea.scrollHeight - messagesArea.scrollTop - messagesArea.clientHeight < 80;
+    return messagesArea.scrollTop < 80;
+  }
+
+  // 点赞粒子爆裂特效：扩散环 + 7 颗粒子飞散 + 心形弹跳 + 数字弹跳
+  function burstHeart(btn, countEl) {
+    if (REDUCED_MOTION || typeof gsap === 'undefined') return;
+    try {
+      var rect = btn.getBoundingClientRect();
+      var cx = rect.left + rect.width/2;
+      var cy = rect.top + rect.height/2;
+      var ring = document.createElement('span');
+      ring.className = 'like-ring';
+      ring.style.left = cx + 'px'; ring.style.top = cy + 'px';
+      document.body.appendChild(ring);
+      gsap.set(ring, { xPercent:-50, yPercent:-50, scale:0.4, opacity:0.9 });
+      gsap.to(ring, { scale:2.6, opacity:0, duration:0.5, ease:'power2.out', onComplete:function(){ ring.remove(); } });
+      var n = 7;
+      for (var i=0; i<n; i++) {
+        var p = document.createElement('span');
+        p.className = 'like-particle';
+        p.style.left = cx + 'px'; p.style.top = cy + 'px';
+        document.body.appendChild(p);
+        var angle = (Math.PI*2) * (i/n) + (Math.random()*0.6-0.3);
+        var dist = 24 + Math.random()*20;
+        gsap.set(p, { xPercent:-50, yPercent:-50, x:0, y:0, scale:0.4+Math.random()*0.6, opacity:1 });
+        gsap.to(p, { x:Math.cos(angle)*dist, y:Math.sin(angle)*dist, opacity:0, scale:0, duration:0.55+Math.random()*0.3, ease:'power2.out', onComplete:(function(node){ return function(){ node.remove(); }; })(p) });
+      }
+      gsap.fromTo(btn, { scale:1 }, { scale:1.35, duration:0.16, ease:'power2.out', yoyo:true, repeat:1 });
+      if (countEl) gsap.fromTo(countEl, { scale:1.5 }, { scale:1, duration:0.3, ease:'back.out(2)' });
+    } catch(e){}
   }
 
   function showScrollBtn(msg){
@@ -3333,7 +3740,8 @@
 
   if(messagesArea){
     messagesArea.addEventListener('scroll', function(){
-      if (isNearBottom()) {
+      // 倒序流：滚回顶部（看到最新）即隐藏"回到顶部"按钮
+      if (isNearTop()) {
         hideScrollBtn();
         if (unreadCounts[currentChannel && currentChannel.id]) {
           unreadCounts[currentChannel.id] = 0;
@@ -3345,8 +3753,9 @@
 
   if(scrollBottomBtn){
     scrollBottomBtn.addEventListener('click', function(){
+      // 倒序流：该按钮变为"回到顶部（最新）"
       if(messagesArea){
-        messagesArea.scrollTo({ top: messagesArea.scrollHeight, behavior: 'smooth' });
+        messagesArea.scrollTo({ top: 0, behavior: 'smooth' });
       }
       hideScrollBtn();
     });
@@ -3526,9 +3935,11 @@
       root.style.removeProperty('--main-bg-dim');
     }
 
-    // 自定义主题显示滑块
+    // 自定义主题显示滑块 (both panels)
     var sliders = document.getElementById('bg-sliders');
+    var settingsSliders = document.getElementById('settings-bg-sliders');
     if (sliders) sliders.style.display = (theme === 'custom') ? 'flex' : 'none';
+    if (settingsSliders) settingsSliders.style.display = (theme === 'custom') ? 'flex' : 'none';
 
     // 更新按钮激活态
     var themes = document.querySelectorAll('.bg-theme');
@@ -3611,6 +4022,11 @@
           currentBg.theme = theme;
           saveBackgroundSettings();
           applyTheme(theme, true);
+          // Sync settings panel
+          if (typeof syncThemeActiveState === 'function') {
+            syncThemeActiveState(document.getElementById('settings-bg-themes'));
+            syncThemeActiveState(themes);
+          }
         }
       });
     }
@@ -3628,6 +4044,10 @@
           saveBackgroundSettings();
           applyTheme('custom', true);
           showToast('壁纸已应用 ✅');
+          if (typeof syncThemeActiveState === 'function') {
+            syncThemeActiveState(document.getElementById('settings-bg-themes'));
+            syncThemeActiveState(themes);
+          }
         };
         reader.readAsDataURL(file);
       });
@@ -3657,8 +4077,15 @@
         saveBackgroundSettings();
         applyTheme('starry', true);
         if (blurInput) blurInput.value = 0;
-        if (dimInput) dimInput.value = 55;
+        if (dimInput) dimInput.value = 38;
         showToast('已恢复默认背景');
+        // Sync settings panel
+        var settingsSliders = document.getElementById('settings-bg-sliders');
+        if (settingsSliders) settingsSliders.style.display = 'none';
+        if (typeof syncThemeActiveState === 'function') {
+          syncThemeActiveState(document.getElementById('settings-bg-themes'));
+          syncThemeActiveState(themes);
+        }
       });
     }
   }
@@ -3719,9 +4146,20 @@
       if (!loginForm || !IF) { showToast('后端未就绪', 'error'); return; }
       var email = (new FormData(loginForm).get('email') || '').trim();
       if (!email) { showLoginError({message:'请先输入邮箱'}); return; }
-      IF.insforge.auth.sendResetPasswordEmail({ email: email, redirectTo: window.location.href })
-        .then(function(){ showToast('重置邮件已发送，请查收邮箱验证码', 'info'); })
-        .catch(function(err){ showToast((err&&err.message)||'发送失败', 'error'); });
+      if (forgotLink._busy) return;
+      forgotLink._busy = true;
+      forgotLink.style.opacity = '0.6';
+      IF.sendResetPasswordEmail(email)
+        .then(function(){
+          forgotLink._busy = false;
+          forgotLink.style.opacity = '';
+          showResetPanel(email);
+        })
+        .catch(function(err){
+          forgotLink._busy = false;
+          forgotLink.style.opacity = '';
+          showToast((err&&err.message)||'发送失败', 'error');
+        });
     });
   }
 
@@ -3957,23 +4395,358 @@
     });
   }
 
-  if(togglePw){
-    togglePw.addEventListener('click',function(){
-      var pw=loginForm.querySelector('input[name="password"]');
-      if(!pw) return;
-      pw.type=pw.type==='password'?'text':'password';
+  // ==================== 重置密码 ====================
+  var resetPanel = document.getElementById('reset-panel');
+  var resetEmailDisplay = document.getElementById('reset-email-display');
+  var resetNewPasswordInput = document.getElementById('reset-password');
+  var resetConfirmInput = document.getElementById('reset-confirm');
+  var resetCodeInput = document.getElementById('reset-code');
+  var resetErrorEl = document.getElementById('reset-error');
+  var btnReset = document.getElementById('btn-reset');
+  var resetSub = document.getElementById('reset-sub');
+  var pendingResetEmail = null;
+
+  function showResetPanel(email) {
+    pendingResetEmail = email;
+    // 收起加载层、恢复卡片可见
+    if (loginSubmitLoader) { loginSubmitLoader.classList.remove('active'); loginSubmitLoader.setAttribute('aria-hidden','true'); loginSubmitLoader.style.opacity=''; }
+    if (monsterLogin) { monsterLogin.classList.add('active'); monsterLogin.style.opacity='1'; monsterLogin.style.visibility='visible'; monsterLogin.style.pointerEvents='auto'; }
+    if (loginCard) { loginCard.style.opacity='1'; loginCard.style.transform=''; loginCard.style.filter=''; loginCard.style.visibility='visible'; }
+    if (loginForm) loginForm.style.display='none';
+    if (loginFooterSwitch) loginFooterSwitch.style.display='none';
+    var vp = document.getElementById('verify-panel'); if (vp) vp.style.display='none';
+    if (resetPanel) { resetPanel.style.display='block'; resetPanel.style.opacity='1'; resetPanel.style.position='relative'; resetPanel.style.zIndex='2'; }
+    if (resetEmailDisplay) resetEmailDisplay.textContent = email;
+    if (resetSub) resetSub.textContent = '我们已向 ' + email + ' 发送了 6 位验证码，请查收邮箱';
+    if (resetErrorEl) resetErrorEl.textContent='';
+    if (resetNewPasswordInput) resetNewPasswordInput.value='';
+    if (resetConfirmInput) resetConfirmInput.value='';
+    if (resetCodeInput) { resetCodeInput.value=''; setTimeout(function(){ try { resetCodeInput.focus(); } catch(e){} }, 300); }
+  }
+
+  function hideResetPanel() {
+    if (resetPanel) resetPanel.style.display='none';
+    if (loginForm) loginForm.style.display='';
+    if (loginFooterSwitch) loginFooterSwitch.style.display='';
+    pendingResetEmail = null;
+  }
+
+  function submitReset() {
+    if (!IF || !pendingResetEmail) { if (resetErrorEl) resetErrorEl.textContent='会话已失效，请重新点击忘记密码'; return; }
+    var code = (resetCodeInput && resetCodeInput.value || '').trim();
+    var np = (resetNewPasswordInput && resetNewPasswordInput.value || '').trim();
+    if (!code) { if (resetErrorEl) resetErrorEl.textContent='请输入验证码'; return; }
+    if (!/^\d{6}$/.test(code)) { if (resetErrorEl) resetErrorEl.textContent='验证码为 6 位数字'; return; }
+    if (!np) { if (resetErrorEl) resetErrorEl.textContent='请设置新密码'; return; }
+    if (np.length < 8 || !/[a-zA-Z]/.test(np) || !/\d/.test(np)) {
+      if (resetErrorEl) resetErrorEl.textContent='密码至少 8 位，需同时包含字母和数字';
+      return;
+    }
+    var confirmPw = (resetConfirmInput && resetConfirmInput.value || '').trim();
+    if (!confirmPw) { if (resetErrorEl) resetErrorEl.textContent='请再次输入新密码'; return; }
+    if (confirmPw !== np) { if (resetErrorEl) resetErrorEl.textContent='两次输入的密码不一致'; return; }
+    if (btnReset) { btnReset.disabled = true; var bt = btnReset.querySelector('.btn-text'); if (bt) bt.textContent = '重置中...'; }
+    IF.exchangeResetPasswordToken(pendingResetEmail, code)
+      .then(function (tk) {
+        if (!tk || !tk.token) throw new Error('验证码无效或已过期');
+        return IF.resetPassword(np, tk.token);
+      })
+      .then(function () {
+        if (btnReset) { btnReset.disabled = false; var bt = btnReset.querySelector('.btn-text'); if (bt) bt.textContent = '确认重置'; }
+        showToast('密码已重置，请用新密码登录', 'success');
+        hideResetPanel();
+        openLoginModal('signin');
+      })
+      .catch(function (e2) {
+        if (btnReset) { btnReset.disabled = false; var bt = btnReset.querySelector('.btn-text'); if (bt) bt.textContent = '确认重置'; }
+        var raw = (e2 && e2.message) || '';
+        var low = (raw + '').toLowerCase();
+        var fullMsg = raw;
+        if (low.indexOf('invalid') !== -1 || low.indexOf('incorrect') !== -1 || low.indexOf('mismatch') !== -1 || low.indexOf('expired') !== -1 || low.indexOf('token') !== -1) {
+          fullMsg = '验证码错误或已过期，请检查邮箱中的最新验证码，或点击“重新发送验证码”';
+        } else if (low.indexOf('network') !== -1 || low.indexOf('failed to fetch') !== -1 || low.indexOf('timeout') !== -1) {
+          fullMsg = '网络连接不稳定，请稍后重试';
+        }
+        if (resetErrorEl) resetErrorEl.textContent = fullMsg || '重置失败，请重试';
+        console.error('resetPassword failed:', e2);
+      });
+  }
+
+  if (btnReset) btnReset.addEventListener('click', submitReset);
+  if (resetCodeInput) {
+    resetCodeInput.addEventListener('input', function () {
+      this.value = (this.value || '').replace(/\D/g, '').slice(0, 6);
     });
   }
 
-  // ==================== LOGOUT ====================
+  var linkResendReset = document.getElementById('link-resend-reset');
+  if (linkResendReset) {
+    linkResendReset.addEventListener('click', function (e) {
+      e.preventDefault();
+      if (!IF || !pendingResetEmail) { if (resetErrorEl) resetErrorEl.textContent='会话已失效，请重新点击忘记密码'; return; }
+      if (linkResendReset._disabled) return;
+      linkResendReset._disabled = true;
+      var originalText = linkResendReset.textContent;
+      IF.sendResetPasswordEmail(pendingResetEmail).then(function () {
+        showToast('验证码已重新发送，请查收邮箱', 'info');
+        if (resetErrorEl) resetErrorEl.textContent = '';
+        var left = 60;
+        linkResendReset.textContent = originalText + ' (' + left + 's)';
+        var t = setInterval(function () {
+          left--;
+          if (left <= 0) { clearInterval(t); linkResendReset._disabled = false; linkResendReset.textContent = originalText; }
+          else { linkResendReset.textContent = originalText + ' (' + left + 's)'; }
+        }, 1000);
+      }).catch(function (e2) {
+        linkResendReset._disabled = false;
+        linkResendReset.textContent = originalText;
+        if (resetErrorEl) resetErrorEl.textContent = (e2 && e2.message) || '重发失败';
+      });
+    });
+  }
+
+  var linkBackReset = document.getElementById('link-back-login-reset');
+  if (linkBackReset) {
+    linkBackReset.addEventListener('click', function (e) {
+      e.preventDefault();
+      hideResetPanel();
+      openLoginModal('signin');
+    });
+  }
+
+  function bindPasswordToggle(btn, input){
+    if(!btn||!input) return;
+    var EYE_OPEN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+    var EYE_OFF='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+    btn.addEventListener('click',function(){
+      var show = input.type==='password';
+      input.type = show ? 'text' : 'password';
+      btn.innerHTML = show ? EYE_OFF : EYE_OPEN;
+      btn.setAttribute('aria-label', show ? '隐藏密码' : '显示密码');
+    });
+  }
+  if(togglePw) bindPasswordToggle(togglePw, loginForm.querySelector('input[name="password"]'));
+  var resetPw=document.getElementById('reset-password');
+  var resetPwToggle=document.getElementById('toggle-reset-pw');
+  bindPasswordToggle(resetPwToggle, resetPw);
+  var resetConfirm=document.getElementById('reset-confirm');
+  var resetConfirmToggle=document.getElementById('toggle-reset-confirm');
+  bindPasswordToggle(resetConfirmToggle, resetConfirm);
+
+  // ==================== LOGOUT (with GSAP animation) ====================
 
   var btnLogout = document.getElementById('btn-logout');
-  if(btnLogout) btnLogout.addEventListener('click',function(e){
-    e.preventDefault();
-    if (IF) IF.signOut().catch(function(){});
-    currentUser = null;
-    showLogin();
-  });
+  if(btnLogout){
+    // Hover micro-animation: gentle pulse + color shift
+    if (typeof gsap !== 'undefined') {
+      btnLogout.addEventListener('mouseenter', function(){
+        gsap.to(this, { scale: 1.12, duration: 0.28, ease: 'back.out(2)' });
+        gsap.to(this.querySelector('svg'), { rotation: 8, duration: 0.3, ease: 'power2.out' });
+      });
+      btnLogout.addEventListener('mouseleave', function(){
+        gsap.to(this, { scale: 1, duration: 0.25, ease: 'power2.out' });
+        gsap.to(this.querySelector('svg'), { rotation: 0, duration: 0.25, ease: 'power2.out' });
+      });
+      // Click: door-swing exit animation
+      btnLogout.addEventListener('click', function(e){
+        e.preventDefault();
+        var self = this;
+        gsap.timeline()
+          .to(self, { rotation: -20, scale: 0.85, opacity: 0.6, duration: 0.18, ease: 'power2.in' })
+          .to(self.querySelector('svg'), { x: -4, duration: 0.18, ease: 'power2.in' }, 0)
+          .add(function(){
+            if (IF) IF.signOut().catch(function(){});
+            currentUser = null;
+            showLogin();
+            // Reset button state for next login session
+            gsap.set(self, { rotation: 0, scale: 1, opacity: 1, x: 0 });
+            gsap.set(self.querySelector('svg'), { x: 0, rotation: 0 });
+          });
+      });
+    } else {
+      // Fallback without GSAP
+      btnLogout.addEventListener('click',function(e){
+        e.preventDefault();
+        if (IF) IF.signOut().catch(function(){});
+        currentUser = null;
+        showLogin();
+      });
+    }
+  }
+
+  // ==================== SETTINGS PANEL ====================
+
+  var settingsPanel = null;
+  var settingsOverlay = null;
+
+  function initSettingsPanel() {
+    settingsPanel = document.getElementById('settings-panel');
+    settingsOverlay = document.getElementById('settings-overlay');
+    var openBtn = document.getElementById('btn-drawer-settings');
+    var closeBtn = document.getElementById('settings-close-btn');
+
+    if (!settingsPanel || !openBtn) return;
+
+    function openSettings() {
+      // Close avatar popup if open
+      if (typeof closeAvatarPopup === 'function') closeAvatarPopup();
+      settingsOverlay.classList.add('active');
+      settingsPanel.classList.add('open');
+      document.body.style.overflow = 'hidden';
+      // GSAP entrance
+      if (typeof gsap !== 'undefined') {
+        gsap.fromTo(settingsPanel,
+          { x: 60 },
+          { x: 0, duration: 0.35, ease: 'expo.out' }
+        );
+        gsap.fromTo(settingsOverlay,
+          { opacity: 0 },
+          { opacity: 1, duration: 0.25, ease: 'power2.out' }
+        );
+        // Stagger section reveal
+        var sections = settingsPanel.querySelectorAll('.settings-section');
+        if (sections.length) {
+          gsap.fromTo(sections,
+            { y: 16, opacity: 0 },
+            { y: 0, opacity: 1, stagger: 0.06, duration: 0.32, ease: 'power2.out', delay: 0.1 }
+          );
+        }
+      }
+      // Init background settings within panel (mirror logic)
+      initSettingsBackground();
+    }
+
+    function closeSettings() {
+      settingsOverlay.classList.remove('active');
+      settingsPanel.classList.remove('open');
+      document.body.style.overflow = '';
+      if (typeof gsap !== 'undefined') {
+        gsap.to(settingsPanel, { x: '100%', duration: 0.28, ease: 'power3.in' });
+        gsap.to(settingsOverlay, { opacity: 0, duration: 0.2, ease: 'power2.out',
+          onComplete: function() { settingsOverlay.classList.remove('active'); }
+        });
+      }
+    }
+
+    openBtn.addEventListener('click', openSettings);
+    if (closeBtn) closeBtn.addEventListener('click', closeSettings);
+    if (settingsOverlay) settingsOverlay.addEventListener('click', closeSettings);
+
+    // ESC to close
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape' && settingsPanel && settingsPanel.classList.contains('open')) {
+        closeSettings();
+      }
+    });
+
+    // Settings gear button hover animation
+    if (typeof gsap !== 'undefined') {
+      openBtn.addEventListener('mouseenter', function(){
+        gsap.to(this, { rotation: 30, duration: 0.35, ease: 'back.out(2.5)' });
+      });
+      openBtn.addEventListener('mouseleave', function(){
+        gsap.to(this, { rotation: 0, duration: 0.4, ease: 'elastic.out(1, 0.5)' });
+      });
+    }
+  }
+
+  // Background settings inside the settings panel (mirrors original but uses #settings-* IDs)
+  function initSettingsBackground() {
+    var themes = document.getElementById('settings-bg-themes');
+    var fileInput = document.getElementById('settings-bg-file-input');
+    var blurInput = document.getElementById('settings-bg-blur');
+    var dimInput = document.getElementById('settings-bg-dim');
+    var resetBtn = document.getElementById('settings-bg-reset');
+
+    // Sync active state from current theme
+    syncThemeActiveState(themes || document.getElementById('bg-themes'));
+
+    if (themes) {
+      // Remove any previous listener by cloning approach not needed (fresh on each open)
+      themes.addEventListener('click', function(e){
+        var btn = e.target.closest('.bg-theme');
+        if (!btn) return;
+        var theme = btn.dataset.theme;
+        if (theme === 'custom') {
+          if (fileInput) fileInput.click();
+        } else {
+          currentBg.theme = theme;
+          saveBackgroundSettings();
+          applyTheme(theme, true);
+          // Sync both panels
+          syncThemeActiveState(themes);
+          syncThemeActiveState(document.getElementById('bg-themes'));
+        }
+      });
+    }
+
+    if (fileInput) {
+      fileInput.addEventListener('change', function(e){
+        var file = e.target.files && e.target.files[0];
+        if (!file) return;
+        if (!/^image\//.test(file.type)) { showToast('请选择图片文件'); return; }
+        if (file.size > 4 * 1024 * 1024) { showToast('图片超过 4MB，建议压缩后重试'); return; }
+        var reader = new FileReader();
+        reader.onload = function(ev){
+          currentBg.theme = 'custom';
+          currentBg.customUrl = ev.target.result;
+          saveBackgroundSettings();
+          applyTheme('custom', true);
+          showToast('壁纸已应用 ✅');
+          syncThemeActiveState(document.getElementById('settings-bg-themes'));
+          syncThemeActiveState(document.getElementById('bg-themes'));
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    // Show/hide custom sliders
+    var slidersDiv = document.getElementById('settings-bg-sliders');
+    if (slidersDiv) {
+      if (currentBg.theme === 'custom') slidersDiv.style.display = 'flex';
+      else slidersDiv.style.display = 'none';
+    }
+
+    if (blurInput) {
+      blurInput.value = currentBg.blur || 0;
+      blurInput.addEventListener('input', function(){
+        currentBg.blur = parseInt(this.value, 10);
+        saveBackgroundSettings();
+        applyTheme(currentBg.theme, false);
+      });
+    }
+
+    if (dimInput) {
+      dimInput.value = currentBg.dim || 38;
+      dimInput.addEventListener('input', function(){
+        currentBg.dim = parseInt(this.value, 10);
+        saveBackgroundSettings();
+        applyTheme(currentBg.theme, false);
+      });
+    }
+
+    if (resetBtn) {
+      resetBtn.addEventListener('click', function(){
+        currentBg = { theme: 'starry', customUrl: '', blur: 0, dim: 38 };
+        saveBackgroundSettings();
+        applyTheme('starry', true);
+        if (blurInput) blurInput.value = 0;
+        if (dimInput) dimInput.value = 38;
+        if (slidersDiv) slidersDiv.style.display = 'none';
+        showToast('已恢复默认背景');
+        syncThemeActiveState(document.getElementById('settings-bg-themes'));
+        syncThemeActiveState(document.getElementById('bg-themes'));
+      });
+    }
+  }
+
+  // Sync active class across both theme pickers (avatar popup + settings panel)
+  function syncThemeActiveState(container) {
+    if (!container) return;
+    container.querySelectorAll('.bg-theme').forEach(function(btn){
+      btn.classList.toggle('active', btn.dataset.theme === currentBg.theme);
+    });
+  }
 
   // ==================== INIT ====================
 
@@ -3992,6 +4765,7 @@
 
   initAvatarPopup();
   initBackgroundSettings();
+  initSettingsPanel();
 
   // ==================== SCHOOL INTRO (click server header) ====================
 
@@ -4033,7 +4807,7 @@
           '<div class="msg-feed-body">'+
             '<div class="msg-content"><strong>'+item.title+'</strong><br><br>'+item.content+'</div>'+
             '<div class="msg-interactions">'+
-              '<div class="msg-interactions-left"><span class="msg-view-count">👁 1.2k+</span></div>'+
+              '<div class="msg-interactions-left">'+createTimeCharsHtml(new Date().toISOString())+'</div>'+
               '<div class="msg-interactions-right">'+
                 '<button type="button" class="msg-interact-btn" data-act="like">♥ <span class="msg-interact-count">0</span></button>'+
                 '<button type="button" class="msg-interact-btn" data-act="comment">💬 <span class="msg-interact-count">0</span></button>'+

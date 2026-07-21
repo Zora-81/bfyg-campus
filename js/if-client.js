@@ -82,12 +82,12 @@ async function ensureProfile(user, desiredUsername, desiredNickname) {
   const nickname = desiredNickname || username
   const { error } = await withTimeout(
     insforge.database.from('profiles').insert([{
-      id: user.id, username, nickname, role: 'student', status: 'active'
+      id: user.id, username, nickname, email: user.email || null, role: 'student', status: 'active'
     }]).select(),
     6000
   )
   if (!error) {
-    profileCache[user.id] = { id: user.id, username, nickname, avatar_url: '', role: 'student', title: '', status: 'active' }
+    profileCache[user.id] = { id: user.id, username, nickname, email: user.email || null, avatar_url: '', role: 'student', title: '', status: 'active' }
   }
   return adaptUser(user)
 }
@@ -213,6 +213,27 @@ async function verifyEmail(email, otp, password) {
 
 async function resendVerification(email) {
   const { data, error } = await insforge.auth.resendVerificationEmail({ email })
+  if (error) throw error
+  return data
+}
+
+// ---- 重置密码（code 模式）：发送验证码 → 校验验证码换 token → 用 token 设新密码 ----
+async function sendResetPasswordEmail(email) {
+  const { data, error } = await insforge.auth.sendResetPasswordEmail({ email })
+  if (error) throw error
+  return data
+}
+
+// 用 6 位邮箱验证码换取一次性重置 token（{ token, expiresAt }）
+async function exchangeResetPasswordToken(email, code) {
+  const { data, error } = await insforge.auth.exchangeResetPasswordToken({ email, code })
+  if (error) throw error
+  return data
+}
+
+// 用重置 token 设置新密码（otp 字段即 exchange 返回的 token）
+async function resetPassword(newPassword, token) {
+  const { data, error } = await insforge.auth.resetPassword({ newPassword, otp: token })
   if (error) throw error
   return data
 }
@@ -501,7 +522,10 @@ async function toggleLike(messageId, userId) {
   const { count, error: cErr } = await insforge.database
     .from('message_likes').select('*', { count: 'exact', head: true })
     .eq('message_id', messageId)
-  return { liked, total: (cErr ? 0 : (count || 0)) }
+  const total = cErr ? 0 : (count || 0)
+  // 一致性兜底：刚插入成功但 count 读到 0 时，至少把自己算上
+  if (liked && total <= 0) return { liked, total: 1 }
+  return { liked, total }
 }
 
 // 批量聚合某频道所有消息的点赞：{ [messageId]: { total, mine } }
@@ -528,6 +552,12 @@ async function getLikeAggregates(messageIds, userId) {
         })
       }
     } catch (e) { /* 单批失败不影响其他批次 */ }
+  }
+  // 一致性兜底：mine=true 但 total=0 时修正为 1
+  for (const mid in agg) {
+    if (agg.hasOwnProperty(mid) && agg[mid].mine && agg[mid].total <= 0) {
+      agg[mid].total = 1
+    }
   }
   return agg
 }
@@ -685,6 +715,7 @@ const IF = {
   insforge,
   loadProfiles, resolveAuthor, adaptUser, ensureProfile, completePendingProfile, updateMyProfile,
   signIn, signUp, signOut, getCurrentUser, verifyEmail, resendVerification,
+  sendResetPasswordEmail, exchangeResetPasswordToken, resetPassword,
   listChannels, getMessages, sendMessage, moderateMessage,
   listNotifications, unreadCount, markRead, markAllRead,
   getCurrentUserId, notifyMentions, searchUsers, friendsList, friendRequest, friendRespond, friendRemove,
@@ -693,7 +724,9 @@ const IF = {
   toggleLike, getLikeAggregates, forwardMessage,
   connectRealtime, unsubscribeChannel, disconnectRealtime, publishDelete,
   recallMessage, publishRecall,
-  get isRealtimeConnected() { return rtConnected }
+  get isRealtimeConnected() { return rtConnected },
+  get INS_FORGE_URL() { return 'https://api.bfgzlt.cc.cd' },
+  get ANON_KEY() { return ANON_KEY }
 }
 
 window.IF = IF
