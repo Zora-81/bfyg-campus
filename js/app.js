@@ -3125,6 +3125,18 @@
         // 实时未覆盖时的兜底：出现新未读通知，刷新好友列表与下拉（不只红点）
         if (typeof renderFriends === 'function') renderFriends();
         if (notifyDropdown && notifyDropdown.style.display === 'block') loadNotifications();
+        // 新未读若是好友类，弹明确浮层提示（实时链路未覆盖时的兜底可见性）
+        if (IF.listNotifications) {
+          IF.listNotifications().then(function(list) {
+            var n = list && list[0];
+            if (n && !n.is_read && (n.type === 'friend_request' || n.type === 'friend_accepted')) {
+              if (typeof showToast === 'function') {
+                showToast((n.type === 'friend_request' ? '💌 ' : '✅ ') + (n.title || '好友通知'),
+                          n.type === 'friend_accepted' ? 'success' : 'info', 4500);
+              }
+            }
+          }).catch(function() {});
+        }
       }
       unreadNotifCount = count;
       updateNotifBadge();
@@ -3605,6 +3617,11 @@
             if (rec.type === 'friend_accepted' || rec.type === 'friend_request') {
               renderFriends();
               if (typeof loadFriendsToPopup === 'function') loadFriendsToPopup();
+              // 明确浮层提示，避免"通知没显示"误判（不只静默亮铃标）
+              if (typeof showToast === 'function') {
+                if (rec.type === 'friend_request') showToast('💌 ' + (rec.title || '收到新的好友申请'), 'info', 4500);
+                else showToast('✅ ' + (rec.title || '对方已接受你的好友申请'), 'success', 4500);
+              }
             }
           };
           rt.on('new_notification', notifRtHandler);
