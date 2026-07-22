@@ -292,6 +292,7 @@
     }
     notifRtHandler = null;
     notifRtSubscribed = false;
+    if (_notifFallbackTimer) { clearInterval(_notifFallbackTimer); _notifFallbackTimer = null; }
     if (_pollUnreadInterval) { clearInterval(_pollUnreadInterval); _pollUnreadInterval = null; }
   }
 
@@ -3119,7 +3120,13 @@
   function fetchUnreadCount() {
     if (!IF) return;
     IF.unreadCount().then(function(count){
-      unreadNotifCount = count || 0;
+      count = count || 0;
+      if (count > unreadNotifCount) {
+        // 实时未覆盖时的兜底：出现新未读通知，刷新好友列表与下拉（不只红点）
+        if (typeof renderFriends === 'function') renderFriends();
+        if (notifyDropdown && notifyDropdown.style.display === 'block') loadNotifications();
+      }
+      unreadNotifCount = count;
       updateNotifBadge();
     }).catch(function(){});
   }
@@ -3553,6 +3560,17 @@
   // ── Realtime 通知订阅（最小订阅，不干扰聊天订阅）──
   var notifRtHandler = null;
   var notifRtSubscribed = false;
+  var _notifFallbackTimer = null;
+  // 实时订阅失败时的兜底：4s 短轮询未读 + 好友列表，保证被加方几秒内必看到通知
+  function startNotifFallbackPoll() {
+    if (_notifFallbackTimer) return;
+    _notifFallbackTimer = setInterval(function() {
+      if (document.visibilityState === 'visible' && currentUser && IF && IF.unreadCount) {
+        fetchUnreadCount();
+        if (typeof renderFriends === 'function') renderFriends();
+      }
+    }, 4000);
+  }
   function subscribeNotifications() {
     if (notifRtSubscribed) return;
     if (!IF || !IF.insforge || !IF.insforge.realtime || !currentUser) return;
@@ -3562,7 +3580,11 @@
       var channel = 'notifications:' + currentUser.id;
       try {
         rt.subscribe(channel).then(function(resp) {
-          if (!resp || !resp.ok) { console.warn('[notif-rt] 订阅失败', resp && resp.error); return; }
+          if (!resp || !resp.ok) {
+            console.warn('[notif-rt] 订阅失败，启用兜底轮询', resp && resp.error);
+            startNotifFallbackPoll();
+            return;
+          }
           if (notifRtHandler) { try { rt.off('new_notification', notifRtHandler); } catch (e) {} }
           notifRtHandler = function(payload) {
             var rec = (payload && (payload.record || payload)) || {};
@@ -3720,13 +3742,16 @@
       });
     }
     // 如果还是空的，从频道已有消息中提取用户
+    // InsForge 消息对象只有 author_id（无 username/nickname），须走 resolveAuthor 查 profileCache
     if (members.length === 0 && currentChannel) {
       var msgs = channelMessages[currentChannel.id] || [];
       var seen = {};
       msgs.forEach(function(msg) {
-        if (!seen[msg.username]) {
-          seen[msg.username] = true;
-          members.push({ username: msg.username, nickname: msg.nickname || msg.username });
+        var author = (IF && IF.resolveAuthor ? IF.resolveAuthor(msg.author_id) : null);
+        var uname = author ? (author.username || '') : '';
+        if (uname && !seen[uname]) {
+          seen[uname] = true;
+          members.push({ username: uname, nickname: author.nickname || uname });
         }
       });
     }

@@ -82,6 +82,7 @@ END;
 $func$;
 
 -- ⑤ respond_friend_request：接受/拒绝好友申请（仅目标可操作）
+-- 修复：① 幂等校验（已接受不再重复插入通知）；② 处理后删除原始 friend_request 通知
 CREATE OR REPLACE FUNCTION public.respond_friend_request(p_friendship_id uuid, p_action text)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'pg_catalog','public','pg_temp'
 AS $func$
@@ -90,6 +91,8 @@ DECLARE
 BEGIN
   SELECT * INTO v_row FROM public.friends WHERE id = p_friendship_id AND friend_id = v_me;
   IF v_row.id IS NULL THEN RETURN jsonb_build_object('ok',false,'error','notfound'); END IF;
+  -- 幂等：已接受的重复点击直接返回成功，不重复插通知
+  IF v_row.status = 'accepted' THEN RETURN jsonb_build_object('ok',true,'msg','already_accepted'); END IF;
   IF p_action = 'accept' THEN
     UPDATE public.friends SET status='accepted' WHERE id = p_friendship_id;
     SELECT nickname INTO v_nick FROM public.profiles WHERE id = v_me;
@@ -98,6 +101,9 @@ BEGIN
   ELSE
     DELETE FROM public.friends WHERE id = p_friendship_id;
   END IF;
+  -- 清理原始 friend_request 通知（防止已处理的请求反复显示"同意/拒绝"按钮）
+  DELETE FROM public.notifications
+    WHERE type = 'friend_request' AND link = '/friends/request?id=' || p_friendship_id::text;
   RETURN jsonb_build_object('ok',true);
 END;
 $func$;

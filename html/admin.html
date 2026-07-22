@@ -10,8 +10,8 @@
   <link rel="apple-touch-icon" sizes="180x180" href="../images/apple-touch-icon.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="../css/style.css?v=1.0.8" />
-  <link rel="stylesheet" href="../css/admin.css?v=1.0.8" />
+  <link rel="stylesheet" href="../css/style.css?v=1.2.63" />
+  <link rel="stylesheet" href="../css/admin.css?v=1.2.63" />
 </head>
 <body>
   <div class="admin-layout">
@@ -126,6 +126,7 @@
             <option value="">全部频道</option>
           </select>
           <button class="btn-primary btn-sm" id="btn-batch-approve">标记已审</button>
+          <button class="btn-undo btn-sm" id="btn-batch-overturn">批量撤回</button>
           <button class="btn-danger btn-sm" id="btn-batch-reject">批量删除</button>
         </div>
         <div class="admin-table-wrap" id="post-table-wrap">
@@ -139,7 +140,7 @@
                 <th data-sort="created_at" style="width:90px;">时间</th>
                 <th style="width:80px;">类型</th>
                 <th class="col-status" style="width:80px;">状态</th>
-                <th style="width:140px;">操作</th>
+                <th style="width:210px;">操作</th>
               </tr>
             </thead>
             <tbody id="post-tbody"></tbody>
@@ -378,11 +379,26 @@
     </div>
   </div>
 
+  <!-- Modal: 帖子详情（查看完整消息 + 上下文，辅助审核判断） -->
+  <div class="admin-modal-overlay" id="post-detail-modal-overlay">
+    <div class="admin-modal admin-modal-post-detail">
+      <div class="admin-modal-header">
+        <h3 class="admin-modal-title" id="post-detail-title">消息详情</h3>
+        <button class="admin-modal-close" id="post-detail-close">✕</button>
+      </div>
+      <div class="admin-modal-body" id="post-detail-body"></div>
+      <div class="admin-modal-footer">
+        <button class="btn-ghost" id="post-detail-cancel">关闭</button>
+        <span id="post-detail-actions" class="pd-actions"></span>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast container -->
   <div class="toast-container" id="toast-container"></div>
 
   <!-- InsForge 客户端（注入 window.IF，供 admin.js 调用；module 脚本 defer，就绪后派发 IF_READY） -->
-  <script type="module" src="../js/if-client.js?v=1.0.8"></script>
-  <script src="../js/admin.js?v=1.0.8"></script>
+  <script type="module" src="../js/if-client.js?v=1.2.63"></script>
+  <script src="../js/admin.js?v=1.2.64"></script>
 </body>
 </html>

@@ -230,7 +230,9 @@ export default {
     const target = new URL(INS_FORGE)
     target.pathname = url.pathname
     target.search = url.search
-    if (isWs) target.protocol = 'wss:'
+    // 注意：Cloudflare Workers 的 fetch 子请求不支持 wss:// 协议，
+    // 出站 WebSocket 升级必须用 https://（由 Upgrade: websocket 头触发隧道）。
+    // 原代码把 WS 改成 wss: 导致 fetch 抛 "cannot load wss://" → 边缘 500，实时通道全断。
     const targetUrl = target.toString()
 
     // 去掉 origin/host，避免 InsForge 按 Host 校验拒掉
@@ -239,20 +241,11 @@ export default {
     hdr.delete('host')
 
     if (isWs) {
-      const resp = await fetch(targetUrl, { headers: hdr, method: request.method })
-      const tws = resp.webSocket
-      if (!tws) return new Response('Bad gateway: no upstream websocket', { status: 502, headers: corsHeaders(origin, request.headers.get('access-control-request-headers') || '') })
-      tws.accept()
-      const pair = new WebSocketPair()
-      const [client, server] = [pair[0], pair[1]]
-      server.accept()
-      server.onmessage = (e) => { try { tws.send(e.data) } catch (_) {} }
-      server.onclose = () => { try { tws.close() } catch (_) {} }
-      server.onerror = () => { try { tws.close() } catch (_) {} }
-      tws.onmessage = (e) => { try { server.send(e.data) } catch (_) {} }
-      tws.onclose = () => { try { server.close() } catch (_) {} }
-      tws.onerror = () => { try { server.close() } catch (_) {} }
-      return new Response(null, { status: 101, webSocket: client, headers: corsHeaders(origin) })
+      // 用 Cloudflare 原生 WS 透传（整体转发升级请求，由运行时接管隧道）。
+      // 顺手剥掉 permessage-deflate 压缩扩展头，避免个别客户端协商失败。
+      hdr.delete('sec-websocket-extensions')
+      const wsReq = new Request(targetUrl, { method: request.method, headers: hdr })
+      return await fetch(wsReq)
     }
 
     const init = { method: request.method, headers: hdr }
