@@ -1645,36 +1645,50 @@
     return ageSec < 60;
   }
 
-  // 给消息节点绑定长按（移动）/右键（桌面）触发浮现撤回按键
+  // 给消息节点绑定长按（移动）触发浮现撤回按键
+  // 桌面右键统一走 messagesArea 事件委托，防止子元素/浏览器默认菜单截胡。
   function bindRecallTrigger(group, msg) {
     if (!canRecall(msg)) return;
-    var timer = null, fired = false, startX = 0, startY = 0;
-
-    var trigger = function (e) {
-      if (fired) return;
-      fired = true;
-      if (e && e.preventDefault) e.preventDefault();
-      if (e && e.stopPropagation) e.stopPropagation();
-      showRecallPop(msg, group);
-    };
-
-    // 桌面：右键弹出
-    group.addEventListener('contextmenu', trigger);
+    var timer = null, startX = 0, startY = 0;
 
     // 触摸/笔：pointerdown 起 500ms 视为长按
     group.addEventListener('pointerdown', function (e) {
       if (e.pointerType === 'mouse') return; // 鼠标走右键
-      startX = e.clientX; startY = e.clientY; fired = false;
-      timer = setTimeout(function () { trigger(e); }, 500);
+      startX = e.clientX; startY = e.clientY;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(function () { triggerTouch(e); }, 500);
     });
+    var triggerTouch = function (e) {
+      if (!e) return;
+      try { e.preventDefault(); e.stopPropagation(); } catch (err) {}
+      showRecallPop(msg, group);
+    };
     var cancel = function (e) {
       if (timer) { clearTimeout(timer); timer = null; }
       if (e && e.clientX !== undefined &&
-          (Math.abs(e.clientX - startX) > 10 || Math.abs(e.clientY - startY) > 10)) fired = true;
+          (Math.abs(e.clientX - startX) > 10 || Math.abs(e.clientY - startY) > 10)) { if (timer) clearTimeout(timer); }
     };
     group.addEventListener('pointermove', cancel);
     group.addEventListener('pointerup', cancel);
     group.addEventListener('pointercancel', cancel);
+  }
+
+  // 桌面右键：在消息列表容器上统一监听（事件委托），捕获阶段阻止浏览器默认菜单。
+  // 点在非消息区域时放行默认菜单；点在消息上且有权撤回时浮现撤回键。
+  if (messagesArea) {
+    messagesArea.addEventListener('contextmenu', function (e) {
+      if (!e) return;
+      var group = e.target && e.target.closest ? e.target.closest('.msg-group') : null;
+      if (!group) return; // 非消息区域保留浏览器默认菜单
+      var msgId = group.getAttribute('data-msg-id');
+      var msg = currentChannel ? findMessageById(currentChannel.id, msgId) : null;
+      if (!msg || !canRecall(msg)) return; // 无权也放行默认菜单
+      e.preventDefault();
+      e.stopPropagation();
+      try { e.returnValue = false; } catch (err) {}
+      showRecallPop(msg, group);
+      return false;
+    }, true);
   }
 
   // 当前已打开的撤回浮层（同一时刻只一个）
@@ -1869,8 +1883,17 @@
   function appendMessageNode(msg, animate) {
     if (!messagesArea) return;
     var node = buildMessageGroup(msg);
-    // 倒序流：新消息插到列表最顶（而非底部）
-    messagesArea.prepend(node);
+    if (!node) return;
+    // 倒序流：新消息插到消息列表最顶，但要保持在欢迎卡/分隔线之后，
+    // 避免 welcome-card 被顶到消息上方。
+    var welcome = messagesArea.querySelector('.welcome-card');
+    var divider = messagesArea.querySelector('.day-divider');
+    var ref = divider ? divider.nextSibling : (welcome ? welcome.nextSibling : messagesArea.firstChild);
+    if (ref) {
+      messagesArea.insertBefore(node, ref);
+    } else {
+      messagesArea.appendChild(node);
+    }
     if (animate && typeof gsap !== 'undefined' && !REDUCED_MOTION) {
       gsap.killTweensOf(node);
       gsap.fromTo(node, { scale: 0.92, opacity: 0 },
@@ -3143,14 +3166,16 @@
           var item = document.createElement('div');
           item.className = 'notify-item' + (n.is_read ? '' : ' unread');
           var isFriendReq = n.type === 'friend_request' || n.type === 'friend' || n.type === 'friend_request_received';
+          // 已读的好友请求不再显示操作按钮（已处理过，防止反复点击）
+          var showActions = isFriendReq && !n.is_read;
           item.innerHTML =
             '<span class="notify-icon">' + (n.type === 'mention' ? '💬' : (isFriendReq ? '👋' : '🔔')) + '</span>' +
             '<div class="notify-body">' +
               '<div class="notify-title">' + escapeHtml(n.title) + '</div>' +
               '<div class="notify-preview">' + escapeHtml(n.body) + '</div>' +
             '</div>' +
-            (isFriendReq ? '<div class="notify-actions"><button type="button" class="notify-btn notify-accept" data-action="accept">同意</button><button type="button" class="notify-btn notify-reject" data-action="reject">拒绝</button></div>' : '');
-          if (isFriendReq) {
+            (showActions ? '<div class="notify-actions"><button type="button" class="notify-btn notify-accept" data-action="accept">同意</button><button type="button" class="notify-btn notify-reject" data-action="reject">拒绝</button></div>' : '');
+          if (showActions) {
             var acceptBtn = item.querySelector('.notify-accept');
             var rejectBtn = item.querySelector('.notify-reject');
             if (acceptBtn) {
@@ -3209,11 +3234,14 @@
     function doRespond(id) {
       IF.friendRespond(id, action)
         .then(function() {
-          item.style.opacity = '0.55';
-          var actions = item.querySelector('.notify-actions');
-          if (actions) actions.innerHTML = '<span class="notify-status">' + (action === 'accept' ? '已同意' : '已拒绝') + '</span>';
+          // 从 DOM 移除该通知项（而非仅改透明度），防止反复操作
+          if (item && item.parentNode) item.parentNode.removeChild(item);
           markNotifRead(n.id);
           renderFriends();
+          // 重载通知列表确保干净状态（原 friend_request 通知已被 RPC 删除）
+          loadNotifications();
+          // 同步刷新弹窗好友列表
+          if (typeof loadFriendsToPopup === 'function') loadFriendsToPopup();
         })
         .catch(function(err) {
           if (acceptBtn) acceptBtn.disabled = false;
@@ -3551,6 +3579,11 @@
             unreadNotifCount = (unreadNotifCount || 0) + 1;
             updateNotifBadge();
             if (notifyDropdown && notifyDropdown.style.display === 'block') loadNotifications();
+            // 好友关系变化时同步刷新好友列表（解决"对方同意后列表不显示"）
+            if (rec.type === 'friend_accepted' || rec.type === 'friend_request') {
+              renderFriends();
+              if (typeof loadFriendsToPopup === 'function') loadFriendsToPopup();
+            }
           };
           rt.on('new_notification', notifRtHandler);
         }).catch(function(e) { console.warn('[notif-rt] subscribe', e); });
