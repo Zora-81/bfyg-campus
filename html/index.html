@@ -16,7 +16,7 @@
 
     (function(){
 
-      var v = '1.2.66';
+      var v = '1.2.92';
 
       try {
 
@@ -50,7 +50,7 @@
 
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap" rel="stylesheet" />
 
-  <link rel="stylesheet" href="../css/style.css?v=1.2.66" />
+  <link rel="stylesheet" href="../css/style.css?v=1.2.92" />
 
 </head>
 
@@ -828,51 +828,12 @@
 
 
 
-        <!-- Channel info (desktop avatar-popup) -->
-
-        <div class="popup-section" id="popup-channel-info">
-
-          <h3 class="popup-title">📡 频道信息</h3>
-
-          <div class="panel-info" id="panel-info">
-
-            <div class="info-row"><span class="info-label">频道名称</span><span class="info-value">校园频道</span></div>
-
-            <div class="info-row"><span class="info-label">创建日期</span><span class="info-value">2025 年 5 月</span></div>
-
-            <div class="info-row"><span class="info-label">类型</span><span class="info-value">校园社区</span></div>
-
-            <div class="info-row"><span class="info-label">在线成员</span><span class="info-value" id="rp-online-count">0</span></div>
-
-          </div>
-
-        </div>
-
-
-
-        <!-- Hot topics (mobile avatar-popup; desktop uses right sidebar) -->
-
+        <!-- 移动端 avatar-popup 热门话题（桌面端在右侧边栏，这里仅移动端显示） -->
         <div class="popup-section" id="popup-hot-topics">
 
           <h3 class="popup-title">🔥 热门话题</h3>
 
           <ul class="sidebar-list" id="hot-topics-mobile"></ul>
-
-        </div>
-
-
-
-        <!-- Members -->
-
-        <div class="popup-section" id="panel-members">
-
-          <h3 class="popup-title">👥 成员 <span class="member-count" id="member-count">12</span></h3>
-
-          <div id="avatar-popup-members">
-
-            <!-- Members rendered by JS -->
-
-          </div>
 
         </div>
 
@@ -910,15 +871,27 @@
 
       <h2 class="settings-title">⚙️ 设置</h2>
 
-      <button class="settings-close-btn" id="settings-close-btn" title="关闭">
+      <button class="settings-close-btn" id="settings-close-btn" title="返回">
 
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="20" height="20"><polyline points="15 18 9 12 15 6"/></svg>
 
       </button>
 
     </div>
 
     <div class="settings-body">
+
+      <section class="settings-section">
+
+        <h3 class="settings-section-title">👤 账户与隐私</h3>
+
+        <div class="settings-group settings-account-group">
+
+          <div id="settings-account-card"></div>
+
+        </div>
+
+      </section>
 
       <section class="settings-section">
 
@@ -992,30 +965,6 @@
 
       <section class="settings-section">
 
-        <h3 class="settings-section-title">🔔 通知与消息</h3>
-
-        <div class="settings-row-placeholder">
-
-          <span class="placeholder-text">更多设置，敬请期待...</span>
-
-        </div>
-
-      </section>
-
-      <section class="settings-section">
-
-        <h3 class="settings-section-title">👤 账户与隐私</h3>
-
-        <div class="settings-row-placeholder">
-
-          <span class="placeholder-text">更多设置，敬请期待...</span>
-
-        </div>
-
-      </section>
-
-      <section class="settings-section">
-
         <h3 class="settings-section-title">ℹ️ 关于</h3>
 
         <div class="settings-group">
@@ -1032,7 +981,7 @@
 
             <span class="settings-info-label">版本</span>
 
-            <span class="settings-info-value">v1.2.66</span>
+            <span class="settings-info-value">v1.2.84</span>
 
           </div>
 
@@ -1064,17 +1013,17 @@
 
 
 
-  <script src="../js/lib/gsap.min.js?v=1.2.66" defer></script>
+  <script src="../js/lib/gsap.min.js?v=1.2.92" defer></script>
 
-  <script src="../js/shooting-stars.js?v=1.2.66"></script>
+  <script src="../js/shooting-stars.js?v=1.2.92"></script>
 
-  <script src="../js/main-bg.js?v=1.2.66"></script>
+  <script src="../js/main-bg.js?v=1.2.92"></script>
 
   <!-- InsForge SDK 客户端（ESM，CDN 引入），注入 window.IF 并派发 IF_READY -->
 
-  <script type="module" src="../js/if-client.js?v=1.2.66"></script>
+  <script type="module" src="../js/if-client.js?v=1.2.92"></script>
 
-  <script src="../js/app.js?v=1.2.66" defer></script>
+  <script src="../js/app.js?v=1.2.92" defer></script>
 
   <!-- ════════════════════════════════════════════
        学校介绍弹窗：点击侧栏校徽/校园频道 触发

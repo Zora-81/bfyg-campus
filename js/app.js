@@ -77,6 +77,7 @@
   var channelTitle    = document.getElementById('channel-title');
   var channelDesc     = document.getElementById('channel-desc');
   var messagesArea    = document.getElementById('messages-area');
+  var feedWrapper     = document.getElementById('feed-wrapper');
   var msgInput        = document.getElementById('msg-input');
   var btnSend         = document.getElementById('btn-send');
   var btnAttach       = document.getElementById('btn-attach');
@@ -86,7 +87,6 @@
   var userNameEl      = document.getElementById('user-name');
   var userAvatarEl    = document.getElementById('user-avatar');
   var userTagEl       = document.getElementById('user-tag');
-  var memberCount     = document.getElementById('member-count');
   var togglePw        = document.getElementById('toggle-pw');
   var pinBar       = document.getElementById('pin-bar');
   var pinText      = document.getElementById('pin-text');
@@ -94,8 +94,6 @@
   var annBanner    = document.getElementById('announcement-banner');
   var annContent   = document.getElementById('ann-content');
   var annClose     = document.getElementById('ann-close');
-  var memberRolesContainer = document.getElementById('member-roles-container');
-  var rpOnlineCount = document.getElementById('rp-online-count');
   var scrollBottomBtn = document.getElementById('scroll-bottom-btn');
   var newMsgDot = document.getElementById('new-msg-dot');
   var connectionDot = document.getElementById('connection-dot');
@@ -271,11 +269,7 @@
     IF.connectRealtime(currentChannel.id, {
       onMessage: handleIncomingMessage,
       onDelete: handleIncomingDelete,
-      onRecall: handleIncomingRecall,
-      onPresence: function(members) {
-        var onlineEl = document.getElementById('rp-online-count');
-        if (onlineEl) onlineEl.textContent = (members ? members.length : 0);
-      }
+      onRecall: handleIncomingRecall
     });
     startDeletionSync(); // 启动兜底对账（后台删消息无需刷新即消失）
   }
@@ -766,10 +760,11 @@
     student: { label: '在校学生',   icon: '📚' }
   };
 
-  function renderProfile() {
-    if (!viewProfile) return;
+  function getAccountCardHTML(prefix) {
+    prefix = prefix || '';
+    var p = prefix ? prefix + '-' : '';
     var user = currentUser;
-    if (!user) return;
+    if (!user) return '';
 
     var roleMeta = ROLE_META[user.role] || ROLE_META.student;
     var avatarInner = user.avatar_url
@@ -779,53 +774,58 @@
       ? '<span class="profile-title-badge">✦ '+escapeHtml(user.title)+'</span>'
       : '<span class="profile-title-badge profile-title-empty">未设置称号</span>';
 
-    viewProfile.innerHTML =
-      '<div class="profile-container">'+
-        '<button class="profile-back" id="profile-back">← 返回</button>'+
-        '<div class="profile-card">'+
-          '<div class="profile-avatar-wrap" id="avatar-upload-trigger" title="点击更换头像">'+
-            '<div class="profile-avatar" id="prof-avatar-el" style="background:'+getAvatarColor(user.username)+'">'+avatarInner+'</div>'+
-            '<div class="avatar-camera-overlay"><span>📷</span></div>'+
-            '<input type="file" id="avatar-file-input" accept="image/*" style="display:none;">'+
-          '</div>'+
-          '<h2 class="profile-name">'+escapeHtml(user.nickname||user.username)+'</h2>'+
-          '<p class="profile-username">@'+escapeHtml(user.username)+'</p>'+
-          '<div class="profile-title-row" id="profile-title-row">'+titleBadge+'</div>'+
-          '<p class="profile-bio">'+roleMeta.icon+' '+roleMeta.label+'</p>'+
-
-          '<div class="profile-stats">'+
-            '<div class="profile-stat"><span class="ps-num">'+roleMeta.label.slice(0,3)+'</span><span class="ps-label">身份</span></div>'+
-            '<div class="profile-stat"><span class="ps-num" id="prof-channels">-</span><span class="ps-label">可见频道</span></div>'+
-            '<div class="profile-stat"><span class="ps-num" id="prof-messages">-</span><span class="ps-label">我的消息</span></div>'+
-            '<div class="profile-stat"><span class="ps-num" id="prof-joined">-</span><span class="ps-label">加入天数</span></div>'+
-          '</div>'+
-
-          // 编辑区（默认收起）
-          '<div class="profile-edit" id="profile-edit" style="display:none;">'+
-            '<div class="pe-field"><label>昵称</label>'+
-              '<input type="text" id="pe-nickname" maxlength="20" placeholder="你的昵称" value="'+escapeHtml(user.nickname||'')+'"></div>'+
-            '<div class="pe-field"><label>称号 <span class="pe-hint">可自拟 · 最多12字</span></label>'+
-              '<input type="text" id="pe-title" maxlength="12" placeholder="如：学习委员 / 篮球队长" value="'+escapeHtml(user.title||'')+'"></div>'+
-            '<div class="pe-actions">'+
-              '<button class="profile-btn" id="pe-save">保存</button>'+
-              '<button class="profile-btn profile-btn-outline" id="pe-cancel">取消</button>'+
-            '</div>'+
-            '<div class="pe-msg" id="pe-msg"></div>'+
-          '</div>'+
-
-          '<div class="profile-actions" id="profile-actions">'+
-            '<button class="profile-btn" id="profile-edit-btn">编辑资料</button>'+
-            (user.role === 'admin' ? '<button class="profile-btn profile-btn-outline" id="profile-admin-btn">管理后台</button>' : '')+
-            '<button class="profile-btn profile-btn-outline" id="profile-logout-btn">退出登录</button>'+
-          '</div>'+
+    return (
+      '<div class="profile-card">'+
+        '<div class="profile-avatar-wrap" id="'+p+'avatar-upload-trigger" title="点击更换头像">'+
+          '<div class="profile-avatar" id="'+p+'prof-avatar-el" style="background:'+getAvatarColor(user.username)+'">'+avatarInner+'</div>'+
+          '<div class="avatar-camera-overlay"><span>📷</span></div>'+
+          '<input type="file" id="'+p+'avatar-file-input" accept="image/*" style="display:none;">'+
         '</div>'+
-      '</div>';
+        '<h2 class="profile-name">'+escapeHtml(user.nickname||user.username)+'</h2>'+
+        '<p class="profile-username">@'+escapeHtml(user.username)+'</p>'+
+        '<div class="profile-title-row" id="'+p+'profile-title-row">'+titleBadge+'</div>'+
+        '<p class="profile-bio">'+roleMeta.icon+' '+roleMeta.label+'</p>'+
+
+        '<div class="profile-stats">'+
+          '<div class="profile-stat"><span class="ps-num">'+roleMeta.label.slice(0,3)+'</span><span class="ps-label">身份</span></div>'+
+          '<div class="profile-stat"><span class="ps-num" id="'+p+'prof-channels">-</span><span class="ps-label">可见频道</span></div>'+
+          '<div class="profile-stat"><span class="ps-num" id="'+p+'prof-messages">-</span><span class="ps-label">我的消息</span></div>'+
+          '<div class="profile-stat"><span class="ps-num" id="'+p+'prof-joined">-</span><span class="ps-label">加入天数</span></div>'+
+        '</div>'+
+
+        // 编辑区（默认收起）
+        '<div class="profile-edit" id="'+p+'profile-edit" style="display:none;">'+
+          '<div class="pe-field"><label>昵称</label>'+
+            '<input type="text" id="'+p+'pe-nickname" maxlength="20" placeholder="你的昵称" value="'+escapeHtml(user.nickname||'')+'"></div>'+
+          '<div class="pe-field"><label>称号 <span class="pe-hint">可自拟 · 最多12字</span></label>'+
+            '<input type="text" id="'+p+'pe-title" maxlength="12" placeholder="如：学习委员 / 篮球队长" value="'+escapeHtml(user.title||'')+'"></div>'+
+          '<div class="pe-actions">'+
+            '<button class="profile-btn" id="'+p+'pe-save">保存</button>'+
+            '<button class="profile-btn profile-btn-outline" id="'+p+'pe-cancel">取消</button>'+
+          '</div>'+
+          '<div class="pe-msg" id="'+p+'pe-msg"></div>'+
+        '</div>'+
+
+        '<div class="profile-actions" id="'+p+'profile-actions">'+
+          '<button class="profile-btn" id="'+p+'profile-edit-btn">编辑资料</button>'+
+          (user.role === 'admin' ? '<button class="profile-btn profile-btn-outline" id="'+p+'profile-admin-btn">管理后台</button>' : '')+
+          '<button class="profile-btn profile-btn-outline" id="'+p+'profile-logout-btn">退出登录</button>'+
+        '</div>'+
+      '</div>'
+    );
+  }
+
+  function bindAccountCardEvents(prefix, options) {
+    options = options || {};
+    var p = prefix ? prefix + '-' : '';
+    var user = currentUser;
+    if (!user) return;
 
     // ---- 真实统计 ----
-    var chEl = document.getElementById('prof-channels');
+    var chEl = document.getElementById(p+'prof-channels');
     if (chEl) chEl.textContent = (channels ? channels.length : 0);
 
-    var joinedEl = document.getElementById('prof-joined');
+    var joinedEl = document.getElementById(p+'prof-joined');
     if (joinedEl) {
       var createdAt = user.created_at || (IF && IF.resolveAuthor ? (IF.resolveAuthor(user.id)||{}).created_at : null);
       if (createdAt) {
@@ -835,7 +835,7 @@
     }
 
     // 我的消息数：向后端真实统计（count head 查询，不拉全量）
-    var msgEl = document.getElementById('prof-messages');
+    var msgEl = document.getElementById(p+'prof-messages');
     if (msgEl) {
       if (IF && IF.insforge) {
         IF.insforge.database.from('messages')
@@ -847,15 +847,18 @@
 
     // ---- 事件绑定 ----
     setTimeout(function() {
-      var backBtn = document.getElementById('profile-back');
-      if (backBtn) backBtn.addEventListener('click', backToMain);
+      if (options.backButton) {
+        var backBtn = document.getElementById('profile-back');
+        if (backBtn) backBtn.addEventListener('click', backToMain);
+      }
 
       // ---- 头像上传 ----
-      var avatarTrigger = document.getElementById('avatar-upload-trigger');
-      var avatarInput   = document.getElementById('avatar-file-input');
+      var avatarTrigger = document.getElementById(p+'avatar-upload-trigger');
+      var avatarInput   = document.getElementById(p+'avatar-file-input');
       if (avatarTrigger && avatarInput) {
         avatarTrigger.addEventListener('click', function(e){
           // 防止在编辑模式下点头像误触（编辑模式不换头像）
+          var editBox = document.getElementById(p+'profile-edit');
           if (editBox && editBox.style.display === 'block') return;
           e.stopPropagation();
           avatarInput.click();
@@ -866,7 +869,7 @@
           // 校验
           if (!file.type.startsWith('image/')) { alert('请选择图片文件'); return; }
           if (file.size > 5*1024*1024) { alert('图片不能超过 5MB'); return; }
-          var avatarEl  = document.getElementById('prof-avatar-el');
+          var avatarEl  = document.getElementById(p+'prof-avatar-el');
           var overlayEl = avatarTrigger.querySelector('.avatar-camera-overlay');
           // 本地预览
           var reader = new FileReader();
@@ -883,9 +886,12 @@
             .then(function(result) {
               var url = (result && result.url) || '';
               if (!url) throw new Error('上传未返回URL');
-              return IF.updateMyProfile(currentUser.id, { avatar_url: url });
+              return IF.updateMyProfile(currentUser.id, { avatar_url: url }).then(function() {
+                return { url: url };
+              });
             })
-            .then(function() {
+            .then(function(res) {
+              var url = res.url;
               // 用上传返回的真实 URL（已改写为反代域名），而非本地预览的 data URL
               currentUser.avatar_url = url;
               // 同步更新导航栏头像
@@ -898,31 +904,34 @@
             .catch(function(err) {
               console.error('[avatar] 上传失败', err);
               showToast('头像上传失败：' + ((err && err.message) || '未知错误'), 'error');
-              // 回滚显示
+            })
+            .finally(function() {
+              // 刷新两处账户卡片
               renderProfile();
+              renderSettingsAccount();
             });
           this.value = ''; // 允许重复选同一文件
         });
       }
 
-      var editBtn = document.getElementById('profile-edit-btn');
-      var editBox = document.getElementById('profile-edit');
-      var actionsBox = document.getElementById('profile-actions');
+      var editBtn = document.getElementById(p+'profile-edit-btn');
+      var editBox = document.getElementById(p+'profile-edit');
+      var actionsBox = document.getElementById(p+'profile-actions');
       if (editBtn) editBtn.addEventListener('click', function(){
         if (editBox) editBox.style.display = 'block';
         if (actionsBox) actionsBox.style.display = 'none';
       });
-      var cancelBtn = document.getElementById('pe-cancel');
+      var cancelBtn = document.getElementById(p+'pe-cancel');
       if (cancelBtn) cancelBtn.addEventListener('click', function(){
         if (editBox) editBox.style.display = 'none';
         if (actionsBox) actionsBox.style.display = 'flex';
       });
 
-      var saveBtn = document.getElementById('pe-save');
+      var saveBtn = document.getElementById(p+'pe-save');
       if (saveBtn) saveBtn.addEventListener('click', function(){
-        var nick = (document.getElementById('pe-nickname').value || '').trim();
-        var ttl  = (document.getElementById('pe-title').value || '').trim();
-        var msgBox = document.getElementById('pe-msg');
+        var nick = (document.getElementById(p+'pe-nickname').value || '').trim();
+        var ttl  = (document.getElementById(p+'pe-title').value || '').trim();
+        var msgBox = document.getElementById(p+'pe-msg');
         if (!nick) { if (msgBox){ msgBox.textContent='昵称不能为空'; msgBox.className='pe-msg pe-msg-err'; } return; }
         saveBtn.disabled = true; saveBtn.textContent = '保存中…';
         if (msgBox) { msgBox.textContent=''; msgBox.className='pe-msg'; }
@@ -933,7 +942,9 @@
             // 同步顶部导航头像/名字
             var navName = document.getElementById('user-name');
             if (navName) navName.textContent = nick;
+            showToast('资料已保存 ✅');
             renderProfile();
+            renderSettingsAccount();
           })
           .catch(function(e){
             saveBtn.disabled = false; saveBtn.textContent = '保存';
@@ -941,18 +952,35 @@
           });
       });
 
-      var adminBtn = document.getElementById('profile-admin-btn');
+      var adminBtn = document.getElementById(p+'profile-admin-btn');
       if (adminBtn) adminBtn.addEventListener('click', function() {
         window.location.href = 'admin.html';
       });
 
-      var logoutBtn = document.getElementById('profile-logout-btn');
+      var logoutBtn = document.getElementById(p+'profile-logout-btn');
       if (logoutBtn) logoutBtn.addEventListener('click', function() {
         if (IF) IF.signOut().catch(function(){});
         currentUser = null;
         showLogin();
       });
     }, 60);
+  }
+
+  function renderProfile() {
+    if (!viewProfile) return;
+    viewProfile.innerHTML =
+      '<div class="profile-container">'+
+        '<button class="profile-back" id="profile-back">← 返回</button>'+
+        getAccountCardHTML('')+
+      '</div>';
+    bindAccountCardEvents('', { backButton: true });
+  }
+
+  function renderSettingsAccount() {
+    var card = document.getElementById('settings-account-card');
+    if (!card) return;
+    card.innerHTML = getAccountCardHTML('settings-account');
+    bindAccountCardEvents('settings-account', { backButton: false });
   }
 
   // ==================== CHANNELS ====================
@@ -992,7 +1020,7 @@
         case 'bounce':
           gsap.fromTo(item,
             { scale: 0.82, opacity: 0.5 },
-            { scale: 1, opacity: 1, duration: 0.55, ease: 'elastic.out(1, 0.35)' }
+            { scale: 1, opacity: 1, duration: 0.55, ease: 'elastic.out(1, 0.35)', clearProps: 'scale,opacity' }
           );
           var ripple = document.createElement('div');
           ripple.style.cssText = 'position:absolute;inset:-4px;border-radius:12px;border:2px solid rgba(124,92,252,0.4);pointer-events:none;';
@@ -1069,16 +1097,12 @@
 
   function applyChannelCard(ch){
     var card = document.getElementById('nav-channel-card');
-    var glow = document.getElementById('ch-card-glow');
     if(!card || !ch) return;
     var key = chHeroMap[ch.name] || 'chat';
     card.setAttribute('data-ch', key);
-    if(_reduceMotion) { if(glow) glow.style.opacity = '0.55'; return; }
     try {
       gsap.fromTo(card, {backgroundColor:'rgba(255,255,255,0.05)'}, {backgroundColor:'', duration:0.5, ease:'power2.out', clearProps:'backgroundColor'});
-    } catch(e) {
-      if(glow) glow.style.opacity = '0.55';
-    }
+    } catch(e) {}
   }
 
   function renderChannels(){
@@ -1096,14 +1120,13 @@
     groups.announcement.forEach(function(ch){
       var item=document.createElement('div');
       var isActive = currentChannel && currentChannel.id === ch.id;
-      item.className='ch-item ch-notice'+(isActive?' active':''); item.dataset.channel=ch.id;
+      item.className='ch-item ch-notice'+(isActive?' active':''); item.dataset.channel=ch.id; item.dataset.name=ch.name;
       item.innerHTML='<span class="ch-icon '+(chIconMap[ch.name]||'')+'"></span><span class="ch-name">'+escapeHtml(ch.name)+'</span>';
       item.addEventListener('click',function(){
         switchChannel(ch);
         playChannelAnim(this, chAnimMap[ch.name]||'bounce');
       });
       sidebarChannels.appendChild(item);
-      if(isActive) playChannelAnim(item, chAnimMap[ch.name]||'bounce');
     });
 
     // ═══ 交流频道 — 可折叠 ═══
@@ -1117,14 +1140,13 @@
       groups.public.forEach(function(ch){
         var item=document.createElement('div');
         var isActive = currentChannel && currentChannel.id === ch.id;
-        item.className='ch-item'+(isActive?' active':''); item.dataset.channel=ch.id;
+        item.className='ch-item'+(isActive?' active':''); item.dataset.channel=ch.id; item.dataset.name=ch.name;
         item.innerHTML='<span class="ch-icon '+(chIconMap[ch.name]||'')+'"></span><span class="ch-name">'+escapeHtml(ch.name)+'</span>';
         item.addEventListener('click',function(){
           switchChannel(ch);
           playChannelAnim(this, chAnimMap[ch.name]||'bounce');
         });
         list.appendChild(item);
-        if(isActive) playChannelAnim(item, chAnimMap[ch.name]||'bounce');
       });
       catDiv.appendChild(title); catDiv.appendChild(list); sidebarChannels.appendChild(catDiv);
     }
@@ -1132,7 +1154,17 @@
     // 入场交错动画
     var allItems = sidebarChannels.querySelectorAll('.ch-item');
     if (allItems.length > 0) {
-      try { gsap.fromTo(allItems, {opacity:0,x:-20}, {opacity:1,x:0,duration:0.4,stagger:0.08,ease:'power2.out',overwrite:true}); } catch(e){}
+      try {
+        gsap.fromTo(allItems, {opacity:0,x:-20}, {opacity:1,x:0,duration:0.4,stagger:0.08,ease:'power2.out',overwrite:true,
+          onComplete:function(){
+            // 入场动画结束后，再对当前 active 频道播放强调动画（避免被 overwrite 中断导致 transform 残留）
+            var act = sidebarChannels.querySelector('.ch-item.active');
+            if (act && act.dataset.name) {
+              try { playChannelAnim(act, chAnimMap[act.dataset.name]||'bounce'); } catch(e){}
+            }
+          }
+        });
+      } catch(e){}
     }
   }
 
@@ -1376,7 +1408,9 @@
 
   function switchChannel(ch, onAfterRender){
     var prevChannel = currentChannel; // 切换前频道，用于缓存/订阅判断
+    hideLoadMoreSpinner(); // 切换频道时清掉可能残留的加载转圈
     renderWinEnd = RENDER_WIN; // 进入频道重置渲染窗口（pendingJumpMsgId 由调用方在 switchChannel 前设置）
+    _noMoreOlder = false; _olderOffset = 0; // 重置分页状态（加载更多是真实网络请求）
     // Mark previous as read
     if (prevChannel && prevChannel.id !== ch.id) {
       lastReadTimestamps[prevChannel.id] = Date.now();
@@ -1403,24 +1437,53 @@
     if (prevChannel && prevChannel.id === ch.id) {
       // 已在目标频道：若目标消息不在当前 DOM（窗口外），先扩展窗口重渲染；否则零重渲染直接定位
       if (pendingJumpMsgId && messagesArea && !messagesArea.querySelector('.msg-group[data-msg-id="'+pendingJumpMsgId+'"]')) {
-        renderMessages(); // 内部会清空 pendingJumpMsgId
+        renderMessages({ animate: false }); // 内部会清空 pendingJumpMsgId
       } else {
         pendingJumpMsgId = null; // 目标已在 DOM，手动清空，避免污染后续渲染
       }
       if (typeof onAfterRender === 'function') { try { onAfterRender(); } catch (e) {} }
+    } else if (pendingJumpMsgId) {
+      // 跳转目标可能很旧：强制走网络拉取（更大窗口 200）确保目标在首批，期间显示频道专属骨架屏
+      showMessageSkeleton();
+      IF.getMessages(ch.id, { offset: 0, limit: 200 }).then(function(list){
+        list = list || [];
+        channelMessages[ch.id] = list.slice().reverse(); // newest-first → oldest-first
+        _olderOffset = 200;
+        _noMoreOlder = list.length < 200;
+        var ids = list.map(function(m){ return m.id; });
+        var afterAgg = function(){
+          renderMessages({ animate: true });
+          if (messagesArea) { messagesArea.scrollTop = 0; }
+          hideScrollBtn();
+          if (typeof onAfterRender === 'function') { try { onAfterRender(); } catch(e){} }
+        };
+        if (ids.length && currentUser && IF.getLikeAggregates) {
+          IF.getLikeAggregates(ids, currentUser.id).then(function(agg){
+            likeAgg = agg || {};
+            for (var mid in likeAgg){ if (likeAgg.hasOwnProperty(mid) && likeAgg[mid].mine && likeAgg[mid].total<=0) likeAgg[mid].total=1; }
+            afterAgg();
+          }).catch(function(){ likeAgg={}; afterAgg(); });
+        } else { likeAgg={}; afterAgg(); }
+      }).catch(function(){
+        renderMessages({ animate: true });
+        if (typeof onAfterRender === 'function') { try { onAfterRender(); } catch(e){} }
+      });
     } else if (channelMessages[ch.id] && channelMessages[ch.id].length) {
-      // 缓存命中：跳过网络拉取，直接复用已加载消息渲染
-      renderMessages();
+      // 缓存命中：跳过网络拉取，直接复用已加载消息渲染（首屏 3D 翻转入场）
+      renderMessages({ animate: true });
       hideScrollBtn();
       if (typeof onAfterRender === 'function') { try { onAfterRender(); } catch (e) {} }
     } else {
-      // 首次加载：拉取消息 + 点赞聚合
+      // 首次加载：分页拉取（不一次性全拉）→ 真实网络请求，期间显示频道专属骨架屏
       showMessageSkeleton();
-      IF.getMessages(ch.id).then(function(list) {
-        channelMessages[ch.id] = list || [];
-        var ids = (list || []).map(function(m){ return m.id; });
+      IF.getMessages(ch.id, { offset: 0, limit: RENDER_WIN }).then(function(list) {
+        list = list || [];
+        channelMessages[ch.id] = list.slice().reverse(); // newest-first → oldest-first
+        _olderOffset = RENDER_WIN;
+        _noMoreOlder = list.length < RENDER_WIN;
+        var ids = list.map(function(m){ return m.id; });
         var afterAgg = function() {
-          renderMessages();
+          renderMessages({ animate: true }); // 首屏 3D 翻转入场
           if (messagesArea) { messagesArea.scrollTop = 0; } // 进入频道停在顶部，自然一些
           hideScrollBtn();
           if (typeof onAfterRender === 'function') {
@@ -1444,7 +1507,7 @@
           afterAgg();
         }
       }).catch(function() {
-        renderMessages();
+        renderMessages({ animate: true });
         if (typeof onAfterRender === 'function') { try { onAfterRender(); } catch (e) {} }
       });
     }
@@ -1921,12 +1984,21 @@
     if (newNode) animateTimeChars(newNode);
   }
 
-  var RENDER_WIN = 80;           // 单次渲染消息上限，避免大频道全量重建 DOM 卡顿
+  var RENDER_WIN = 15;           // 首屏渲染消息条数（点频道进入时，远小于全量避免卡顿）
+  var RENDER_BATCH = 15;         // 滚动到底自动加载「更早消息」每批条数
   var renderWinEnd = RENDER_WIN; // 当前已渲染到（从最新起的条数）
   var pendingJumpMsgId = null;   // 跳转到指定消息时，renderMessages 需把它纳入渲染窗口
+  var _noMoreOlder = false;    // 已无更早消息（服务端分页拉取到底）
+  var _olderOffset = 0;        // 下一次「加载更早」的服务端分页 offset
+  var _loadingEarlier = false;   // 防止滚动监听重入
+  var _prevRenderedEnd = 0;      // 上一次已渲染到的位置，用于标记「本批新增」做滑入动画
 
-  function renderMessages(){
+  function renderMessages(opts){
+    opts = opts || {};
+    var doAnimate = opts.animate !== false;   // 默认 true；切换频道首屏置 false 消除「卡住才跳」观感
+    var restoreScroll = !!opts.restoreScroll; // 加载更多时恢复滚动位置（避免全量重建弹回顶部）
     if(!messagesArea) return;
+    var _prevScrollTop = messagesArea.scrollTop; // 重建前记录，restoreScroll 时还原
     // 销毁骨架屏动画（消息加载完毕后）
     if (_skeletonTL) { _skeletonTL.kill(); _skeletonTL = null; }
     var msgs = channelMessages[currentChannel ? currentChannel.id : ''] || [];
@@ -1977,53 +2049,50 @@
     var renderCount = Math.min(renderWinEnd, dispMsgs.length);
     for (var _i=0; _i<renderCount; _i++){
       var node = buildMessageGroup(dispMsgs[_i]);
-      if (node) messagesArea.appendChild(node);
+      if (node) {
+        if (_i >= _prevRenderedEnd) node.classList.add('msg-new'); // 本批新增，仅这些做滑入
+        messagesArea.appendChild(node);
+      }
     }
-    // 仍有更早消息：底部「加载更早」按钮（纯前端分页，数据已在缓存中，无后端开销）
-    if (renderCount < dispMsgs.length) {
-      var _more = document.createElement('div');
-      _more.className = 'load-earlier';
-      _more.textContent = '↑ 加载更早消息';
-      _more.addEventListener('click', function(){
-        renderWinEnd = Math.min(dispMsgs.length, renderWinEnd + RENDER_WIN);
-        renderMessages();
-      });
-      messagesArea.appendChild(_more);
-    }
+    // 是否还有更早消息由服务端分页返回长度决定（_noMoreOlder），不再依赖本地总数
+    // （原底部「加载更早」按钮已移除：改为滚动到底自动加载）
     pendingJumpMsgId = null; // 消费后清空，避免影响后续渲染
 
     // Auto-scroll only if already at top（倒序流：最新在最顶，跟随顶部）；跳转时跳过，交给 onAfterRender 定位
-    if (!jumping && isNearTop()) {
+    // 加载更多（restoreScroll）时用户停在底部看历史，不强制滚回顶部
+    if (!restoreScroll && !jumping && isNearTop()) {
       messagesArea.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
     // GSAP：消息交错进场（stagger）—— 用 fromTo 显式终点 opacity:1 + clearProps 兜底，绝不留在 opacity:0
-    if (typeof gsap !== 'undefined' && !REDUCED_MOTION) {
-      var groups = messagesArea.querySelectorAll('.msg-group');
+    if (doAnimate && typeof gsap !== 'undefined' && !REDUCED_MOTION) {
+      // 3D 翻转入场：消息卡片沿 X 轴翻入（唯一入场风格，首屏与加载更多均使用）
+      var groups = messagesArea.querySelectorAll(restoreScroll ? '.msg-group.msg-new' : '.msg-group');
       if (groups.length) {
         gsap.killTweensOf(groups);
         gsap.fromTo(groups,
-          { y: 14, opacity: 0 },
-          { y: 0, opacity: 1, duration: 0.42, ease: 'power3.out',
-            stagger: { each: 0.04, start: 0.05 },
+          { rotationX: -88, opacity: 0, transformPerspective: 800, transformOrigin: 'center top' },
+          { rotationX: 0, opacity: 1, duration: 0.55, ease: 'power3.out',
+            stagger: { each: 0.05, start: 0.04 },
             clearProps: 'opacity,transform' });  // 动画结束清 inline，回 CSS 默认(可见)
       }
-      // 欢迎卡片轻微弹入（更精致）
-      var wc = messagesArea.querySelector('.welcome-card');
-      if (wc) {
-        gsap.killTweensOf(wc);
-        gsap.fromTo(wc, { opacity: 0, y: -10, scale: 0.96 },
-          { opacity: 1, y: 0, scale: 1, duration: 0.5, ease: 'back.out(1.6)', clearProps: 'opacity,transform' });
-      }
-      // 发送时间字符逐显：历史消息加载时也逐个淡入，避免只有新消息才有动效
-      var timeChars = messagesArea.querySelectorAll('.msg-time-char');
-      if (timeChars.length) {
-        gsap.killTweensOf(timeChars);
-        gsap.fromTo(timeChars,
-          { opacity: 0, y: 5 },
-          { opacity: 1, y: 0, duration: 0.3, ease: 'power2.out',
-            stagger: { each: 0.02, start: 0.08 },
-            clearProps: 'opacity,transform' });
+      // 欢迎卡片 / 时间字符仅在非「加载更多」时淡入，避免历史批次逐字重闪
+      if (!restoreScroll) {
+        var wc = messagesArea.querySelector('.welcome-card');
+        if (wc) {
+          gsap.killTweensOf(wc);
+          gsap.fromTo(wc, { opacity: 0, y: -10, scale: 0.96 },
+            { opacity: 1, y: 0, scale: 1, duration: 0.5, ease: 'back.out(1.6)', clearProps: 'opacity,transform' });
+        }
+        var timeChars = messagesArea.querySelectorAll('.msg-time-char');
+        if (timeChars.length) {
+          gsap.killTweensOf(timeChars);
+          gsap.fromTo(timeChars,
+            { opacity: 0, y: 5 },
+            { opacity: 1, y: 0, duration: 0.3, ease: 'power2.out',
+              stagger: { each: 0.02, start: 0.08 },
+              clearProps: 'opacity,transform' });
+        }
       }
     }
     // 更新右侧边栏（消息变化后刷新热点）
@@ -2038,6 +2107,10 @@
         renderCommentList(sec, rMsg);
       }
     });
+    // 加载更多（restoreScroll）：恢复滚动位置，避免全量重建弹回顶部
+    if (restoreScroll) { messagesArea.scrollTop = _prevScrollTop; }
+    // 记录本次已渲染到的位置，供下一批标记「新增」做滑入动画
+    _prevRenderedEnd = renderCount;
   }
 
   // ── 浏览量模拟（纯前端，基于时间衰减）──
@@ -2861,8 +2934,12 @@
         if (window.IF) {
           IF.moderateMessage(msg).then(function (res) {
             if (res && res.violation && currentChannel && currentChannel.id) {
-              IF.getMessages(currentChannel.id).then(function (list) {
-                channelMessages[currentChannel.id] = list || [];
+              IF.getMessages(currentChannel.id, { offset: 0, limit: 500 }).then(function (list) {
+                list = list || [];
+                channelMessages[currentChannel.id] = list.slice().reverse(); // newest-first → oldest-first
+                renderWinEnd = list.length;
+                _olderOffset = Math.min(500, list.length);
+                _noMoreOlder = list.length < 500;
                 if (!parentId) {
                   renderMessages(); // renderMessages 末尾已按 nearBottom 平滑跟随，不再硬跳
                 } else {
@@ -3520,7 +3597,12 @@
         })
         .catch(function(err) {
           var raw = (err && (err.message || err.error_description || err.msg || String(err))) || '加好友失败';
-          if (typeof showToast === 'function') showToast(raw, 'error', 3000);
+          var msg = raw, kind = 'error', ms = 3000;
+          // RPC 返回 {ok:false,error:'exists'|'self'|'noauth'} 时翻译成人话，便于定位
+          if (raw.indexOf('exists') !== -1) { msg = '已向该用户发送过申请，等待对方通过'; kind = 'info'; ms = 2600; }
+          else if (raw.indexOf('self') !== -1) { msg = '不能添加自己为好友'; }
+          else if (raw.indexOf('noauth') !== -1) { msg = '登录已失效，请重新登录后再试'; }
+          if (typeof showToast === 'function') showToast(msg, kind, ms);
         })
         .then(function() { if (friendAddBtn) friendAddBtn.disabled = false; });
     }
@@ -3824,6 +3906,35 @@
     if (newMsgDot) newMsgDot.classList.remove('show');
   }
 
+  // ── 加载更多：按频道专属主题的转圈动画（复用 chSkeletonMap）──
+  var loadMoreSpinnerEl = null;
+  function loadMoreSkeletonType() {
+    return (currentChannel && chSkeletonMap[currentChannel.name]) ? chSkeletonMap[currentChannel.name] : 'default';
+  }
+  function loadMoreSpinnerInner(type) {
+    switch (type) {
+      case 'notice': return '<span class="ls-dot"></span><span class="ls-dot"></span><span class="ls-dot"></span>';
+      case 'study':  return '<div class="ls-book"></div>';
+      case 'life':   return '<div class="ls-wave"><i></i><i></i><i></i></div>';
+      case 'general':return '<div class="ls-sound"><i></i><i></i><i></i><i></i><i></i></div>';
+      case 'anime':  return '<div class="ls-rainbowstar">&#10022;</div>';
+      default:       return '<div class="ls-ring"></div>';
+    }
+  }
+  function showLoadMoreSpinner() {
+    if (!feedWrapper || loadMoreSpinnerEl) return;
+    var t = loadMoreSkeletonType();
+    var el = document.createElement('div');
+    el.className = 'load-more-spinner ls-' + t;
+    el.innerHTML = loadMoreSpinnerInner(t);
+    feedWrapper.appendChild(el);
+    loadMoreSpinnerEl = el;
+  }
+  function hideLoadMoreSpinner() {
+    if (loadMoreSpinnerEl && loadMoreSpinnerEl.parentNode) loadMoreSpinnerEl.parentNode.removeChild(loadMoreSpinnerEl);
+    loadMoreSpinnerEl = null;
+  }
+
   if(messagesArea){
     messagesArea.addEventListener('scroll', function(){
       // 倒序流：滚回顶部（看到最新）即隐藏"回到顶部"按钮
@@ -3833,6 +3944,46 @@
           unreadCounts[currentChannel.id] = 0;
           updateChannelBadges();
         }
+      }
+      // ── 滚动到底部自动加载更早消息（倒序流：底=更早）── 仅在有真实网络请求时显示频道专属转圈
+      if (_loadingEarlier || _noMoreOlder) return;
+      var nearBottom = messagesArea.scrollTop + messagesArea.clientHeight >= messagesArea.scrollHeight - 160;
+      if (nearBottom && currentChannel) {
+        _loadingEarlier = true;
+        // 仅当真实网络请求超过 250ms 才显示转圈；快请求（Worker/CDN 缓存）直接渲染，保持顺滑、不硬塞
+        var _spinnerTimer = setTimeout(showLoadMoreSpinner, 250);
+        IF.getMessages(currentChannel.id, { offset: _olderOffset, limit: RENDER_BATCH }).then(function(batch){
+          clearTimeout(_spinnerTimer); // 请求已返回：取消可能未触发的转圈
+          batch = batch || [];
+          var finish = function(){
+            if (batch.length) {
+              var older = batch.slice().reverse();          // newest-first → oldest-first
+              var arr = channelMessages[currentChannel.id] || [];
+              channelMessages[currentChannel.id] = older.concat(arr); // 更旧拼到前面（倒序流落底部）
+              var newTop = batch.filter(function(m){ return !m.parent_id; }).length;
+              var totalTop = channelMessages[currentChannel.id].filter(function(m){ return !m.parent_id; }).length;
+              renderWinEnd = Math.min(renderWinEnd + newTop, totalTop);
+              _prevRenderedEnd = renderWinEnd - newTop;     // 仅本批更早消息做 3D 翻入
+              _olderOffset += batch.length;
+              renderMessages({ animate: true, restoreScroll: true });
+            }
+            if (batch.length < RENDER_BATCH) _noMoreOlder = true;
+            hideLoadMoreSpinner();
+            _loadingEarlier = false;
+          };
+          // 聚合这批更早消息的点赞，避免更早消息点赞数显示为 0
+          var ids = batch.map(function(m){ return m.id; });
+          if (ids.length && currentUser && IF.getLikeAggregates) {
+            IF.getLikeAggregates(ids, currentUser.id).then(function(agg){
+              if (agg) { for (var k in agg) { if (agg.hasOwnProperty(k)) likeAgg[k] = agg[k]; } }
+              finish();
+            }).catch(finish);
+          } else { finish(); }
+        }).catch(function(){
+          clearTimeout(_spinnerTimer);
+          hideLoadMoreSpinner();
+          _loadingEarlier = false;
+        });
       }
     });
   }
@@ -3958,8 +4109,6 @@
         gsap.fromTo(avatarPopupOverlay, {autoAlpha:0}, {autoAlpha:1, duration:0.28});
       }
     }
-    // 加载成员列表到弹窗
-    loadMembersToPopup();
     loadFriendsToPopup();
     updatePopupUserCard();
   }
@@ -4189,27 +4338,6 @@
         avatarEl.style.background = getAvatarColor(currentUser.username);
       }
     }
-  }
-
-  // 将成员列表渲染进头像弹窗
-  function loadMembersToPopup(){
-    if(!avatarPopup) return;
-    var listEl = avatarPopup.querySelector('#avatar-popup-members');
-    if(!listEl) return;
-    var members = getChannelMembers();
-    if(!members || members.length === 0){
-      listEl.innerHTML = '<div class="popup-empty">暂无成员</div>';
-      return;
-    }
-    listEl.innerHTML = '';
-    members.slice(0, 50).forEach(function(m){
-      var item = document.createElement('div');
-      item.className = 'popup-member';
-      item.innerHTML =
-        '<div class="popup-member-avatar" style="background:'+getAvatarColor(m.username)+'">'+getInitial(m.nickname||m.username)+'</div>'+
-        '<span class="popup-member-name">'+escapeHtml(m.nickname||m.username)+'</span>';
-      listEl.appendChild(item);
-    });
   }
 
   // 移动端键盘弹出后，确保消息输入框可见
@@ -4679,11 +4807,11 @@
       settingsOverlay.classList.add('active');
       settingsPanel.classList.add('open');
       document.body.style.overflow = 'hidden';
-      // GSAP entrance
+      // GSAP entrance：整屏从右滑入，像切换独立页面
       if (typeof gsap !== 'undefined') {
         gsap.fromTo(settingsPanel,
-          { x: 60 },
-          { x: 0, duration: 0.35, ease: 'expo.out' }
+          { x: '100%' },
+          { x: '0%', duration: 0.35, ease: 'expo.out' }
         );
         gsap.fromTo(settingsOverlay,
           { opacity: 0 },
@@ -4700,6 +4828,8 @@
       }
       // Init background settings within panel (mirror logic)
       initSettingsBackground();
+      // 渲染账户资料卡片到设置页
+      renderSettingsAccount();
     }
 
     function closeSettings() {
