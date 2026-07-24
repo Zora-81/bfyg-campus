@@ -1,0 +1,15 @@
+# 统一换行符，避免 Windows/Linux 混用导致无意义 diff
+* text=auto
+
+# 二进制资源（不合并 diff）
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.mp4 binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary

@@ -48,3 +48,11 @@ nul
 .roo
 .trae
 .windsurf
+
+# 本地生成 / 工作产物（不入库）
+campus-promo/            # Remotion 宣传视频生成器（源码本地保留，不公开）
+video/capture/           # 视频抓帧工作目录
+*.log
+.DS_Store
+Thumbs.db
+desktop.ini
