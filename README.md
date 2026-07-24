@@ -81,3 +81,13 @@ cd worker && wrangler deploy
 
 - 进行中方案：`docs/plans/`
 - 过期归档：`docs/archive/`
+
+## 许可证
+
+[MIT](LICENSE)
+
+## 备注
+
+- `campus-promo/` 为 Remotion 宣传视频生成器，源码本地保留、**不纳入本仓库**。
+- 渲染产物（`web_build/`、`campus-promo/out/`、`video/capture/`）均由脚本生成，不入库。
+- 部署依赖 `CLOUDFLARE_API_TOKEN`（不入库，通过环境变量注入，详见部署章节）。

@@ -255,13 +255,18 @@ async function listChannels() {
   return data
 }
 
-async function getMessages(channelId) {
+async function getMessages(channelId, opts) {
+  opts = opts || {}
+  const offset = opts.offset || 0
+  const limit = opts.limit || 15
   const { data, error } = await insforge.database
     .from('messages').select('*')
     .eq('channel_id', channelId)
-    .order('created_at', { ascending: true }).limit(500)
+    .is('parent_id', null) // 只拉顶层消息；回复/评论在各自评论区展开，避免 15 条限额被回复挤占
+    .order('created_at', { ascending: false })
+    .range(offset, offset + limit - 1)
   if (error) throw error
-  return data
+  return data || []
 }
 
 async function sendMessage(channelId, content, authorId, parentId) {
@@ -413,6 +418,9 @@ async function friendRequest(friendId) {
   const { data, error } = await insforge.database
     .rpc('create_friend_request', { p_friend_id: friendId })
   if (error) throw error
+  // 业务层可能返回 {ok:false,...}（重复申请/加自己/noauth），PostgREST 仍视为 200，
+  // 必须显式检查，否则前端会误判成功假弹“已发送”。
+  if (data && data.ok === false) throw new Error('好友申请失败：' + (data.error || 'unknown'))
   return data
 }
 
@@ -421,6 +429,7 @@ async function friendRespond(id, action) {
   const { data, error } = await insforge.database
     .rpc('respond_friend_request', { p_friendship_id: id, p_action: action })
   if (error) throw error
+  if (data && data.ok === false) throw new Error('操作失败：' + (data.error || 'unknown'))
   return data
 }
 
@@ -429,6 +438,7 @@ async function friendRemove(id) {
   const { data, error } = await insforge.database
     .rpc('remove_friend', { p_friend_id: id })
   if (error) throw error
+  if (data && data.ok === false) throw new Error('移除失败：' + (data.error || 'unknown'))
   return data
 }
 

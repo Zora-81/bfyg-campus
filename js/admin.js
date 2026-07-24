@@ -591,6 +591,12 @@
         }
       });
     });
+    document.getElementById('btn-batch-overturn').addEventListener('click', function () {
+      var selected = getSelectedPostIds();
+      if (selected.length === 0) { showToast('请先选择帖子', 'info'); return; }
+      if (!confirm('确认撤回 ' + selected.length + ' 条 AI 误判？将清除待审标记、恢复消息、扣回警告并通知用户。')) return;
+      batchOverturn(selected);
+    });
     loadPostChannels();
     loadPostsData(true);
     loadFlaggedPosts();
@@ -715,6 +721,172 @@
     }).catch(function () {});
   }
 
+  // 撤回审核：AI 误判纠错。服务端 RPC overturn_moderation 一次性完成
+  // 清待审标记 + 删机器人警告评论 + 扣回 warning_count + 给用户发通知（均绕过 RLS）
+  function overturnPost(pid, cb) {
+    db().rpc('overturn_moderation', { p_message_id: pid }).then(function (r) {
+      if (r.error) { showToast('撤回失败：' + (r.error.message || ''), 'error'); if (cb) cb(false); return; }
+      if (cb) cb(true);
+    }).catch(function (e) { showToast('撤回异常：' + ((e && e.message) || ''), 'error'); if (cb) cb(false); });
+  }
+  function batchOverturn(ids) {
+    var done = 0, ok = 0;
+    ids.forEach(function (pid) {
+      overturnPost(pid, function (success) {
+        done++; if (success) ok++;
+        if (done === ids.length) {
+          showToast('已撤回 ' + ok + '/' + ids.length + ' 条误判', ok === ids.length ? 'success' : 'info');
+          document.getElementById('post-select-all').checked = false;
+          setTimeout(loadFlaggedPosts, 400);
+        }
+      });
+    });
+  }
+
+  // 标记已审（可复用：行内按钮 / 详情弹窗）
+  function approvePost(pid, cb) {
+    db().from('messages').update({ reviewed: true }).eq('id', pid).then(function (r) {
+      if (r.error) { showToast('操作失败：' + (r.error.message || ''), 'error'); if (cb) cb(false); return; }
+      showToast('已标记为已审核', 'success');
+      logAdmin('approve', '标记已审', pid);
+      if (cb) cb(true);
+      setTimeout(loadFlaggedPosts, 400);
+    });
+  }
+  // 删除帖子（可复用：行内按钮 / 详情弹窗）
+  function deletePost(pid, cb) {
+    var p = findPostInState(pid);
+    db().from('messages').delete().eq('id', pid).then(function (r) {
+      if (r.error) { showToast('删除失败：' + (r.error.message || ''), 'error'); if (cb) cb(false); return; }
+      showToast('已删除', 'success');
+      logAdmin('reject', '删除帖子', pid);
+      try { db().from('messages').delete().eq('parent_id', pid); } catch (e) {} // 级联删子回复（DB）
+      purgePostsFromState([pid]); // 本地立即摘除（无需刷新）
+      if (p && p.channel_id) IF.publishDelete(p.channel_id, pid); // 实时广播，用户界面秒消失
+      if (cb) cb(true);
+    });
+  }
+
+  // 帖子详情：查看完整消息 + AI 判定理由 + 上下文（原消息/回复），辅助管理员判断
+  function openPostDetail(pid) {
+    var p = findPostInState(pid);
+    if (!p) { showToast('找不到该消息', 'info'); return; }
+    var api = db();
+    var parentP = p.parent_id
+      ? api.from('messages').select('id,content,content_type,created_at,author_id,channel_id').eq('id', p.parent_id).eq('is_mod', false).single()
+      : Promise.resolve({ data: null });
+    var repliesP = api.from('messages').select('id,content,content_type,created_at,author_id').eq('parent_id', pid).eq('is_mod', false).order('created_at', { ascending: true });
+    var botP = api.from('messages').select('content,created_at').eq('parent_id', pid).eq('is_mod', true).order('created_at', { ascending: true });
+    Promise.all([parentP, repliesP, botP]).then(function (res) {
+      renderPostDetail(p, (res[0] && res[0].data) || null, (res[1] && res[1].data) || [], (res[2] && res[2].data) || []);
+    }).catch(function () {
+      renderPostDetail(p, null, [], []);
+    });
+  }
+
+  function renderPostDetail(p, parent, replies, bots) {
+    var overlay = document.getElementById('post-detail-modal-overlay');
+    var titleEl = document.getElementById('post-detail-title');
+    var bodyEl = document.getElementById('post-detail-body');
+    var actionsEl = document.getElementById('post-detail-actions');
+    if (!overlay || !bodyEl) return;
+
+    var chName = channelMap[p.channel_id] || ('频道' + p.channel_id);
+    var author = p.nickname || p.username || '未知';
+    titleEl.textContent = '#' + chName + ' · ' + author;
+
+    var reasonText = (bots && bots.length)
+      ? bots.map(function (b) { return b.content || ''; }).join('\n')
+      : (p.mod_reason || p._childReason || '');
+    var isFlagged = state.postView === 'flagged';
+
+    var html = '';
+    // 状态条
+    var statusBadge = p.reviewed ? '<span class="badge badge-default">已审</span>' : '<span class="badge badge-warning">待审</span>';
+    if (p.mod_overturned) statusBadge += ' <span class="badge badge-undo">已撤回</span>';
+    html += '<div class="pd-status-row">' + statusBadge + '</div>';
+
+    // 原消息（若是回复）
+    if (parent) {
+      var pa = profileMap[parent.author_id];
+      var paName = pa ? (pa.nickname || pa.username || '未知') : '未知';
+      html += '<div class="pd-section-label">原消息</div>' +
+        '<div class="pd-ctx-card"><div class="pd-ctx-meta">' + esc(paName) + ' · ' + esc(formatFull(parent.created_at)) + '</div>' +
+        '<div class="pd-content">' + esc(parent.content || '') + '</div></div>';
+    }
+
+    // 完整消息正文（不截断）
+    html += '<div class="pd-section-label">消息内容</div>' +
+      '<div class="pd-content pd-main">' + esc(p.content || '（空）') + '</div>';
+
+    // AI 判定理由
+    if (reasonText) {
+      html += '<div class="pd-section-label">AI 判定理由</div>' +
+        '<div class="pd-reason">' + esc(reasonText) + '</div>';
+    }
+
+    // 回复列表
+    if (replies && replies.length) {
+      html += '<div class="pd-section-label">回复（' + replies.length + '）</div>';
+      replies.forEach(function (rp) {
+        var ra = profileMap[rp.author_id];
+        var raName = ra ? (ra.nickname || ra.username || '未知') : '未知';
+        html += '<div class="pd-ctx-card"><div class="pd-ctx-meta">' + esc(raName) + ' · ' + esc(formatFull(rp.created_at)) + '</div>' +
+          '<div class="pd-content">' + esc(rp.content || '') + '</div></div>';
+      });
+    }
+
+    // 元数据
+    html += '<div class="pd-section-label">元数据</div>' +
+      '<div class="pd-meta-grid">' +
+        metaItem('频道', '#' + esc(chName)) +
+        metaItem('类型', esc(p.content_type || 'text')) +
+        metaItem('发布时间', esc(formatFull(p.created_at))) +
+        metaItem('分类', esc(p.mod_category || '—')) +
+        metaItem('严重度', esc(String(p.mod_severity != null ? p.mod_severity : '—'))) +
+        metaItem('作者ID', esc(p.author_id || '—')) +
+      '</div>';
+
+    bodyEl.innerHTML = html;
+
+    // 动作按钮：仅未审核的待审消息显示 标记已审/撤回审核
+    actionsEl.innerHTML = '';
+    if (isFlagged && !p.reviewed) {
+      var bApp = document.createElement('button');
+      bApp.className = 'btn-primary btn-sm';
+      bApp.textContent = '标记已审';
+      bApp.addEventListener('click', function () { approvePost(p.id, function () { closePostDetail(); }); });
+      var bOver = document.createElement('button');
+      bOver.className = 'btn-undo btn-sm';
+      bOver.textContent = '撤回审核';
+      bOver.addEventListener('click', function () {
+        if (!confirm('确认撤回该 AI 误判？将清除待审标记、恢复消息、扣回警告并通知用户。')) return;
+        overturnPost(p.id, function (success) {
+          if (success) { showToast('已撤回审核并通知用户', 'success'); logAdmin('overturn', '撤回审核（AI误判）', p.id, p.author_id); closePostDetail(); }
+        });
+      });
+      actionsEl.appendChild(bApp);
+      actionsEl.appendChild(bOver);
+    }
+    var bDel = document.createElement('button');
+    bDel.className = 'btn-danger btn-sm';
+    bDel.textContent = '删除';
+    bDel.addEventListener('click', function () {
+      if (!confirm('确认删除此帖子？此操作不可恢复！')) return;
+      deletePost(p.id, function () { closePostDetail(); });
+    });
+    actionsEl.appendChild(bDel);
+
+    overlay.classList.add('active');
+  }
+  function metaItem(k, v) {
+    return '<div class="pd-meta-item"><div class="pd-meta-k">' + k + '</div><div class="pd-meta-v">' + v + '</div></div>';
+  }
+  function closePostDetail() {
+    var overlay = document.getElementById('post-detail-modal-overlay');
+    if (overlay) overlay.classList.remove('active');
+  }
+
   function getFilteredPosts() {
     var search = (document.getElementById('post-search').value || '').toLowerCase();
     var channelFilter = document.getElementById('post-channel-filter').value;
@@ -789,9 +961,10 @@
               ? '<span class="badge badge-default">已审</span>'
               : '<span class="badge badge-warning">待审</span>')
           : '';
-        var actionBtns = '';
+        var actionBtns = '<button class="btn-ghost btn-xs" data-action="detail-post" data-id="' + p.id + '">详情</button>';
         if (isFlagged && !p.reviewed) {
           actionBtns += '<button class="btn-primary btn-xs" data-action="approve-post" data-id="' + p.id + '">标记已审</button>';
+          actionBtns += '<button class="btn-undo btn-xs" data-action="overturn-post" data-id="' + p.id + '">撤回审核</button>';
         }
         actionBtns += '<button class="btn-danger btn-xs" data-action="delete-post" data-id="' + p.id + '">删除</button>';
         tr.innerHTML =
@@ -811,31 +984,29 @@
       btn.addEventListener('click', function () {
         var pid = this.dataset.id;
         if (!confirm('确认删除此帖子？此操作不可恢复！')) return;
-        var p = findPostInState(pid);
-        db().from('messages').delete().eq('id', pid).then(function (r) {
-          if (r.error) showToast('删除失败：' + (r.error.message || ''), 'error');
-          else {
-            showToast('已删除', 'success');
-            logAdmin('reject', '删除帖子', pid);
-            // 级联删子回复（DB）
-            try { db().from('messages').delete().eq('parent_id', pid); } catch (e) {}
-            // 本地立即摘除（无需刷新）
-            purgePostsFromState([pid]);
-            // 实时广播，让开着该频道的用户界面秒消失
-            if (p && p.channel_id) IF.publishDelete(p.channel_id, pid);
-          }
-        });
+        deletePost(pid);
       });
     });
 
     tbody.querySelectorAll('[data-action="approve-post"]').forEach(function (btn) {
+      btn.addEventListener('click', function () { approvePost(this.dataset.id); });
+    });
+
+    tbody.querySelectorAll('[data-action="detail-post"]').forEach(function (btn) {
+      btn.addEventListener('click', function () { openPostDetail(this.dataset.id); });
+    });
+
+    tbody.querySelectorAll('[data-action="overturn-post"]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         var pid = this.dataset.id;
-        db().from('messages').update({ reviewed: true }).eq('id', pid).then(function (r) {
-          if (r.error) { showToast('操作失败：' + (r.error.message || ''), 'error'); return; }
-          showToast('已标记为已审核', 'success');
-          logAdmin('approve', '标记已审', pid);
-          setTimeout(loadFlaggedPosts, 400);
+        var p = findPostInState(pid);
+        if (!confirm('确认撤回该 AI 误判？将清除待审标记、恢复消息、扣回警告并通知用户。')) return;
+        overturnPost(pid, function (success) {
+          if (success) {
+            showToast('已撤回审核并通知用户', 'success');
+            logAdmin('overturn', '撤回审核（AI误判）', pid, p ? p.author_id : null);
+            setTimeout(loadFlaggedPosts, 400);
+          }
         });
       });
     });
@@ -963,6 +1134,13 @@
         document.querySelectorAll('.admin-modal-overlay.active').forEach(function (m) { m.classList.remove('active'); });
       }
     });
+    // 帖子详情弹窗关闭
+    var pdClose = document.getElementById('post-detail-close');
+    if (pdClose) pdClose.addEventListener('click', closePostDetail);
+    var pdCancel = document.getElementById('post-detail-cancel');
+    if (pdCancel) pdCancel.addEventListener('click', closePostDetail);
+    var pdOverlay = document.getElementById('post-detail-modal-overlay');
+    if (pdOverlay) pdOverlay.addEventListener('click', function (e) { if (e.target === this) closePostDetail(); });
   }
 
   /* ========== WORDLIST MANAGEMENT (敏感词库) ========== */
