@@ -52,8 +52,6 @@ nul
 # 本地生成 / 工作产物（不入库）
 # Remotion 宣传视频生成器（源码本地保留，不公开）
 campus-promo/
-# 视频抓帧工作目录
-video/capture/
 *.log
 .DS_Store
 Thumbs.db
