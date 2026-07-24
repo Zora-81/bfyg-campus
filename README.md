@@ -1,8 +1,18 @@
-# 宝丰一高校园频道
+# ⚡ 宝丰一高校园频道 — 沉浸式校园社交平台
 
-校园社交平台 —— 登录页（学校夜景 + 动漫流星雨）+ QQ 频道风格实时聊天 + 后台管理。
+> 一个属于宝丰一高师生的实时数字校园：登录页动漫流星雨、QQ 频道风格聊天、后台管理，不只是聊天，更是校园生活的在线入口。
 
-线上地址：**https://bfgzlt.cc.cd**
+🌐 **在线预览**：[https://bfgzlt.cc.cd](https://bfgzlt.cc.cd)
+
+![HTML5](https://img.shields.io/badge/HTML5-E34F26?logo=html5&logoColor=white)
+![CSS3](https://img.shields.io/badge/CSS3-1572B6?logo=css3&logoColor=white)
+![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?logo=javascript&logoColor=black)
+![Cloudflare Pages](https://img.shields.io/badge/Cloudflare%20Pages-F38020?logo=cloudflarepages&logoColor=white)
+![Cloudflare Workers](https://img.shields.io/badge/Cloudflare%20Workers-F38020?logo=cloudflare&logoColor=white)
+![InsForge](https://img.shields.io/badge/Backend-InsForge-111827)
+![Express](https://img.shields.io/badge/Express-000000?logo=express&logoColor=white)
+![Socket.io](https://img.shields.io/badge/Realtime-Socket.io-010101?logo=socketdotio&logoColor=white)
+![MIT License](https://img.shields.io/badge/License-MIT-green.svg)
 
 ## 技术栈
 
