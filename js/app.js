@@ -12,6 +12,10 @@
   var IF = window.IF || null;
   window.addEventListener('IF_READY', function () { IF = window.IF; });
 
+  // 评论/回复分流工具必须先于 app.js 加载；所有 parent_id 子消息都只能进入评论区。
+  var MessageThread = window.MessageThread;
+  if (!MessageThread) throw new Error('message-thread.js 未加载，评论分流无法初始化');
+
   // 兼容占位（不再使用本地 token / socket，保留变量名以免散落引用报错）
   var ws = null;
   var token = '';
@@ -152,42 +156,60 @@
     return false;
   }
 
+  function syncRootCommentCount(parentId) {
+    if (!parentId || !currentChannel) return;
+    var rootId = findRootMessageId(parentId);
+    var count = MessageThread.countThreadReplies(channelMessages[currentChannel.id] || [], rootId);
+    var countEl = document.querySelector('.msg-interact-btn[data-act="comment"][data-msg-id="' + rootId + '"] .msg-interact-count');
+    if (countEl) countEl.textContent = count;
+  }
+
   function handleIncomingMessage(msg) {
     var chId = msg.channel_id;
     if (!channelMessages[chId]) channelMessages[chId] = [];
+    var messages = channelMessages[chId];
 
-    // 实时消息回来时，若本地还有同内容/同作者的 pending 消息，直接替换避免重复
+    // Realtime 可能先于或后于 INSERT 响应到达。匹配 pending 时必须包含 parent_id，
+    // 否则同一作者在两个评论串发送相同文字会串错。
+    var pendingIdx = -1;
     if (currentChannel && currentChannel.id === chId && !msg.isPending && msg.author_id && msg.content) {
-      var pendingIdx = -1;
-      for (var i = 0; i < channelMessages[chId].length; i++) {
-        var m = channelMessages[chId][i];
-        if (m.isPending && m.author_id === msg.author_id && m.content === msg.content) {
-          pendingIdx = i; break;
-        }
+      pendingIdx = MessageThread.findPendingIndex(messages, msg);
+    }
+    if (pendingIdx >= 0) {
+      var pendingId = messages[pendingIdx].id;
+      messages[pendingIdx] = msg;
+      if (MessageThread.isThreadMessage(msg)) {
+        if (!replaceCommentNode(pendingId, msg)) refreshOpenCommentFor(msg.parent_id);
+        syncRootCommentCount(msg.parent_id);
+      } else {
+        replaceMessageNode(pendingId, msg);
       }
-      if (pendingIdx >= 0) {
-        channelMessages[chId][pendingIdx] = msg;
-        if (msg.parent_id) {
-          refreshOpenCommentFor(msg.parent_id); // 评论/回复：只刷新评论区
-        } else {
-          replaceMessageNode(channelMessages[chId][pendingIdx].id, msg); // 就地替换 pending 节点
-        }
-        return;
-      }
+      return;
     }
 
-    if (!channelMessages[chId].some(function(m){ return m.id === msg.id; })) {
-      channelMessages[chId].push(msg);
+    // INSERT Promise 已经把 pending 替换成真实消息时，Realtime 会再送一次同 id。
+    // 重复事件必须在这里结束，绝不能继续走主消息 DOM 追加。
+    var existingIdx = messages.findIndex(function (m) { return m.id === msg.id; });
+    if (existingIdx >= 0) {
+      messages[existingIdx] = Object.assign({}, messages[existingIdx], msg);
+      if (currentChannel && currentChannel.id === chId && MessageThread.isThreadMessage(msg)) {
+        syncRootCommentCount(msg.parent_id);
+        refreshOpenCommentFor(msg.parent_id);
+      }
+      return;
     }
+
+    messages.push(msg);
 
     if (currentChannel && currentChannel.id === chId) {
-      // 避免实时回显与乐观替换导致的 DOM 重复：若该消息节点已存在则跳过
-      if (messagesArea.querySelector('.msg-group[data-msg-id="' + msg.id + '"]')) {
+      // parent_id 子消息是评论/楼中楼：只更新评论区和计数，永不进入频道主 feed。
+      if (MessageThread.isThreadMessage(msg)) {
+        syncRootCommentCount(msg.parent_id);
+        refreshOpenCommentFor(msg.parent_id);
         return;
       }
       // 倒序流：最新在最顶，跟随判断改为"是否已在顶部附近"
       var wasAtTop = isNearTop();
-      // 增量追加这条新消息：他人的消息淡入；自己发的（已乐观显示）实时回显不播动画，避免闪烁
       var isSelfMsg = currentUser && msg.author_id === currentUser.id;
       appendMessageNode(msg, !isSelfMsg);
       if (wasAtTop || (currentUser && msg.author_id === currentUser.id)) {
@@ -1406,6 +1428,23 @@
     return hash;
   }
 
+  // 顶层消息保持独立分页，评论/楼中楼另行补拉后合并到同一内存快照。
+  // 这样主 feed 不会被评论挤占，同时刷新后评论区和计数都有完整数据。
+  function loadChannelSnapshot(ch, opts) {
+    var topPromise = IF.getMessages(ch.id, opts);
+    var replyPromise = IF.getReplyMessages
+      ? IF.getReplyMessages(ch.id, { limit: 1000 }).catch(function () { return []; })
+      : Promise.resolve([]);
+    return Promise.all([topPromise, replyPromise]).then(function (parts) {
+      var top = parts[0] || [];
+      var replies = parts[1] || [];
+      return {
+        top: top,
+        all: MessageThread.mergeMessages(top.slice().reverse(), replies)
+      };
+    });
+  }
+
   function switchChannel(ch, onAfterRender){
     var prevChannel = currentChannel; // 切换前频道，用于缓存/订阅判断
     hideLoadMoreSpinner(); // 切换频道时清掉可能残留的加载转圈
@@ -1445,9 +1484,9 @@
     } else if (pendingJumpMsgId) {
       // 跳转目标可能很旧：强制走网络拉取（更大窗口 200）确保目标在首批，期间显示频道专属骨架屏
       showMessageSkeleton();
-      IF.getMessages(ch.id, { offset: 0, limit: 200 }).then(function(list){
-        list = list || [];
-        channelMessages[ch.id] = list.slice().reverse(); // newest-first → oldest-first
+      loadChannelSnapshot(ch, { offset: 0, limit: 200 }).then(function(snapshot){
+        var list = snapshot.top;
+        channelMessages[ch.id] = snapshot.all;
         _olderOffset = 200;
         _noMoreOlder = list.length < 200;
         var ids = list.map(function(m){ return m.id; });
@@ -1476,9 +1515,9 @@
     } else {
       // 首次加载：分页拉取（不一次性全拉）→ 真实网络请求，期间显示频道专属骨架屏
       showMessageSkeleton();
-      IF.getMessages(ch.id, { offset: 0, limit: RENDER_WIN }).then(function(list) {
-        list = list || [];
-        channelMessages[ch.id] = list.slice().reverse(); // newest-first → oldest-first
+      loadChannelSnapshot(ch, { offset: 0, limit: RENDER_WIN }).then(function(snapshot) {
+        var list = snapshot.top;
+        channelMessages[ch.id] = snapshot.all;
         _olderOffset = RENDER_WIN;
         _noMoreOlder = list.length < RENDER_WIN;
         var ids = list.map(function(m){ return m.id; });
@@ -1530,26 +1569,32 @@
     var locked = isChannelLocked();
     var compose = document.getElementById('btn-compose');
     if (compose) {
+      // 仅管理员可发主楼：非管理员隐藏「+」发布按钮
+      compose.classList.toggle('locked-announcement', locked);
       compose.style.display = locked ? 'none' : '';
       compose.disabled = locked;
     }
     var inputArea = document.getElementById('message-input-area');
-    if (inputArea) inputArea.classList.toggle('locked-announcement', locked);
+    // 注意：不再给输入区加 .locked-announcement 灰态（pointer-events:none 会阻断评论输入）。
+    // 仅通过隐藏 compose + 提示文案表达"仅管理员可发布"，评论/回复照常可用。
+    if (inputArea) inputArea.classList.remove('locked-announcement');
     if (msgInput) {
-      msgInput.disabled = locked;
+      msgInput.disabled = false;
       msgInput.placeholder = locked
-        ? '公告频道仅限管理员发言'
+        ? '公告频道仅限管理员发布，你可对公告进行评论'
         : ('发送消息到 ' + (currentChannel ? currentChannel.name : ''));
     }
-    if (btnAttach) btnAttach.disabled = locked;
+    // 附件/表情/发送按钮不禁用：评论模式下非管理员仍需使用
+    if (btnAttach) btnAttach.disabled = false;
     var emojiBtn = document.querySelector('.emoji-btn');
-    if (emojiBtn) emojiBtn.disabled = locked;
-    if (btnSend) btnSend.disabled = locked;
+    if (emojiBtn) emojiBtn.disabled = false;
+    if (btnSend) btnSend.disabled = false;
     if (locked) {
+      // 切换频道时收起输入栏；评论/回复时由各自入口单独 showInputBar 打开
       hideInputBar();
       if (channelDesc && currentChannel) {
         var base = currentChannel.description || '';
-        channelDesc.textContent = base + (base ? ' · ' : '') + '仅管理员可发言';
+        channelDesc.textContent = base + (base ? ' · ' : '') + '仅管理员可发布 · 全员可评论';
       }
     }
   }
@@ -1660,7 +1705,7 @@
     var la = likeAgg[msg.id] || { total: 0, mine: false };
     // 一致性兜底：若 mine=true 但 total=0，说明聚合/状态不同步，至少显示 1（自己）
     if (la.mine && la.total <= 0) la.total = 1;
-    var replyCount = (channelMessages[currentChannel.id] || []).filter(function(m){ return m.parent_id === msg.id; }).length;
+    var replyCount = MessageThread.countThreadReplies(channelMessages[currentChannel.id] || [], msg.id);
     var interactionsHtml =
       '<div class="msg-interactions">'+
         '<div class="msg-interactions-left">'+
@@ -1945,7 +1990,8 @@
 
   // 增量追加单条消息节点（发消息乐观插入 / 实时收到新消息时用），只动新节点、不重建整个频道
   function appendMessageNode(msg, animate) {
-    if (!messagesArea) return;
+    // 防御性硬门：parent_id 子消息只属于评论区，任何调用方都不能把它画进主 feed。
+    if (!messagesArea || MessageThread.isThreadMessage(msg)) return;
     var node = buildMessageGroup(msg);
     if (!node) return;
     // 倒序流：新消息插到消息列表最顶，但要保持在欢迎卡/分隔线之后，
@@ -2171,8 +2217,11 @@
             showToast('点赞失败，请重试', 'error');
           });
         } else if (act === 'comment') {
-          if (isChannelLocked()) { showToast('公告频道仅限管理员评论', 'error', 4000); return; }
-          // 评论 = 真实回复：展开子回复列表 + 进入回复模式（发送带 parent_id）
+          // 评论 = 展开评论区 + 关联评论目标（发送时直接取 parent_id，不走 @ 回复模式）
+          // 公告栏评论对所有用户开放（含非管理员），故不再被 isChannelLocked 拦截
+          // 清除可能残留的回复状态，避免旧回复目标污染普通评论。
+          replyingTo = null;
+          if (replyBar) replyBar.classList.remove('open');
           var cSec = document.getElementById('comment-'+msg.id);
           if (cSec) {
             document.querySelectorAll('.msg-comment-section.open').forEach(function(el){
@@ -2182,10 +2231,8 @@
             if (cOpen) {
               renderCommentList(cSec, msg);
               cSec.scrollIntoView({ behavior:'smooth', block:'nearest' });
-              setReply(msg); // 进入回复模式：输入框显示"回复 @X"，发送带 parent_id = msg.id
-              setCommentTarget(msg.id); // 移动端评论模式同步
-            } else if (replyingTo && replyingTo.id === msg.id) {
-              clearReply();
+              setCommentTarget(msg.id); // 评论目标：发送时直接用作 parent_id，不走回复栏
+            } else {
               setCommentTarget(null);
             }
           }
@@ -2215,7 +2262,18 @@
     }
     collect(rootMsg.id, 0);
     if (!flat.length) {
-      sec.innerHTML = '<div class="msg-comment-empty">暂无评论，来抢沙发~</div>';
+      // 空态也保留 .comment-list，首条评论可以直接增量插入而不再回到主 feed。
+      sec.innerHTML =
+        '<div class="comment-header">'+
+          '<span class="comment-title">全部回复</span>'+
+          '<span class="comment-count">0条</span>'+
+        '</div>'+
+        '<div class="comment-list"><div class="msg-comment-empty">暂无评论，来抢沙发~</div></div>'+
+        '<div class="comment-footer-bar">'+
+          '<span class="comment-collapse-btn" data-act="comment-collapse" data-root-id="'+rootMsg.id+'">收起 ∧</span>'+
+        '</div>';
+      sec._commentHtmlCache = [];
+      bindCommentEvents(sec, rootMsg);
       return;
     }
 
@@ -2363,7 +2421,7 @@
     sec.querySelectorAll('[data-act="reply-comment"]').forEach(function(btn){
       btn.addEventListener('click', function(e){
         e.stopPropagation();
-        if (isChannelLocked()) { showToast('公告频道仅限管理员评论', 'error', 4000); return; }
+        // 回复评论对所有用户开放（含非管理员），故不再被 isChannelLocked 拦截
         var msgId = btn.getAttribute('data-msg-id');
         var cmt = findMessageById(currentChannel.id, msgId);
         if (cmt) {
@@ -2425,7 +2483,13 @@
   // 增量插入单条评论节点（回复评论时用）：不重建整个评论列表、不滚动频道，保持原位置，避免"刷新一下"
   function appendCommentNode(sec, comment, parentId, rootMsg) {
     var list = sec.querySelector('.comment-list');
-    if (!list) return;
+    if (!list) {
+      renderCommentList(sec, rootMsg);
+      list = sec.querySelector('.comment-list');
+      if (!list) return;
+    }
+    var emptyNode = list.querySelector('.msg-comment-empty');
+    if (emptyNode) emptyNode.remove();
     var all = channelMessages[currentChannel.id] || [];
     var depth = 0;
     if (parentId) {
@@ -2452,12 +2516,13 @@
     }
     if (after) after.after(node); else list.appendChild(node);
     bindCommentEvents(node, rootMsg);
-    // 更新回复计数
+    // 更新评论区总条数，并同步根消息互动栏（直接评论与楼中楼都即时生效）
     var countEl = sec.querySelector('.comment-count');
     if (countEl) {
-      var prev = parseInt((countEl.textContent||'').replace(/[^0-9]/g,'')) || 0;
-      countEl.textContent = (prev+1) + '条';
+      var total = list.querySelectorAll('.msg-comment-item').length;
+      countEl.textContent = total + '条';
     }
+    syncRootCommentCount(rootMsg.id);
   }
 
   // 就地替换评论区的 pending 节点为真实评论（不重建列表、不闪、不跳位置）
@@ -2651,7 +2716,8 @@
     }
   }
   function showInputBar() {
-    if (isChannelLocked()) { showToast('公告频道仅限管理员发言', 'error', 4000); return; }
+    // 不再因 isChannelLocked 拦截：非管理员进入公告栏后，评论/回复时仍需打开输入栏。
+    // 主楼发布限制改在 sendMessage / handleFileUpload 中按是否有 parent_id 判定。
     var ia = document.getElementById('message-input-area');
     if (ia) {
       ia.classList.add('input-visible');
@@ -2809,7 +2875,7 @@
 
   function setReply(msg) {
     if (!msg) return;
-    if (isChannelLocked()) { showToast('公告频道仅限管理员评论', 'error', 4000); return; }
+    // 回复对所有用户开放（含非管理员），故不再被 isChannelLocked 拦截
     buildReplyBar();
     if (!replyBar) return;
     replyingTo = msg;
@@ -2848,20 +2914,15 @@
   function sendMessage(){
     if(!msgInput||!currentUser||!currentChannel||!IF) return;
     var text=msgInput.value.trim(); if(!text) return;
-    if (isChannelLocked()) { showToast('公告频道仅限管理员发言', 'error', 4000); return; }
-
-    // ═══ 移动端评论模式：追加内联评论，不发新消息到频道 ═══
-    var cmtId = getCommentTarget();
-    if (cmtId) {
-      // 移动端评论与桌面回复模式统一：映射到 replyingTo，确保真实发送并持久化
-      var cmtMsg = findMessageById(currentChannel.id, cmtId);
-      if (cmtMsg) setReply(cmtMsg);
-      setCommentTarget(null);
+    // 仅管理员可发主楼消息；评论/回复（带 parent_id）对所有已登录用户开放
+    if (isChannelLocked() && !getCommentTarget() && !(replyingTo && replyingTo.id)) {
+      showToast('公告频道仅限管理员发布，你可对公告进行评论', 'error', 4000); return;
     }
 
-    // ═══ 正常频道消息（非评论模式）═══
-
-    var parentId = (replyingTo && replyingTo.id) ? replyingTo.id : null;
+    // ═══ 移动端评论模式：直接取 parent_id，不走 @ 回复模式 ═══
+    var cmtId = getCommentTarget();
+    if (cmtId) setCommentTarget(null);
+    var parentId = cmtId || (replyingTo && replyingTo.id) || null;
 
     // 乐观 UI：立即清空输入、显示本地"发送中"消息，再后台请求
     var tempId = 'pending-' + Date.now() + '-' + Math.random().toString(36).slice(2,8);
@@ -2934,9 +2995,9 @@
         if (window.IF) {
           IF.moderateMessage(msg).then(function (res) {
             if (res && res.violation && currentChannel && currentChannel.id) {
-              IF.getMessages(currentChannel.id, { offset: 0, limit: 500 }).then(function (list) {
-                list = list || [];
-                channelMessages[currentChannel.id] = list.slice().reverse(); // newest-first → oldest-first
+              loadChannelSnapshot(currentChannel, { offset: 0, limit: 500 }).then(function (snapshot) {
+                var list = snapshot.top;
+                channelMessages[currentChannel.id] = snapshot.all;
                 renderWinEnd = list.length;
                 _olderOffset = Math.min(500, list.length);
                 _noMoreOlder = list.length < 500;
@@ -3021,7 +3082,10 @@
 
   function handleFileUpload() {
     if(!fileInput.files || !fileInput.files[0] || !currentChannel) return;
-    if (isChannelLocked()) { showToast('公告频道仅限管理员上传文件', 'error', 4000); fileInput.value=''; return; }
+    // 仅管理员可发主楼附件；评论/回复（带 parent_id）对所有用户开放
+    if (isChannelLocked() && !getCommentTarget() && !(replyingTo && replyingTo.id)) {
+      showToast('公告频道仅限管理员上传文件，你可在评论中附带图片', 'error', 4000); fileInput.value=''; return;
+    }
     var file = fileInput.files[0];
 
     // 文件大小检查 (10MB)
@@ -3959,7 +4023,7 @@
             if (batch.length) {
               var older = batch.slice().reverse();          // newest-first → oldest-first
               var arr = channelMessages[currentChannel.id] || [];
-              channelMessages[currentChannel.id] = older.concat(arr); // 更旧拼到前面（倒序流落底部）
+              channelMessages[currentChannel.id] = MessageThread.mergeMessages(older, arr); // 合并去重并保持时间顺序
               var newTop = batch.filter(function(m){ return !m.parent_id; }).length;
               var totalTop = channelMessages[currentChannel.id].filter(function(m){ return !m.parent_id; }).length;
               renderWinEnd = Math.min(renderWinEnd + newTop, totalTop);
