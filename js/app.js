@@ -5052,7 +5052,7 @@
     var overlay = null, iframe = null;
     function openMemoryTree() {
       if (overlay && overlay.style.display === 'block') return; // 防重入
-      var ver = (window.v && String(window.v)) || '1.4.28';
+      var ver = (window.v && String(window.v)) || '1.4.29';
       if (!overlay) {
         overlay = document.createElement('div');
         overlay.className = 'mt-overlay';
@@ -5104,7 +5104,9 @@
     var entry = document.querySelector('.mt-drawer-entry-btn') || document.getElementById('mt-entry-btn');
     if (entry) entry.addEventListener('click', openMemoryTree);
     window.addEventListener('message', function (e) {
-      if (e && e.data && e.data.type === 'mt-close') closeMemoryTree();
+      if (!e || !e.data) return;
+      if (e.data.type === 'mt-close') closeMemoryTree();
+      if (e.data.type === 'mt-open-profile' && e.data.userId && window.openUserProfile) window.openUserProfile(e.data.userId);
     });
   })();
 

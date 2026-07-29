@@ -460,26 +460,40 @@ async function openDetail(item) {
     el.detailMedia.appendChild(ph);
   }
   el.detailTitle.textContent = title;
-  // 发布人可点击：帖子显示真实用户昵称 + 时间，点击打开用户信息卡（与频道消息一致）
+  // 发布人：直接移植频道消息风格——头像+昵称+角色徽章+时间，点击打开用户资料卡
   const authorName = item.location || item.authorName || '匿名同学';
   const timePart = item.year || '—';
   if (isPost && item.authorId) {
-    el.detailMeta.innerHTML = `<span class="mt-detail-author" data-author-id="${escapeHtml(item.authorId)}">${escapeHtml(authorName)}</span> · ${escapeHtml(timePart)}`;
-    const authorEl = el.detailMeta.querySelector('.mt-detail-author');
-    if (authorEl) {
-      authorEl.style.cursor = 'pointer';
-      authorEl.style.textDecoration = 'underline';
-      authorEl.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const opener = window.parent || window;
-        if (opener.openUserProfile) opener.openUserProfile(item.authorId);
-      });
-    }
+    const author = (window.IF && window.IF.resolveAuthor)
+      ? window.IF.resolveAuthor(item.authorId)
+      : { id: item.authorId, nickname: authorName, username: authorName, avatar_url: '', role: 'student' };
+    const nickname = author.nickname || author.username || authorName || '未知用户';
+    const username = author.username || nickname;
+    const avatarInner = author.avatar_url
+      ? `<img src="${escapeHtml(author.avatar_url)}" alt="" onerror="this.style.display='none'">`
+      : getInitial(nickname);
+    el.detailMeta.innerHTML = `
+      <div class="mt-author-card" data-author-id="${escapeHtml(item.authorId)}" title="查看资料">
+        <div class="mt-author-avatar" style="background:${getAvatarColor(username)}">${avatarInner}</div>
+        <div class="mt-author-meta">
+          <div class="mt-author-name-row">
+            <span class="mt-author-name">${escapeHtml(nickname)}</span>
+            ${roleBadge(author.role)}
+          </div>
+          <div class="mt-author-time">${escapeHtml(timePart)}</div>
+        </div>
+      </div>`;
+    const card = el.detailMeta.querySelector('.mt-author-card');
+    if (card) card.addEventListener('click', (e) => { e.stopPropagation(); openUserProfileBridge(item.authorId); });
   } else {
     el.detailMeta.textContent = [authorName, timePart].filter(Boolean).join(' · ') || '—';
   }
   // 仅管理员在详情右上角看到删除按钮
-  if (el.detailDelete) el.detailDelete.hidden = !isAdmin();
+  if (el.detailDelete) {
+    const admin = isAdmin();
+    el.detailDelete.hidden = !admin;
+    el.detailDelete.classList.toggle('mt-hidden-force', !admin);
+  }
   el.summary.hidden = true; el.summary.innerHTML = '';
   el.detail.hidden = false;
 
@@ -502,6 +516,26 @@ function renderComments(list) {
     </div>`).join('');
 }
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m])); }
+function getInitial(n) { return n ? n.charAt(0).toUpperCase() : '?'; }
+const AVATAR_COLORS = [
+  'linear-gradient(135deg,#6366f1,#818cf8)','linear-gradient(135deg,#8b5cf6,#c084fc)',
+  'linear-gradient(135deg,#ef4444,#f87171)','linear-gradient(135deg,#14b8a6,#2dd4bf)',
+];
+function getAvatarColor(name) { let h=0; const s=String(name||'?'); for(let i=0;i<s.length;i++) h=s.charCodeAt(i)+((h<<5)-h); return AVATAR_COLORS[Math.abs(h)%AVATAR_COLORS.length]; }
+function roleBadge(role) {
+  const map = { admin: ['系统管理员','admin'], teacher: ['教师','teacher'], student: ['在校学生','student'], moderator: ['版主','moderator'] };
+  const r = map[role] || map.student;
+  return `<span class="mt-role-badge ${r[1]}">${r[0]}</span>`;
+}
+// 在 iframe 内打开用户资料卡：优先直接调用父窗口 openUserProfile，失败则 postMessage
+function openUserProfileBridge(userId) {
+  if (!userId) return;
+  try {
+    const p = window.parent;
+    if (p && p !== window && p.openUserProfile) { p.openUserProfile(userId); return; }
+  } catch (e) {}
+  try { window.parent.postMessage({ type: 'mt-open-profile', userId }, '*'); } catch (e) {}
+}
 
 // ---------- 用户留言（记忆树留言） ----------
 let postIds = new Set();           // 当前已挂到场景的帖子 id（用于管理员删除叉识别）
@@ -610,7 +644,7 @@ function bindUI() {
       return;
     }
     // 兜底：直接打开记忆树（无父页面，如书签/新标签）时，带版本号跳回主频道
-    let v = '1.4.28';
+    let v = '1.4.29';
     try {
       v = localStorage.getItem('mt_v') || v;
       if (!v) {
