@@ -839,13 +839,47 @@ window.MTScene = {
       pickables.push(mesh);
       nodes.push(container);
     }
-    data.forEach((it, i) => makeMediaNode(it, i));
+    function makeStarNode(item, idx) {
+      // 纯文字帖：3D 挤出星，区分于照片卡与背景 2D 光点（暖金色 + 自转 + 发光）
+      const shape = new THREE.Shape();
+      const spikes = 5, outer = 1.7, inner = 0.72;
+      for (let i = 0; i < spikes * 2; i++) {
+        const r = (i % 2 === 0) ? outer : inner;
+        const a = (i / (spikes * 2)) * Math.PI * 2 - Math.PI / 2;
+        const x = Math.cos(a) * r, y = Math.sin(a) * r;
+        if (i === 0) shape.moveTo(x, y); else shape.lineTo(x, y);
+      }
+      shape.closePath();
+      const geo = new THREE.ExtrudeGeometry(shape, { depth: 0.55, bevelEnabled: true, bevelThickness: 0.14, bevelSize: 0.14, bevelSegments: 2 });
+      geo.center();
+      const COLOR = 0xffd36a; // 暖金，明显区别于白色背景星
+      const mat = new THREE.MeshBasicMaterial({ color: COLOR, transparent: true, opacity: 0.97, side: THREE.DoubleSide });
+      const mesh = new THREE.Mesh(geo, mat);
+      const glowMat = new THREE.MeshBasicMaterial({ map: glowTex, color: COLOR, transparent: true, opacity: 0.28, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+      const glow = new THREE.Mesh(new THREE.PlaneGeometry(6.5, 6.5), glowMat);
+      glow.position.z = -0.6;
+      const container = new THREE.Group();
+      container.add(glow); container.add(mesh);
+      const base = getMemoryPos(idx, data.length + (window.MTPosts ? 20 : 0), cfg);
+      container.position.copy(base);
+      container.userData = { item, baseY: container.position.y, phase: Math.random() * Math.PI * 2, mesh, glow, hovered: false, isStar: true, spin: 0.6 + Math.random() * 0.5 };
+      mediaGroup.add(container);
+      pickables.push(mesh);
+      nodes.push(container);
+    }
+
+    data.forEach((it, i) => {
+      const hasImg = !!(it.url && /^https?:\/\/|\/|images\//.test(it.url));
+      if (hasImg) makeMediaNode(it, i);
+      else makeStarNode(it, i);
+    });
     totalTex = data.length;
 
     // ---------- 交互 ----------
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
     let hovered = null;
+    let flying = false;
     const dom = renderer.domElement;
 
     function setPointer(e) {
@@ -872,12 +906,39 @@ window.MTScene = {
         dom.style.cursor = 'default';
       }
     }
+    function flyTo(node, onDone) {
+      if (flying) return;
+      flying = true;
+      controls.enabled = false;
+      const targetPos = new THREE.Vector3();
+      node.getWorldPosition(targetPos);
+      const camFrom = camera.position.clone();
+      const tgtFrom = controls.target.clone();
+      const dir = camFrom.clone().sub(targetPos).normalize();
+      const camDest = targetPos.clone().add(dir.multiplyScalar(15)).add(new THREE.Vector3(0, 2.5, 0));
+      const proxy = { p: 0 };
+      const done = () => { controls.target.copy(targetPos); controls.enabled = true; flying = false; if (onDone) onDone(); };
+      if (window.gsap) {
+        gsap.to(proxy, {
+          p: 1, duration: 1.25, ease: 'power2.inOut',
+          onUpdate: () => {
+            camera.position.lerpVectors(camFrom, camDest, proxy.p);
+            controls.target.lerpVectors(tgtFrom, targetPos, proxy.p);
+            camera.lookAt(controls.target);
+          },
+          onComplete: done
+        });
+      } else {
+        camera.position.copy(camDest); controls.target.copy(targetPos); done();
+      }
+    }
     function onClick(e) {
       setPointer(e);
       const obj = pick();
       if (obj && obj.parent && obj.parent.userData.item) {
         api.playSfx('click');
-        onNodeClick && onNodeClick(obj.parent.userData.item);
+        const node = obj.parent;
+        flyTo(node, () => { onNodeClick && onNodeClick(node.userData.item); });
       }
     }
     dom.addEventListener('pointermove', onMove);
@@ -947,7 +1008,7 @@ window.MTScene = {
       const t = clock.getElapsedTime();
 
       // 整个星河盘（含树、尘埃带、照片）一起缓慢旋转，保持一体
-      if (!reducedMotion) galaxyGroup.rotation.y = t * cfg.autoRotateSpeed;
+      if (!reducedMotion && !flying) galaxyGroup.rotation.y = t * cfg.autoRotateSpeed;
 
       // 异形粒子：严格复制仓库 StarDust 动画（缓慢自转 + 透明度呼吸）
       if (ambient) ambient.forEach(({ points, speedMult }) => {
@@ -962,16 +1023,27 @@ window.MTScene = {
         s.material.opacity = s.userData.opacity * (0.85 + 0.15 * Math.sin(t * s.userData.speed + s.userData.phase));
       });
 
-      // 媒体节点 billboard + 浮动 + hover 缩放
+      // 媒体节点：浮动 + 自转 + hover 缩放（星节点与照片卡分别处理）
       for (const c of nodes) {
-        // 抵消父级（galaxyGroup）自转，使照片始终正面朝向相机
-        c.parent.getWorldQuaternion(_invQ).invert();
-        c.quaternion.copy(_invQ).multiply(camera.quaternion);
         c.position.y = c.userData.baseY + Math.sin(t * 0.28 + c.userData.phase) * 0.55;
-        const target = c.userData.hovered ? 1.18 : 1.0;
-        const s = c.scale.x + (target - c.scale.x) * 0.12;
-        c.scale.setScalar(s);
-        c.userData.glow.material.opacity = c.userData.hovered ? 0.45 : 0.0;
+        if (c.userData.isStar) {
+          // 3D 星：自身缓慢自转（露出立体厚度）+ 脉冲 + 悬停放大
+          c.userData.mesh.rotation.y += 0.012 * c.userData.spin;
+          c.userData.mesh.rotation.z += 0.004;
+          const pulse = 1 + Math.sin(t * 1.6 + c.userData.phase) * 0.06;
+          const target = c.userData.hovered ? 1.28 : pulse;
+          const s = c.scale.x + (target - c.scale.x) * 0.12;
+          c.scale.setScalar(s);
+          c.userData.glow.material.opacity = c.userData.hovered ? 0.6 : 0.28;
+        } else {
+          // 照片卡：billboard 始终正对相机
+          c.parent.getWorldQuaternion(_invQ).invert();
+          c.quaternion.copy(_invQ).multiply(camera.quaternion);
+          const target = c.userData.hovered ? 1.18 : 1.0;
+          const s = c.scale.x + (target - c.scale.x) * 0.12;
+          c.scale.setScalar(s);
+          c.userData.glow.material.opacity = c.userData.hovered ? 0.45 : 0.0;
+        }
       }
 
       // 流星
@@ -1099,8 +1171,7 @@ window.MTScene = {
             }, undefined, () => { /* 加载失败，保留文字星占位 */ });
           } catch (e) { /* 忽略加载异常 */ }
         } else {
-          const tex = createTextCardTexture(post);
-          makeMediaNode(item, nodes.length, tex);
+          makeStarNode(item, nodes.length);
         }
       },
       // 热移除某个帖子节点（管理员删除时调用，无需刷新页面）

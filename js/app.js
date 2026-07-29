@@ -5052,7 +5052,7 @@
     var overlay = null, iframe = null;
     function openMemoryTree() {
       if (overlay && overlay.style.display === 'block') return; // 防重入
-      var ver = (window.v && String(window.v)) || '1.4.34';
+      var ver = (window.v && String(window.v)) || '1.4.35';
       if (!overlay) {
         overlay = document.createElement('div');
         overlay.className = 'mt-overlay';
