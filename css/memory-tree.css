@@ -64,32 +64,32 @@ body { font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI
 /* 返回频道胶囊按钮（与音乐卡片同高同风格） */
 .mt-back-btn {
   display: inline-flex; align-items: center; gap: 7px;
-  height: 52px; padding: 0 18px 0 14px; border-radius: 999px;
+  height: 64px; padding: 0 22px 0 18px; border-radius: 999px;
   background: rgba(12,14,28,.58); border: 1px solid rgba(255,255,255,.14);
   backdrop-filter: blur(16px) saturate(180%); -webkit-backdrop-filter: blur(16px) saturate(180%);
-  font-size: 14px; font-weight: 600; letter-spacing: .5px;
+  font-size: 16px; font-weight: 600; letter-spacing: .5px;
   box-shadow: 0 6px 26px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.08);
 }
 .mt-back-btn:hover { background: rgba(30,34,62,.72); border-color: rgba(150,170,255,.45); box-shadow: 0 0 20px rgba(120,150,255,.28); }
-.mt-back-arrow { font-size: 15px; opacity: .9; }
+.mt-back-arrow { font-size: 17px; opacity: .9; }
 
 /* 靠左的标题（与音乐卡片同高同风格） */
 .mt-hud-title-wrap {
-  display: inline-flex; align-items: center; gap: 6px;
-  height: 52px; padding: 0 14px; border-radius: 999px;
+  display: inline-flex; align-items: center; gap: 8px;
+  height: 64px; padding: 0 18px; border-radius: 999px;
   background: rgba(12,14,28,.58); border: 1px solid rgba(255,255,255,.14);
   backdrop-filter: blur(16px) saturate(180%); -webkit-backdrop-filter: blur(16px) saturate(180%);
   box-shadow: 0 6px 26px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.08);
   cursor: pointer; color: inherit; font: inherit; outline: none;
 }
 .mt-hud-title-wrap:hover { background: rgba(20,24,48,.7); border-color: rgba(150,170,255,.35); box-shadow: 0 0 20px rgba(120,150,255,.25), inset 0 1px 0 rgba(255,255,255,.1); }
-.mt-hud-icon { font-size: 15px; filter: drop-shadow(0 0 10px rgba(150,120,255,.6)); }
-.mt-hud-title { font-size: 14px; font-weight: 700; letter-spacing: 1.5px; text-shadow: 0 0 14px rgba(150,120,255,.7); }
+.mt-hud-icon { font-size: 18px; filter: drop-shadow(0 0 10px rgba(150,120,255,.6)); }
+.mt-hud-title { font-size: 16px; font-weight: 700; letter-spacing: 1.5px; text-shadow: 0 0 14px rgba(150,120,255,.7); }
 
 /* 音乐卡片（圆形旋转唱片，单曲目：点击播放 / 暂停） */
 .mt-music-card {
   display: inline-flex; align-items: center; gap: 10px;
-  padding: 6px 12px 6px 8px; border-radius: 999px;
+  height: 64px; padding: 6px 12px 6px 8px; border-radius: 999px;
   background: rgba(12,14,28,.58); border: 1px solid rgba(255,255,255,.14);
   backdrop-filter: blur(16px) saturate(180%); -webkit-backdrop-filter: blur(16px) saturate(180%);
   box-shadow: 0 6px 26px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.08);
@@ -123,9 +123,9 @@ body { font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI
 @keyframes mtDiscSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
 /* 歌曲信息 */
-.mt-music-info { display: flex; flex-direction: column; gap: 1px; min-width: 86px; }
-.mt-music-name { font-size: 13px; font-weight: 700; color: #f0f2ff; letter-spacing: .3px; }
-.mt-music-artist { font-size: 11px; color: rgba(180,195,230,.65); }
+.mt-music-info { display: flex; flex-direction: column; gap: 2px; min-width: 86px; }
+.mt-music-name { font-size: 15px; font-weight: 700; color: #f0f2ff; letter-spacing: .3px; }
+.mt-music-artist { font-size: 12px; color: rgba(180,195,230,.65); }
 
 .mt-btn {
   border: 1px solid rgba(255,255,255,.16); background: rgba(20,24,46,.5);
