@@ -373,3 +373,55 @@ body { font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI
   .mt-loader-canvas { opacity: .85; }
 }
 
+/* ===== iframe 内用户资料卡（与频道消息点击头像弹出的资料卡视觉一致） ===== */
+.mt-user-card-overlay {
+  position: fixed; inset: 0; z-index: 9999;
+  display: flex; align-items: center; justify-content: center;
+  animation: mt-fade-in 0.2s ease;
+}
+.mt-user-card-bg {
+  position: absolute; inset: 0;
+  background: rgba(0,0,0,.85); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+}
+.mt-user-card-close {
+  position: absolute; top: 18px; right: 18px; z-index: 2;
+  width: 36px; height: 36px; border-radius: 50%;
+  border: 1px solid rgba(255,255,255,.14); background: rgba(20,20,28,.72); color: rgba(230,235,255,.9);
+  font-size: 22px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); transition: all .2s ease;
+}
+.mt-user-card-close:hover { background: rgba(45,45,58,.9); color: #fff; }
+.mt-user-card {
+  position: relative; z-index: 1;
+  width: min(380px, 90vw);
+  background: rgba(14,18,38,.95); border: 1px solid rgba(255,255,255,.08); border-radius: 20px;
+  padding: 36px 32px; text-align: center;
+  box-shadow: 0 8px 48px rgba(0,0,0,.5);
+  animation: mt-fade-in 0.2s ease;
+}
+.mt-user-card-avatar {
+  width: 80px; height: 80px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 2rem; font-weight: 700; color: #fff;
+  margin: 0 auto 16px; position: relative; overflow: hidden;
+}
+.mt-user-card-avatar img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+.mt-user-card-name { font-size: 1.5rem; font-weight: 800; color: #e8ecff; margin-bottom: 4px; }
+.mt-user-card-username { font-size: 0.88rem; color: rgba(180,195,230,.7); margin-bottom: 12px; }
+.mt-user-card-title-row { display: flex; justify-content: center; margin: 2px 0 12px; }
+.mt-user-card-title {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 0.78rem; font-weight: 600; letter-spacing: .02em;
+  padding: 4px 12px; border-radius: 999px;
+  color: #ffe6a8; background: linear-gradient(135deg, rgba(255,196,84,.18), rgba(255,140,50,.14));
+  border: 1px solid rgba(255,196,84,.35);
+}
+.mt-user-card-title-empty { color: rgba(180,195,230,.6); background: rgba(255,255,255,.05); border: 1px dashed rgba(255,255,255,.12); }
+.mt-user-card-role { font-size: 0.9rem; color: rgba(220,228,250,.8); margin-bottom: 20px; }
+.mt-user-card-stats { display: flex; justify-content: center; gap: 32px; margin-bottom: 24px; }
+.mt-user-card-stat { display: flex; flex-direction: column; align-items: center; }
+.mt-user-card-stat-num { font-size: 1.2rem; font-weight: 700; color: #e8ecff; }
+.mt-user-card-stat-label { font-size: 0.72rem; color: rgba(180,195,230,.55); margin-top: 2px; }
+
+@keyframes mt-fade-in { from { opacity: 0; } to { opacity: 1; } }
+

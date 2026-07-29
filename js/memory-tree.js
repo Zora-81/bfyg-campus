@@ -531,15 +531,79 @@ function roleBadge(role) {
   const cls = role === 'admin' ? 'admin' : role === 'moderator' ? 'moderator' : 'member';
   return `<span class="role-badge ${cls}">${label}</span>`;
 }
-// 在 iframe 内打开用户资料卡：优先直接调用父窗口 openUserProfile，失败则 postMessage
-function openUserProfileBridge(userId) {
+// 在 iframe 内直接弹出用户资料卡（不依赖父窗口，避免移动 WebView postMessage 失效）
+function openUserProfile(userId) {
   if (!userId) return;
-  try {
-    const p = window.parent;
-    if (p && p !== window && p.openUserProfile) { p.openUserProfile(userId); return; }
-  } catch (e) {}
-  try { window.parent.postMessage({ type: 'mt-open-profile', userId }, '*'); } catch (e) {}
+  const api = window.IF;
+  function render(user) {
+    user = user || {};
+    const uid = user.id || userId;
+    const role = user.role || 'student';
+    const ROLE = {
+      admin: { label: '系统管理员', icon: '🔧' },
+      teacher: { label: '教师', icon: '👩‍🏫' },
+      student: { label: '在校学生', icon: '📚' },
+      moderator: { label: '版主', icon: '🛡️' }
+    };
+    const rm = ROLE[role] || ROLE.student;
+    const av = user.avatar_url
+      ? `<img src="${escapeHtml(user.avatar_url)}" alt="" onerror="this.style.display='none'">`
+      : getInitial(user.nickname || user.username || '?');
+    const isSelf = !!(currentUser && currentUser.id === uid);
+    const joinedDays = user.created_at
+      ? Math.max(0, Math.floor((Date.now() - new Date(user.created_at).getTime()) / 86400000))
+      : '—';
+    const titleBadge = user.title
+      ? `<span class="mt-user-card-title">✦ ${escapeHtml(user.title)}</span>`
+      : '<span class="mt-user-card-title mt-user-card-title-empty">未设置称号</span>';
+    const html =
+      '<div class="mt-user-card-bg"></div>'+
+      '<button class="mt-user-card-close" aria-label="关闭">&times;</button>'+
+      '<div class="mt-user-card">'+
+        `<div class="mt-user-card-avatar" style="background:${getAvatarColor(user.username || uid)}">${av}</div>`+
+        `<h2 class="mt-user-card-name">${escapeHtml(user.nickname || user.username || '未知用户')}</h2>`+
+        `<p class="mt-user-card-username">@${escapeHtml(user.username || '')}${isSelf ? '（我）' : ''}</p>`+
+        `<div class="mt-user-card-title-row">${titleBadge}</div>`+
+        `<p class="mt-user-card-role">${rm.icon} ${rm.label}</p>`+
+        '<div class="mt-user-card-stats">'+
+          `<div class="mt-user-card-stat"><span class="mt-user-card-stat-num">${rm.label.slice(0,3)}</span><span class="mt-user-card-stat-label">身份</span></div>`+
+          `<div class="mt-user-card-stat"><span class="mt-user-card-stat-num" id="uc-msg">…</span><span class="mt-user-card-stat-label">消息</span></div>`+
+          `<div class="mt-user-card-stat"><span class="mt-user-card-stat-num">${joinedDays}</span><span class="mt-user-card-stat-label">加入天数</span></div>`+
+        '</div>'+
+      '</div>';
+    const overlay = document.createElement('div');
+    overlay.className = 'mt-user-card-overlay';
+    overlay.innerHTML = html;
+    const close = () => { overlay.remove(); document.removeEventListener('keydown', onKey); };
+    const onKey = (e) => { if (e.key === 'Escape') close(); };
+    overlay.querySelector('.mt-user-card-bg').onclick = close;
+    overlay.querySelector('.mt-user-card-close').onclick = close;
+    overlay.onclick = (e) => { if (e.target === overlay) close(); };
+    document.addEventListener('keydown', onKey);
+    document.body.appendChild(overlay);
+    // 异步补消息数
+    const msgEl = overlay.querySelector('#uc-msg');
+    if (msgEl && api && api.insforge) {
+      api.insforge.database.from('messages')
+        .select('*', { count: 'exact', head: true }).eq('author_id', uid)
+        .then(r => { msgEl.textContent = (r && typeof r.count === 'number') ? r.count : '—'; })
+        .catch(() => { msgEl.textContent = '—'; });
+    }
+  }
+  const cached = (api && api.resolveAuthor) ? api.resolveAuthor(userId) : null;
+  if (cached && cached.id && cached.username) {
+    render(cached);
+  } else if (api && api.insforge) {
+    api.insforge.database.from('profiles')
+      .select('id,username,nickname,avatar_url,role,title,status,created_at')
+      .eq('id', userId).single()
+      .then(r => render(r && !r.error ? r : null))
+      .catch(() => render(null));
+  } else {
+    render(null);
+  }
 }
+function openUserProfileBridge(userId) { openUserProfile(userId); }
 
 // ---------- 用户留言（记忆树留言） ----------
 let postIds = new Set();           // 当前已挂到场景的帖子 id（用于管理员删除叉识别）
@@ -648,7 +712,7 @@ function bindUI() {
       return;
     }
     // 兜底：直接打开记忆树（无父页面，如书签/新标签）时，带版本号跳回主频道
-    let v = '1.4.30';
+    let v = '1.4.31';
     try {
       v = localStorage.getItem('mt_v') || v;
       if (!v) {
