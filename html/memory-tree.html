@@ -8,7 +8,7 @@
 
   <script>
     (function(){
-      var v = '1.4.33';
+      var v = '1.4.34';
       try {
         function newer(a, b) {
           if (!b) return true;
@@ -35,7 +35,7 @@
     })();
   </script>
 
-  <link rel="stylesheet" href="../css/memory-tree.css?v=1.4.33" />
+  <link rel="stylesheet" href="../css/memory-tree.css?v=1.4.34" />
 
   <!-- Three.js 走 CDN importmap，与 if-client.js 一致 -->
   <script type="importmap">
@@ -164,6 +164,12 @@
     </div>
   </div>
 
+  <!-- 图片放大预览 -->
+  <div id="mt-lightbox" class="mt-lightbox" hidden>
+    <button id="mt-lightbox-close" class="mt-lightbox-close" type="button" aria-label="关闭">✕</button>
+    <img id="mt-lightbox-img" class="mt-lightbox-img" src="" alt="预览大图" />
+  </div>
+
   <!-- WebGL 兜底：静态相册 -->
   <div id="mt-fallback" class="mt-fallback" hidden>
     <div class="mt-fallback-head">🌌 记忆相册（当前设备不支持 3D，已切换为相册模式）</div>
@@ -171,13 +177,13 @@
   </div>
 
   <!-- 依赖：GSAP（已有） → InsForge 客户端 → 场景 → 配置 → 评论/AI → 引导 -->
-  <script src="../js/lib/gsap.min.js?v=1.4.33" defer></script>
-  <script type="module" src="../js/if-client.js?v=1.4.33"></script>
-  <script type="module" src="../js/three-scene.js?v=1.4.33"></script>
-  <script type="module" src="../js/memory-tree-config.js?v=1.4.33"></script>
-  <script type="module" src="../js/memory-comments.js?v=1.4.33"></script>
-  <script type="module" src="../js/memory-ai.js?v=1.4.33"></script>
-  <script type="module" src="../js/memory-posts.js?v=1.4.33"></script>
-  <script type="module" src="../js/memory-tree.js?v=1.4.33"></script>
+  <script src="../js/lib/gsap.min.js?v=1.4.34" defer></script>
+  <script type="module" src="../js/if-client.js?v=1.4.34"></script>
+  <script type="module" src="../js/three-scene.js?v=1.4.34"></script>
+  <script type="module" src="../js/memory-tree-config.js?v=1.4.34"></script>
+  <script type="module" src="../js/memory-comments.js?v=1.4.34"></script>
+  <script type="module" src="../js/memory-ai.js?v=1.4.34"></script>
+  <script type="module" src="../js/memory-posts.js?v=1.4.34"></script>
+  <script type="module" src="../js/memory-tree.js?v=1.4.34"></script>
 </body>
 </html>

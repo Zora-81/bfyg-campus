@@ -462,6 +462,8 @@ async function openDetail(item) {
   if (url) {
     const img = document.createElement('img');
     img.src = url; img.alt = item.title || '';
+    img.title = '点击放大查看';
+    img.addEventListener('click', (e) => { e.stopPropagation(); openLightbox(url); });
     el.detailMedia.appendChild(img);
   } else {
     const ph = document.createElement('div');
@@ -513,6 +515,21 @@ async function openDetail(item) {
   // 评论
   const list = await MTComments.list(item.id).catch(() => []);
   renderComments(list);
+}
+
+// 图片放大预览：点击详情图打开全屏 lightbox，显示原图（不裁剪）
+function openLightbox(src) {
+  const lb = document.getElementById('mt-lightbox');
+  const img = document.getElementById('mt-lightbox-img');
+  if (!lb || !img || !src) return;
+  img.src = src;
+  lb.hidden = false;
+}
+function closeLightbox() {
+  const lb = document.getElementById('mt-lightbox');
+  const img = document.getElementById('mt-lightbox-img');
+  if (lb) lb.hidden = true;
+  if (img) img.src = '';
 }
 
 function renderComments(list) {
@@ -742,7 +759,7 @@ function bindUI() {
       return;
     }
     // 兜底：直接打开记忆树（无父页面，如书签/新标签）时，带版本号跳回主频道
-    let v = '1.4.33';
+    let v = '1.4.34';
     try {
       v = localStorage.getItem('mt_v') || v;
       if (!v) {
@@ -779,7 +796,16 @@ function bindUI() {
     });
   }
   el.detail.addEventListener('click', (e) => { if (e.target === el.detail) el.detail.hidden = true; });
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !el.detail.hidden) el.detail.hidden = true; });
+  // ESC 关闭：lightbox 优先（避免关放大图时把详情也一起关掉）
+  const lightbox = document.getElementById('mt-lightbox');
+  const lightboxClose = document.getElementById('mt-lightbox-close');
+  if (lightboxClose) lightboxClose.addEventListener('click', (e) => { e.stopPropagation(); closeLightbox(); });
+  if (lightbox) lightbox.addEventListener('click', (e) => { if (e.target === lightbox) closeLightbox(); });
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    if (lightbox && !lightbox.hidden) { closeLightbox(); return; }
+    if (!el.detail.hidden) el.detail.hidden = true;
+  });
 
   el.form.addEventListener('submit', async (e) => {
     e.preventDefault();
