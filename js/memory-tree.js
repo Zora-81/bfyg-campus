@@ -472,18 +472,21 @@ async function openDetail(item) {
     const avatarInner = author.avatar_url
       ? `<img src="${escapeHtml(author.avatar_url)}" alt="" onerror="this.style.display='none'">`
       : getInitial(nickname);
+    const titleHtml = author.title
+      ? `<span class="msg-feed-title" title="${escapeHtml(author.title)}">✦ ${escapeHtml(author.title)}</span>`
+      : '';
+    // 完全复刻频道消息的左列结构：头像 + 昵称/角色/称号/时间
     el.detailMeta.innerHTML = `
-      <div class="mt-author-card" data-author-id="${escapeHtml(item.authorId)}" title="查看资料">
-        <div class="mt-author-avatar" style="background:${getAvatarColor(username)}">${avatarInner}</div>
-        <div class="mt-author-meta">
-          <div class="mt-author-name-row">
-            <span class="mt-author-name">${escapeHtml(nickname)}</span>
-            ${roleBadge(author.role)}
-          </div>
-          <div class="mt-author-time">${escapeHtml(timePart)}</div>
+      <div class="msg-feed-left mt-author-click" data-author-id="${escapeHtml(item.authorId)}" title="查看资料">
+        <div class="msg-feed-avatar" style="background:${getAvatarColor(username)}">${avatarInner}</div>
+        <div class="msg-feed-meta">
+          <span class="msg-feed-name">${escapeHtml(nickname)}</span>
+          <span class="msg-feed-role">${roleBadge(author.role)}</span>
+          ${titleHtml}
+          <span class="msg-feed-time">${escapeHtml(timePart)}</span>
         </div>
       </div>`;
-    const card = el.detailMeta.querySelector('.mt-author-card');
+    const card = el.detailMeta.querySelector('.mt-author-click');
     if (card) card.addEventListener('click', (e) => { e.stopPropagation(); openUserProfileBridge(item.authorId); });
   } else {
     el.detailMeta.textContent = [authorName, timePart].filter(Boolean).join(' · ') || '—';
@@ -522,10 +525,11 @@ const AVATAR_COLORS = [
   'linear-gradient(135deg,#ef4444,#f87171)','linear-gradient(135deg,#14b8a6,#2dd4bf)',
 ];
 function getAvatarColor(name) { let h=0; const s=String(name||'?'); for(let i=0;i<s.length;i++) h=s.charCodeAt(i)+((h<<5)-h); return AVATAR_COLORS[Math.abs(h)%AVATAR_COLORS.length]; }
+// 完全复刻频道消息的角色标签（admin=管理员，moderator=版主，其余=成员）
 function roleBadge(role) {
-  const map = { admin: ['系统管理员','admin'], teacher: ['教师','teacher'], student: ['在校学生','student'], moderator: ['版主','moderator'] };
-  const r = map[role] || map.student;
-  return `<span class="mt-role-badge ${r[1]}">${r[0]}</span>`;
+  const label = role === 'admin' ? '管理员' : role === 'moderator' ? '版主' : '成员';
+  const cls = role === 'admin' ? 'admin' : role === 'moderator' ? 'moderator' : 'member';
+  return `<span class="role-badge ${cls}">${label}</span>`;
 }
 // 在 iframe 内打开用户资料卡：优先直接调用父窗口 openUserProfile，失败则 postMessage
 function openUserProfileBridge(userId) {
@@ -644,7 +648,7 @@ function bindUI() {
       return;
     }
     // 兜底：直接打开记忆树（无父页面，如书签/新标签）时，带版本号跳回主频道
-    let v = '1.4.29';
+    let v = '1.4.30';
     try {
       v = localStorage.getItem('mt_v') || v;
       if (!v) {

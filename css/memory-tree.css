@@ -191,29 +191,57 @@ body { font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI
 .mt-detail-title { font-size: 28px; font-weight: 700; margin: 14px 0 18px; letter-spacing: .5px; line-height: 1.2; }
 .mt-detail-meta-label { font-size: 11px; color: rgba(180,195,230,.45); margin-bottom: 8px; letter-spacing: .5px; }
 .mt-detail-meta-value { font-size: 14px; color: rgba(220,228,250,.9); font-weight: 500; }
-/* 发布人卡片：移植频道消息风格（头像+昵称+角色+时间） */
-.mt-author-card { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; }
-.mt-author-avatar {
-  width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
+/* 发布人：完全复刻频道消息的 .msg-feed-left 结构（头像+昵称+角色/称号/时间） */
+.mt-detail-meta .msg-feed-left {
+  display: flex; flex-direction: row; align-items: center; gap: 10px;
+  flex-shrink: 0; width: auto; cursor: pointer; user-select: none;
+}
+.mt-detail-meta .msg-feed-avatar {
+  width: 38px; height: 38px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  font-size: 14px; font-weight: 700; color: #fff; overflow: hidden;
-  transition: transform .2s ease, box-shadow .2s ease;
+  font-size: 16px; font-weight: 700; color: #fff;
+  position: relative; overflow: hidden;
+  border: 2px solid rgba(255,255,255,0.08);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  flex-shrink: 0;
 }
-.mt-author-avatar img { width: 100%; height: 100%; object-fit: cover; }
-.mt-author-card:hover .mt-author-avatar { transform: scale(1.08); box-shadow: 0 0 0 2px rgba(110,140,255,.45); }
-.mt-author-meta { display: flex; flex-direction: column; gap: 2px; }
-.mt-author-name-row { display: flex; align-items: center; gap: 6px; }
-.mt-author-name { font-size: 14px; font-weight: 700; color: #e8ecff; }
-.mt-author-card:hover .mt-author-name { color: #a8c4ff; }
-.mt-author-time { font-size: 12px; color: rgba(180,195,230,.55); }
-.mt-role-badge {
-  display: inline-flex; align-items: center; padding: 1px 5px; border-radius: 4px;
-  font-size: 10px; font-weight: 600; line-height: 1.4;
+.mt-detail-meta .msg-feed-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.mt-detail-meta .msg-feed-left:hover .msg-feed-avatar {
+  transform: scale(1.06);
+  box-shadow: 0 0 0 3px rgba(110,140,255,.45), 0 4px 16px rgba(0,0,0,0.3);
 }
-.mt-role-badge.admin { background: rgba(237,66,69,.2); color: #ff6b6b; }
-.mt-role-badge.teacher { background: rgba(245,158,11,.2); color: #fbbf24; }
-.mt-role-badge.student { background: rgba(35,165,89,.2); color: #4ade80; }
-.mt-role-badge.moderator { background: rgba(88,101,242,.2); color: #818cf8; }
+.mt-detail-meta .msg-feed-meta {
+  display: flex; flex-direction: row; align-items: center; gap: 6px;
+  text-align: left; width: auto; flex-wrap: wrap;
+}
+.mt-detail-meta .msg-feed-name {
+  font-size: 14px; font-weight: 700; color: #e8ecff;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: 220px; cursor: pointer;
+  transition: color 0.2s ease;
+}
+.mt-detail-meta .msg-feed-left:hover .msg-feed-name { color: #a8c4ff; }
+.mt-detail-meta .msg-feed-role {
+  font-size: 12px; color: rgba(180,195,230,.7); display: flex; align-items: center; gap: 3px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.mt-detail-meta .msg-feed-role .role-badge { font-size: 10px; padding: 0 4px; }
+.mt-detail-meta .msg-feed-title {
+  font-size: 11px; color: #a8c4ff; display: inline-flex; align-items: center; gap: 2px;
+  white-space: nowrap;
+  background: rgba(124,92,252,.08); padding: 1px 8px; border-radius: 6px;
+}
+.mt-detail-meta .msg-feed-time {
+  font-size: 11px; color: rgba(180,195,230,.55); width: 100%;
+}
+/* 频道消息同款角色徽章 */
+.role-badge {
+  display: inline-block; padding: 0 5px; border-radius: 4px;
+  font-size: 0.66rem; font-weight: 600;
+}
+.role-badge.admin { background: rgba(237,66,69,.2); color: #ff6b6b; }
+.role-badge.moderator { background: rgba(88,101,242,.2); color: #818cf8; }
+.role-badge.member { background: rgba(35,165,89,.2); color: #4ade80; }
 
 .mt-detail-body { flex: 1; overflow-y: auto; padding-right: 4px; }
 /* 强制隐藏：确保普通用户在任何浏览器/缓存下都看不到删除按钮 */
