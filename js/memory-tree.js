@@ -365,21 +365,24 @@ const SEED_COMMENTS = SEED_POSTS.map((p, i) => ({
   is_ai: true,
   created_at: p.created_at + 60000
 }));
-function seedMemoryData() {
+async function seedMemoryData() {
   try {
-    // 帖子：idempotent 同步，每次启动都确保字段与当前种子一致（作者、文案等更新可自动落地）
-    if (window.MTPosts && window.MTPosts.ensureSeed) window.MTPosts.ensureSeed(SEED_POSTS);
+    // 帖子：云端模式会异步确保云端已种子（缺失自动补种）；本地模式同步落地
+    if (window.MTPosts && window.MTPosts.ensureSeed) await window.MTPosts.ensureSeed(SEED_POSTS);
 
-    // 评论：idempotent 同步，覆盖旧语气的 AI 评语
-    const ckey = (window.MT_CONFIG && window.MT_CONFIG.commentsStorageKey) || 'mt_comments_v1';
-    let cs = [];
-    try { cs = JSON.parse(localStorage.getItem(ckey) || '[]'); } catch (e) {}
-    SEED_COMMENTS.forEach(sc => {
-      const i = cs.findIndex(c => c.id === sc.id);
-      if (i >= 0) cs[i] = { ...cs[i], ...sc };
-      else cs.push(sc);
-    });
-    localStorage.setItem(ckey, JSON.stringify(cs));
+    // 评论：仅本地模式需要把 AI 评语写入 localStorage；云端模式评语已在云端（记忆树与频道同款）
+    const cb = (window.MT_CONFIG && window.MT_CONFIG.commentsBackend) || 'insforge';
+    if (cb === 'local') {
+      const ckey = (window.MT_CONFIG && window.MT_CONFIG.commentsStorageKey) || 'mt_comments_v1';
+      let cs = [];
+      try { cs = JSON.parse(localStorage.getItem(ckey) || '[]'); } catch (e) {}
+      SEED_COMMENTS.forEach(sc => {
+        const i = cs.findIndex(c => c.id === sc.id);
+        if (i >= 0) cs[i] = { ...cs[i], ...sc };
+        else cs.push(sc);
+      });
+      localStorage.setItem(ckey, JSON.stringify(cs));
+    }
     localStorage.setItem('mt_seeded_v1', '1');
   } catch (e) { /* 种子失败不影响主流程 */ }
 }
@@ -397,7 +400,7 @@ function init() {
   const WARM_MS = 850;
   requestAnimationFrame(function () {
     const warmStart = performance.now();
-    const runScene = function () {
+    const runScene = async function () {
       try {
         sceneApi = window.MTScene.create({
           canvas: el.canvas, config: CFG, data: [], reducedMotion: reduced,
@@ -409,7 +412,12 @@ function init() {
 
       bindUI();
       initMusicPlayer();
-      seedMemoryData();
+      // 云端模式：先把云端帖子/评论拉到内存缓存，再渲染场景与相册（与频道消息一致）
+      try { if (window.MTPosts && window.MTPosts.refresh) await window.MTPosts.refresh(); } catch (e) {}
+      try { if (window.MTComments && window.MTComments.refresh) await window.MTComments.refresh(); } catch (e) {}
+      await seedMemoryData();
+      // 种子可能补充了云端空库，再拉一次确保缓存最新
+      try { if (window.MTPosts && window.MTPosts.refresh) await window.MTPosts.refresh(); } catch (e) {}
       buildFallbackGrid();
       loadPosts();
       tryAuth();
@@ -436,6 +444,7 @@ function init() {
 function tryAuth() {
   const start = async () => {
     try { currentUser = await window.IF.getCurrentUser(); } catch (e) { currentUser = null; }
+    if (currentUser && currentUser.id) window.__mtCurrentUserId = currentUser.id;  // 供云端写入归属
     updatePostAuthorHint();
   };
   if (window.IF) start();
@@ -665,7 +674,7 @@ async function submitPost() {
       toast('图片上传失败，将以纯文字发布');
     }
   }
-  const res = window.MTPosts.submit({ content, authorName, anonymous, imageUrl });
+  const res = window.MTPosts.submit({ content, authorName, anonymous, imageUrl, authorId: (currentUser && currentUser.id) || null });
   if (!res || !res.ok) { toast('发布失败，请重试'); return; }
 
   toast('留言已挂上记忆树 ✦');
@@ -712,7 +721,7 @@ function bindUI() {
       return;
     }
     // 兜底：直接打开记忆树（无父页面，如书签/新标签）时，带版本号跳回主频道
-    let v = '1.4.31';
+    let v = '1.4.32';
     try {
       v = localStorage.getItem('mt_v') || v;
       if (!v) {

@@ -13,9 +13,9 @@ window.MT_CONFIG = {
     comments: true,     // 留言（先审后发）
     ai: true            // AI 摘要（优先走 Pages Function，失败自动本地诗意兜底）
   },
-  // 评论后端：'local' = 浏览器 localStorage（不接也行，现在就能用）；
-  // 'insforge' = 接 InsForge 真实后端 + admin 审核（需要 functions/comments.ts + 建表，后续开启）
-  commentsBackend: 'local',
+  // 存储后端：'local' = 浏览器 localStorage；'insforge' = InsForge 云端（和频道消息同款，跨设备同步）
+  commentsBackend: 'insforge',
+  postsBackend: 'insforge',
   // 音频
   audio: { bgmGain: 0.05, sfxGain: 0.18, chord: [130.81, 164.81, 196.00] }, // C3 E3 G3 柔和 pad
     // 场景调参

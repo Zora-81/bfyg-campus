@@ -1024,8 +1024,8 @@
   }
 
   /* ========== 记忆树留言模块 ==========
-     数据来自 window.MTPosts（与记忆树页面同源 localStorage 共享）。
-     先发后审：留言发完即可见，后台提供「标记已审」+「删除」按钮，语义与频道消息审核一致。 */
+     数据来自 window.MTPosts（InsForge 云端，和频道消息同款，跨设备同步）。
+     发完即显示（先发后审已取消），后台仅提供「删除」按钮；删除走 RLS 仅管理员可操作。 */
   function bindMemoryModule() {
     var search = document.getElementById('mt-search');
     if (search) search.addEventListener('input', function () { renderMemory(); });
@@ -1058,9 +1058,11 @@
     document.querySelectorAll('#mt-tbody .mt-checkbox:checked').forEach(function (cb) { ids.push(cb.dataset.id); });
     return ids;
   }
-  function renderMemory() {
+  async function renderMemory() {
     var tbody = document.getElementById('mt-tbody');
     if (!tbody) return;
+    // 云端模式：先拉取真实云端数据（帖子跨设备同步，与频道消息一致）
+    try { if (window.MTPosts && window.MTPosts.refresh) await window.MTPosts.refresh(); } catch (e) {}
     var search = (document.getElementById('mt-search') && document.getElementById('mt-search').value || '').toLowerCase();
     var posts = (window.MTPosts && window.MTPosts.list) ? window.MTPosts.list() : [];
     if (search) {
