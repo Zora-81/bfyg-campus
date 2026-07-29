@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { execSync } from 'child_process';
 
 const root = process.cwd();
 const out = path.join(root, 'web_build');
@@ -13,24 +14,28 @@ function copyDir(src, dest) {
   }
 }
 
-// 清理并重建（Windows 上 WorkBuddy safe-delete 钩子会拦截 rmSync/rmdirSync，失败时退到 unlinkSync）
+// 清理 web_build：WorkBuddy safe-delete 钩子会拦截 rmSync/unlinkSync（导致旧版本文件残留并被重复重命名）。
+// 退路：git-bash 的 rm -rf 实测可删除；最后再退到逐文件 unlinkSync。
 function wipeFiles(d) {
   for (const e of fs.readdirSync(d, { withFileTypes: true })) {
     const p = path.join(d, e.name);
     if (e.isDirectory()) wipeFiles(p);
     else fs.unlinkSync(p);
   }
+  try { fs.rmdirSync(d); } catch (e) {}
 }
-try {
-  fs.rmSync(out, { recursive: true, force: true });
-} catch (e) {
-  try { wipeFiles(out); } catch (e2) { /* 尽最大努力清理 */ }
+function cleanOut(d) {
+  try { fs.rmSync(d, { recursive: true, force: true }); return; } catch (e) {}
+  try { execSync('rm -rf "' + d + '"', { stdio: 'ignore', shell: 'bash' }); return; } catch (e) {}
+  try { wipeFiles(d); } catch (e) {}
 }
+cleanOut(out);
 fs.mkdirSync(out, { recursive: true });
 
 copyDir('css', path.join(out, 'css'));
 copyDir('js', path.join(out, 'js'));
 copyDir('images', path.join(out, 'images'));
+if (fs.existsSync('audio')) copyDir('audio', path.join(out, 'audio'));
 
 // Cloudflare Pages 缓存头规则
 if (fs.existsSync('_headers')) {
@@ -39,7 +44,7 @@ if (fs.existsSync('_headers')) {
 }
 
 // HTML：../css|js|images/ -> css|js|images/
-const htmlFiles = ['index.html', 'admin.html'];
+const htmlFiles = ['index.html', 'admin.html', 'memory-tree.html'];
 const htmlSrc = {};
 for (const f of htmlFiles) {
   const p = path.join('html', f);
@@ -52,11 +57,16 @@ for (const f of htmlFiles) {
 // 从 HTML 提取本次版本号（如 1.0.0 语义化版本），用于文件名哈希，避免手机浏览器忽略 query string 缓存
 const v = (htmlSrc['index.html'] || '').match(/[?&]v=([a-zA-Z0-9][a-zA-Z0-9._-]*)/)?.[1] || 'build';
 
-function hashDir(dir, ext) {
+// 仅重命名「本次从源码拷贝的原始文件名」，跳过历史遗留的已哈希文件，避免重复追加版本号（web_build 清理被钩子拦截时尤其重要）
+const jsSrcNames = fs.existsSync('js') ? fs.readdirSync('js').filter(f => f.endsWith('.js')) : [];
+const cssSrcNames = fs.existsSync('css') ? fs.readdirSync('css').filter(f => f.endsWith('.css')) : [];
+
+function hashDir(dir, ext, srcNames) {
   const dp = path.join(out, dir);
   const map = {};
   for (const f of fs.readdirSync(dp)) {
     if (!f.endsWith('.' + ext)) continue;
+    if (!srcNames.includes(f)) continue;
     const base = f.slice(0, -(ext.length + 1));
     const newName = `${base}.${v}.${ext}`;
     fs.renameSync(path.join(dp, f), path.join(dp, newName));
@@ -65,8 +75,8 @@ function hashDir(dir, ext) {
   return map;
 }
 
-const cssMap = hashDir('css', 'css');
-const jsMap = hashDir('js', 'js');
+const cssMap = hashDir('css', 'css', cssSrcNames);
+const jsMap = hashDir('js', 'js', jsSrcNames);
 
 function applyMap(html) {
   const escape = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

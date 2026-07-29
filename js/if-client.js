@@ -262,9 +262,23 @@ async function getMessages(channelId, opts) {
   const { data, error } = await insforge.database
     .from('messages').select('*')
     .eq('channel_id', channelId)
-    .is('parent_id', null) // 只拉顶层消息；回复/评论在各自评论区展开，避免 15 条限额被回复挤占
+    .is('parent_id', null) // 顶层消息单独分页，回复由 getReplyMessages 补齐
     .order('created_at', { ascending: false })
     .range(offset, offset + limit - 1)
+  if (error) throw error
+  return data || []
+}
+
+// 回复/评论单独拉取，避免顶层消息分页被子消息挤占，同时恢复评论区与评论计数。
+async function getReplyMessages(channelId, opts) {
+  opts = opts || {}
+  const limit = opts.limit || 1000
+  const { data, error } = await insforge.database
+    .from('messages').select('*')
+    .eq('channel_id', channelId)
+    .not('parent_id', 'is', null)
+    .order('created_at', { ascending: true })
+    .limit(limit)
   if (error) throw error
   return data || []
 }
@@ -726,7 +740,7 @@ const IF = {
   loadProfiles, resolveAuthor, adaptUser, ensureProfile, completePendingProfile, updateMyProfile,
   signIn, signUp, signOut, getCurrentUser, verifyEmail, resendVerification,
   sendResetPasswordEmail, exchangeResetPasswordToken, resetPassword,
-  listChannels, getMessages, sendMessage, moderateMessage,
+  listChannels, getMessages, getReplyMessages, sendMessage, moderateMessage,
   listNotifications, unreadCount, markRead, markAllRead,
   getCurrentUserId, notifyMentions, searchUsers, friendsList, friendRequest, friendRespond, friendRemove,
   findOrCreateDm, notifyDm,

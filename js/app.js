@@ -1329,6 +1329,7 @@
     Object.keys(channelMessages).forEach(function(chId) {
       var msgs = channelMessages[chId] || [];
       msgs.forEach(function(m) {
+        if (m.is_recalled) return; // 撤回的消息不计入热门榜（话题与子评论均不计）
         if (m.parent_id) {
           commentCounts[m.parent_id] = (commentCounts[m.parent_id] || 0) + 1; // 统计评论
         } else {
@@ -1722,7 +1723,7 @@
     // 贴吧风格模板：头像+昵称横排 → 内容 → 底部互动
     group.innerHTML =
       '<div class="msg-feed-left">'+
-        '<div class="msg-feed-avatar" style="background:'+avatarBg+'">'+avatarInner+'</div>'+
+        '<div class="msg-feed-avatar" style="background:'+avatarBg+'" title="查看资料" onclick="window.openUserProfile(\''+escapeHtml(author.id)+'\');event.stopPropagation();">'+avatarInner+'</div>'+
         '<div class="msg-feed-meta">'+
           '<span class="msg-feed-name">'+escapeHtml(author.nickname||author.username||'未知')+'</span>'+
           '<span class="msg-feed-role"><span class="role-badge '+roleCls+'">'+roleLabel+'</span></span>'+
@@ -1970,7 +1971,11 @@
     var arr = channelMessages[currentChannel.id] || [];
     var target = null;
     for (var i = 0; i < arr.length; i++) { if (arr[i].id === msgId) { target = arr[i]; break; } }
-    if (target) { target.is_recalled = true; target.recalled_by = recalledBy; }
+    if (target) {
+      target.is_recalled = true;
+      target.recalled_by = recalledBy;
+      renderRightSidebar(); // 撤回后立即刷新热门榜，避免已撤回话题仍挂在榜上
+    }
     var node = messagesArea ? messagesArea.querySelector('.msg-group[data-msg-id="' + msgId + '"]') : null;
     if (!node) return;
     if (currentUser && currentUser.role === 'admin') {
@@ -5041,6 +5046,68 @@
   if (window.IF) initAuth();
   else window.addEventListener('IF_READY', initAuth);
 
+  // ==================== 记忆树 iframe 覆盖层 ====================
+  // 用 iframe 打开记忆树，避免整页跳转卸载主频道，从而根治「返回频道跳登录页」。
+  (function () {
+    var overlay = null, iframe = null;
+    function openMemoryTree() {
+      if (overlay && overlay.style.display === 'block') return; // 防重入
+      var ver = (window.v && String(window.v)) || '1.4.17';
+      if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.className = 'mt-overlay';
+        overlay.id = 'mt-overlay';
+        iframe = document.createElement('iframe');
+        iframe.className = 'mt-iframe';
+        iframe.setAttribute('frameborder', '0');
+        overlay.appendChild(iframe);
+        overlay.addEventListener('click', function (e) {
+          if (e.target === overlay) closeMemoryTree();
+        });
+        document.body.appendChild(overlay);
+      }
+      // 每次打开都重新加载记忆树页面：关闭时 iframe 已被置为 about:blank，
+      // 不重设 src 会导致再次打开时直接显示空白页（黑屏）。
+      iframe.src = 'memory-tree.html?v=' + ver;
+      overlay.style.display = 'block';
+      document.body.style.overflow = 'hidden';
+      // GSAP 缩放 + 模糊 + 淡入：快速聚焦进入，避免长时间虚化导致「停一会儿才看清动画」
+      if (window.gsap) {
+        gsap.fromTo(overlay,
+          { opacity: 0, scale: 1.08, filter: 'blur(10px)' },
+          { opacity: 1, scale: 1, filter: 'blur(0px)', duration: 0.42, ease: 'power3.out' });
+      } else {
+        overlay.style.opacity = 1;
+        overlay.style.filter = 'none';
+      }
+    }
+    function closeMemoryTree() {
+      if (!overlay || overlay.style.display !== 'block') return;
+      if (closeMemoryTree._busy) return;
+      document.body.style.overflow = '';
+      var done = function () {
+        try { iframe.src = 'about:blank'; } catch (e) {} // 淡出完成后再释放资源
+        overlay.style.display = 'none';
+        overlay.style.opacity = '';
+        overlay.style.transform = '';
+        overlay.style.filter = '';
+        closeMemoryTree._busy = false;
+      };
+      // GSAP 缩放 + 模糊 + 淡出：快速缩小虚化退出，避免过长显得刻意
+      if (window.gsap) {
+        closeMemoryTree._busy = true;
+        gsap.to(overlay, { opacity: 0, scale: 0.96, filter: 'blur(8px)', duration: 0.38, ease: 'power2.in', onComplete: done });
+      } else {
+        done();
+      }
+    }
+    var entry = document.querySelector('.mt-drawer-entry-btn') || document.getElementById('mt-entry-btn');
+    if (entry) entry.addEventListener('click', openMemoryTree);
+    window.addEventListener('message', function (e) {
+      if (e && e.data && e.data.type === 'mt-close') closeMemoryTree();
+    });
+  })();
+
   initAvatarPopup();
   initBackgroundSettings();
   initSettingsPanel();
@@ -5116,7 +5183,7 @@
   ];
 
   var container = document.getElementById('loginCarousel');
-  if (!container) return;
+  if (container) {
 
   var CARD_COUNT = 4;
   var cards = [];
@@ -5279,6 +5346,7 @@
   window._carousel = { start: startCarousel, stop: stopCarousel };
   buildCards();
   frameId = requestAnimationFrame(renderLoop);
+  }
 
   // ==================== IMAGE LIGHTBOX ====================
   window.openImg = function(url) {
@@ -5289,6 +5357,87 @@
     overlay.querySelector('.img-lightbox-close').onclick = function(){ overlay.remove(); };
     overlay.onclick = function(e){ if(e.target===overlay) overlay.remove(); };
     document.body.appendChild(overlay);
+  };
+
+  // ==================== 用户资料卡（点消息头像弹出） ====================
+  // 只读展示，视觉复用个人资料卡 .profile-card 样式
+  window.openUserProfile = function(userId) {
+    if (!userId) return;
+    // 始终用最新的全局客户端，避免捕获的 IF 在 IF_READY 前为 null/stale 导致点击静默失败
+    var api = window.IF || IF;
+    var ROLE = {
+      admin:     { label: '系统管理员', icon: '🔧' },
+      teacher:   { label: '教师',       icon: '👩‍🏫' },
+      student:   { label: '在校学生',   icon: '📚' },
+      moderator: { label: '版主',       icon: '🛡️' }
+    };
+    function render(user) {
+      user = user || {};
+      var uid = user.id || userId;
+      var role = user.role || 'student';
+      var rm = ROLE[role] || ROLE.student;
+      var av = user.avatar_url
+        ? '<img src="'+escapeHtml(user.avatar_url)+'" alt="" onerror="this.style.display=\'none\'">'
+        : getInitial(user.nickname||user.username||'?');
+      var titleBadge = user.title
+        ? '<span class="profile-title-badge">✦ '+escapeHtml(user.title)+'</span>'
+        : '<span class="profile-title-badge profile-title-empty">未设置称号</span>';
+      var joinedDays = '—';
+      if (user.created_at) {
+        var d = Math.floor((Date.now() - new Date(user.created_at).getTime())/86400000);
+        joinedDays = (isFinite(d) && d > 0) ? d : 0;
+      }
+      var isSelf = !!(currentUser && currentUser.id === uid);
+      var html =
+        '<div class="user-card-modal-bg"></div>'+
+        '<button class="user-card-close" aria-label="关闭">&times;</button>'+
+        '<div class="profile-card">'+
+          '<div class="profile-avatar" style="background:'+getAvatarColor(user.username||uid)+'">'+av+'</div>'+
+          '<h2 class="profile-name">'+escapeHtml(user.nickname||user.username||'未知用户')+'</h2>'+
+          '<p class="profile-username">@'+escapeHtml(user.username||'')+(isSelf?'（我）':'')+'</p>'+
+          '<div class="profile-title-row">'+titleBadge+'</div>'+
+          '<p class="profile-bio">'+rm.icon+' '+rm.label+'</p>'+
+          '<div class="profile-stats">'+
+            '<div class="profile-stat"><span class="ps-num">'+rm.label.slice(0,3)+'</span><span class="ps-label">身份</span></div>'+
+            '<div class="profile-stat"><span class="ps-num" id="uc-msg">…</span><span class="ps-label">消息</span></div>'+
+            '<div class="profile-stat"><span class="ps-num" id="uc-joined">'+joinedDays+'</span><span class="ps-label">加入天数</span></div>'+
+          '</div>'+
+        '</div>';
+      var overlay = document.createElement('div');
+      overlay.className = 'user-card-modal';
+      overlay.innerHTML = html;
+
+      function close() { overlay.remove(); document.removeEventListener('keydown', onKey); }
+      function onKey(e) { if (e.key === 'Escape') close(); }
+
+      overlay.querySelector('.user-card-modal-bg').onclick = close;
+      overlay.querySelector('.user-card-close').onclick = close;
+      overlay.onclick = function(e){ if (e.target === overlay) close(); };
+      document.addEventListener('keydown', onKey);
+      document.body.appendChild(overlay);
+
+      // 异步补真实消息数（镜像个人卡逻辑）
+      var msgEl = overlay.querySelector('#uc-msg');
+      if (msgEl && api && api.insforge) {
+        api.insforge.database.from('messages')
+          .select('*', { count: 'exact', head: true }).eq('author_id', uid)
+          .then(function(r){ if (msgEl) msgEl.textContent = (r && typeof r.count === 'number') ? r.count : '—'; })
+          .catch(function(){ if (msgEl) msgEl.textContent = '—'; });
+      }
+    }
+
+    var cached = (api && api.resolveAuthor) ? api.resolveAuthor(userId) : null;
+    if (cached && cached.id && cached.username) {
+      render(cached);
+    } else if (api && api.insforge) {
+      api.insforge.database.from('profiles')
+        .select('id,username,nickname,avatar_url,role,title,status,created_at')
+        .eq('id', userId).single()
+        .then(function(r){ render(r && !r.error ? r : null); })
+        .catch(function(){ render(null); });
+    } else {
+      render(null);
+    }
   };
 
   // ==================== 好友私聊 DM ====================

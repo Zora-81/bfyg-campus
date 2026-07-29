@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#000000" />
+  <title>星空档案 · 记忆树</title>
+
+  <script>
+    (function(){
+      var v = '1.4.17';
+      try { if (!location.search.includes('v=' + v)) { localStorage.setItem('mt_v', v); } } catch(e){}
+    })();
+  </script>
+
+  <link rel="stylesheet" href="../css/memory-tree.css?v=1.4.17" />
+
+  <!-- Three.js 走 CDN importmap，与 if-client.js 一致 -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+
+<body data-theme="starry">
+  <!-- 进入 / 加载层：E · 星海隧道（canvas 粒子 + GSAP 收束） -->
+  <div id="mt-loader" class="mt-loader" aria-hidden="false">
+    <canvas id="mt-loader-canvas" class="mt-loader-canvas"></canvas>
+    <div class="mt-loader-tag">星空档案</div>
+  </div>
+
+  <!-- 3D 画布 -->
+  <canvas id="mt-canvas" class="mt-canvas"></canvas>
+
+  <!-- 暗角遮罩：压住画面边缘，突出中心星河，同时让 HUD 更易读 -->
+  <div class="mt-vignette" aria-hidden="true"></div>
+
+  <!-- 顶部 HUD -->
+  <header class="mt-hud" id="mt-hud">
+    <button id="mt-back" class="mt-btn mt-back-btn" title="返回频道">
+      <span class="mt-back-arrow">←</span>
+      <span>返回频道</span>
+    </button>
+    <div class="mt-hud-title-wrap">
+      <span class="mt-hud-icon">🌌</span>
+      <span class="mt-hud-title">记忆树</span>
+    </div>
+    <div class="mt-music-card" id="mt-music-card">
+      <button class="mt-music-visual" id="mt-music-visual" type="button" title="播放/暂停">
+        <span class="mt-music-note">♫</span>
+        <span class="mt-music-bars" aria-hidden="true">
+          <span></span><span></span><span></span>
+        </span>
+      </button>
+      <div class="mt-music-info">
+        <div class="mt-music-name" id="mt-music-name">星空旋律</div>
+        <div class="mt-music-artist" id="mt-music-artist">记忆树原声</div>
+      </div>
+      <div class="mt-music-controls">
+        <button id="mt-music-prev" class="mt-music-ctrl" type="button" title="上一首">⏮</button>
+        <button id="mt-music-toggle" class="mt-music-ctrl" type="button" title="播放/暂停">
+          <span class="mt-play-icon">▶</span>
+          <span class="mt-pause-icon" hidden>⏸</span>
+        </button>
+        <button id="mt-music-next" class="mt-music-ctrl" type="button" title="下一首">⏭</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- 提示气泡 -->
+  <div id="mt-toast" class="mt-toast" hidden></div>
+
+  <!-- 详情 / 评论弹层 -->
+  <div id="mt-detail" class="mt-detail" hidden>
+    <div class="mt-detail-card">
+      <button id="mt-detail-close" class="mt-detail-close" aria-label="关闭">✕</button>
+
+      <div class="mt-detail-media" id="mt-detail-media"></div>
+
+      <div class="mt-detail-info">
+        <h2 class="mt-detail-title" id="mt-detail-title"></h2>
+        <p class="mt-detail-meta" id="mt-detail-meta"></p>
+
+        <button id="mt-ai-summary" class="mt-btn mt-btn-ai" type="button">✨ AI 生成记忆摘要</button>
+        <div id="mt-summary" class="mt-summary" hidden></div>
+
+        <div class="mt-comments-head">💬 记忆留言 <span class="mt-comments-count" id="mt-comments-count">0</span></div>
+        <div id="mt-comments" class="mt-comments"><div class="mt-comments-empty">还没有留言，来做第一个点亮这段记忆的人</div></div>
+
+        <form id="mt-comment-form" class="mt-comment-form" autocomplete="off">
+          <input id="mt-comment-name" class="mt-input" type="text" maxlength="20" placeholder="你的昵称（可选）" />
+          <textarea id="mt-comment-text" class="mt-input mt-textarea" maxlength="300" placeholder="写下你对这段记忆的感想…（提交后需审核）" required></textarea>
+          <button type="submit" class="mt-btn mt-btn-send">提交留言</button>
+          <span class="mt-comment-hint">留言采用「先审后发」，通过后会显示在星海里 ✦</span>
+        </form>
+
+        <!-- 演示模式审核面板 -->
+        <div class="mt-moderation" id="mt-moderation">
+          <div class="mt-moderation-head">🛡️ 待审留言（演示·点通过即展示）</div>
+          <div id="mt-pending" class="mt-pending"><div class="mt-comments-empty">暂无待审</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- WebGL 兜底：静态相册 -->
+  <div id="mt-fallback" class="mt-fallback" hidden>
+    <div class="mt-fallback-head">🌌 记忆相册（当前设备不支持 3D，已切换为相册模式）</div>
+    <div id="mt-fallback-grid" class="mt-fallback-grid"></div>
+  </div>
+
+  <!-- 依赖：GSAP（已有） → InsForge 客户端 → 场景 → 配置 → 评论/AI → 引导 -->
+  <script src="../js/lib/gsap.min.js?v=1.4.17" defer></script>
+  <script type="module" src="../js/if-client.js?v=1.4.17"></script>
+  <script type="module" src="../js/three-scene.js?v=1.4.17"></script>
+  <script type="module" src="../js/memory-tree-config.js?v=1.4.17"></script>
+  <script type="module" src="../js/memory-comments.js?v=1.4.17"></script>
+  <script type="module" src="../js/memory-ai.js?v=1.4.17"></script>
+  <script type="module" src="../js/memory-tree.js?v=1.4.17"></script>
+</body>
+</html>
