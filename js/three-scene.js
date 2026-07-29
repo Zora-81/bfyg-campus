@@ -121,29 +121,6 @@ function moonTexture() {
   const t2 = new THREE.CanvasTexture(cv); t2.needsUpdate = true; return t2;
 }
 
-function genMemoryCard(item) {
-  const w = 512, h = 512;
-  const cv = document.createElement('canvas');
-  cv.width = w; cv.height = h;
-  const ctx = cv.getContext('2d');
-  const [c1, c2] = item.color || ['#6a8cff', '#c08bff'];
-  const bg = ctx.createLinearGradient(0, 0, w, h);
-  bg.addColorStop(0, c1); bg.addColorStop(1, c2);
-  ctx.fillStyle = bg; ctx.fillRect(0, 0, w, h);
-  const vg = ctx.createRadialGradient(w / 2, h / 2, w * 0.2, w / 2, h / 2, w * 0.7);
-  vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.45)');
-  ctx.fillStyle = vg; ctx.fillRect(0, 0, w, h);
-  ctx.font = '180px serif';
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText(item.emoji || '✦', w / 2, h / 2 - 30);
-  ctx.font = 'bold 40px "Noto Sans SC", sans-serif';
-  ctx.fillStyle = 'rgba(255,255,255,0.95)';
-  ctx.fillText(item.title || '', w / 2, h - 70);
-  const t = new THREE.CanvasTexture(cv);
-  t.colorSpace = THREE.SRGBColorSpace; t.needsUpdate = true;
-  return t;
-}
-
 // ---------- 共享点材质（锐利硬点 + Additive 发光） ----------
 function basePointsMaterial(map, opts = {}) {
   const { maxSize = 12.0, depthTest = true } = opts;
@@ -796,12 +773,55 @@ window.MTScene = {
     const mediaGroup = new THREE.Group();
     galaxyGroup.add(mediaGroup);
 
-    function makeMediaNode(item, idx) {
+    function createTextCardTexture(post) {
+      const w = 512, h = 512;
+      const cv = document.createElement('canvas');
+      cv.width = w; cv.height = h;
+      const ctx = cv.getContext('2d');
+      const grad = ctx.createLinearGradient(0, 0, w, h);
+      grad.addColorStop(0, 'rgba(38,44,92,0.98)');
+      grad.addColorStop(1, 'rgba(16,20,44,0.99)');
+      ctx.fillStyle = grad; ctx.fillRect(0, 0, w, h);
+      ctx.strokeStyle = 'rgba(255,255,255,0.14)'; ctx.lineWidth = 4;
+      ctx.strokeRect(10, 10, w - 20, h - 20);
+
+      const content = String(post.content || '').trim();
+      const maxWidth = w - 90;
+      const lineHeight = 46;
+      const fontSize = content.length > 90 ? 26 : (content.length > 50 ? 30 : 34);
+      ctx.font = `${fontSize}px "Noto Sans SC", "Microsoft YaHei", sans-serif`;
+      ctx.fillStyle = 'rgba(245,247,255,0.95)';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+
+      const chars = content.split('');
+      const lines = []; let line = '';
+      for (const ch of chars) {
+        const test = line + ch;
+        if (ctx.measureText(test).width > maxWidth && line) { lines.push(line); line = ch; }
+        else line = test;
+      }
+      if (line) lines.push(line);
+      if (lines.length > 6) { lines.length = 6; lines[5] = lines[5].replace(/.$/, '…'); }
+      const startY = h / 2 - ((lines.length - 1) * lineHeight) / 2;
+      lines.forEach((l, i) => ctx.fillText(l, w / 2, startY + i * lineHeight));
+
+      ctx.font = '20px "Noto Sans SC", "Microsoft YaHei", sans-serif';
+      ctx.fillStyle = 'rgba(180,195,230,0.65)';
+      ctx.fillText(`— ${post.authorName || '匿名同学'}`, w / 2, h - 68);
+
+      const t = new THREE.CanvasTexture(cv);
+      t.colorSpace = THREE.SRGBColorSpace; t.needsUpdate = true;
+      return t;
+    }
+
+    function makeMediaNode(item, idx, texOverride) {
       let tex2;
-      if (item.gen) tex2 = genMemoryCard(item);
-      else tex2 = loader.load(item.url);
-      tex2.colorSpace = THREE.SRGBColorSpace;
-      tex2.anisotropy = 4;
+      if (texOverride) tex2 = texOverride;
+      else {
+        tex2 = loader.load(item.url || '');
+        tex2.colorSpace = THREE.SRGBColorSpace;
+        tex2.anisotropy = 4;
+      }
 
       const w = 4.2, h = 4.2;
       const mat = new THREE.MeshBasicMaterial({ map: tex2, transparent: true, side: THREE.DoubleSide, depthWrite: false });
@@ -812,7 +832,7 @@ window.MTScene = {
 
       const container = new THREE.Group();
       container.add(glow); container.add(mesh);
-      const base = getMemoryPos(idx, data.length, cfg);
+      const base = getMemoryPos(idx, data.length + (window.MTPosts ? 20 : 0), cfg);
       container.position.copy(base);
       container.userData = { item, baseY: container.position.y, phase: Math.random() * Math.PI * 2, mesh, glow, hovered: false };
       mediaGroup.add(container);
@@ -846,8 +866,11 @@ window.MTScene = {
       const cont = obj ? obj.parent : null;
       if (hovered && hovered !== cont) { hovered.userData.hovered = false; api.playSfx('out'); }
       hovered = cont;
-      if (cont) { cont.userData.hovered = true; api.playSfx('hover'); dom.style.cursor = 'pointer'; }
-      else dom.style.cursor = 'default';
+      if (cont) {
+        cont.userData.hovered = true; api.playSfx('hover'); dom.style.cursor = 'pointer';
+      } else {
+        dom.style.cursor = 'default';
+      }
     }
     function onClick(e) {
       setPointer(e);
@@ -1011,6 +1034,11 @@ window.MTScene = {
       else if (!running) { running = true; clock.getDelta(); animate(); }
     });
 
+    const fmtTime = (ts) => {
+      const d = new Date(ts);
+      return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    };
+
     const api = {
       fallback: false,
       initAudio: ensureAudio,
@@ -1022,6 +1050,82 @@ window.MTScene = {
       focusNode: (id) => {
         const c = nodes.find(n => n.userData.item.id === id);
         if (c) { controls.target.copy(c.position); camera.position.copy(c.position).add(new THREE.Vector3(0, 2, 22)); }
+      },
+      addPostNode(post) {
+        const isImage = !!(post.imageUrl && /^https?:\/\/|\/|images\//.test(post.imageUrl));
+        const item = {
+          ...post,
+          title: (post.content && post.content.length > 18) ? post.content.slice(0, 18) + '…' : (post.content || '记忆'),
+          location: post.authorName || '匿名同学',
+          year: fmtTime(post.created_at),
+          url: isImage ? post.imageUrl : '',
+          emoji: '✦', isPost: true
+        };
+        if (isImage) {
+          // 图片帖：先用文字星占位，图片异步加载完成后替换为「照片 + 底部发布人字幕」纹理（失败则保留文字星）
+          const tex = createTextCardTexture(post);
+          makeMediaNode(item, nodes.length, tex);
+          const lastNode = nodes[nodes.length - 1];
+          const caption = post.authorName || '匿名同学';
+          try {
+            loader.load(post.imageUrl, (t) => {
+              t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+              let mapTex = t;
+              try {
+                const img = t.image;
+                if (img && img.width) {
+                  const cv = document.createElement('canvas');
+                  cv.width = img.width; cv.height = img.height;
+                  const ctx = cv.getContext('2d');
+                  ctx.drawImage(img, 0, 0, cv.width, cv.height);
+                  const capH = Math.max(28, Math.round(cv.height * 0.13));
+                  const g = ctx.createLinearGradient(0, cv.height - capH, 0, cv.height);
+                  g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,0.6)');
+                  ctx.fillStyle = g; ctx.fillRect(0, cv.height - capH, cv.width, capH);
+                  ctx.font = Math.round(capH * 0.5) + 'px "Noto Sans SC","Microsoft YaHei",sans-serif';
+                  ctx.fillStyle = 'rgba(255,255,255,0.94)'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                  ctx.fillText('— ' + caption, cv.width / 2, cv.height - capH / 2);
+                  const ct = new THREE.CanvasTexture(cv);
+                  ct.colorSpace = THREE.SRGBColorSpace; ct.anisotropy = 4;
+                  mapTex = ct;
+                }
+              } catch (e) { /* 合成失败，回退原图 */ }
+              if (lastNode && lastNode.userData && lastNode.userData.mesh) {
+                const mat = lastNode.userData.mesh.material;
+                if (mat.map && mat.map.dispose) { try { mat.map.dispose(); } catch (e) {} }
+                mat.map = mapTex;
+                mat.needsUpdate = true;
+              }
+            }, undefined, () => { /* 加载失败，保留文字星占位 */ });
+          } catch (e) { /* 忽略加载异常 */ }
+        } else {
+          const tex = createTextCardTexture(post);
+          makeMediaNode(item, nodes.length, tex);
+        }
+      },
+      // 热移除某个帖子节点（管理员删除时调用，无需刷新页面）
+      removeNode(id) {
+        const i = nodes.findIndex(n => n.userData && n.userData.item && n.userData.item.id === id);
+        if (i < 0) return;
+        const c = nodes[i];
+        try {
+          if (c.userData && c.userData.mesh) {
+            const m = c.userData.mesh;
+            if (m.geometry) m.geometry.dispose();
+            if (m.material) { if (m.material.map && m.material.map.dispose) { try { m.material.map.dispose(); } catch (e) {} } m.material.dispose(); }
+          }
+          if (c.userData && c.userData.glow) {
+            const gl = c.userData.glow;
+            if (gl.geometry) gl.geometry.dispose();
+            if (gl.material) gl.material.dispose();
+          }
+        } catch (e) {}
+        try { mediaGroup.remove(c); } catch (e) {}
+        if (c.userData && c.userData.mesh) {
+          const pi = pickables.indexOf(c.userData.mesh);
+          if (pi >= 0) pickables.splice(pi, 1);
+        }
+        nodes.splice(i, 1);
       },
       dispose() {
         running = false; cancelAnimationFrame(rafId);

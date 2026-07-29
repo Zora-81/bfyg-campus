@@ -8,12 +8,34 @@
 
   <script>
     (function(){
-      var v = '1.4.21';
-      try { if (!location.search.includes('v=' + v)) { localStorage.setItem('mt_v', v); } } catch(e){}
+      var v = '1.4.28';
+      try {
+        function newer(a, b) {
+          if (!b) return true;
+          var pa = String(a).split('.'), pb = String(b).split('.');
+          for (var i = 0; i < Math.max(pa.length, pb.length); i++) {
+            var na = parseInt(pa[i] || 0, 10) || 0, nb = parseInt(pb[i] || 0, 10) || 0;
+            if (na > nb) return true;
+            if (na < nb) return false;
+          }
+          return false;
+        }
+        var m = location.search.match(/[?&]v=([^&]+)/);
+        var cur = m ? m[1] : '';
+        var latest = localStorage.getItem('mt_v_latest') || '';
+        if (newer(v, cur) && newer(v, latest)) {
+          location.replace(location.href.split('?')[0] + '?v=' + v);
+        } else if (latest && newer(latest, v)) {
+          location.replace(location.href.split('?')[0] + '?v=' + latest);
+        } else {
+          localStorage.setItem('mt_v', v);
+          localStorage.setItem('mt_v_latest', v);
+        }
+      } catch(e){}
     })();
   </script>
 
-  <link rel="stylesheet" href="../css/memory-tree.css?v=1.4.21" />
+  <link rel="stylesheet" href="../css/memory-tree.css?v=1.4.28" />
 
   <!-- Three.js 走 CDN importmap，与 if-client.js 一致 -->
   <script type="importmap">
@@ -45,28 +67,17 @@
       <span class="mt-back-arrow">←</span>
       <span>返回频道</span>
     </button>
-    <div class="mt-hud-title-wrap">
+    <button id="mt-post-trigger" class="mt-hud-title-wrap" type="button" title="在记忆树留言">
       <span class="mt-hud-icon">🌌</span>
       <span class="mt-hud-title">记忆树</span>
-    </div>
+    </button>
     <div class="mt-music-card" id="mt-music-card">
-      <button class="mt-music-visual" id="mt-music-visual" type="button" title="播放/暂停">
-        <span class="mt-music-note">♫</span>
-        <span class="mt-music-bars" aria-hidden="true">
-          <span></span><span></span><span></span>
-        </span>
+      <button class="mt-disc" id="mt-music-disc" type="button" title="播放 / 暂停">
+        <span class="mt-disc-label">♫</span>
       </button>
       <div class="mt-music-info">
         <div class="mt-music-name" id="mt-music-name">星空旋律</div>
         <div class="mt-music-artist" id="mt-music-artist">记忆树原声</div>
-      </div>
-      <div class="mt-music-controls">
-        <button id="mt-music-prev" class="mt-music-ctrl" type="button" title="上一首">⏮</button>
-        <button id="mt-music-toggle" class="mt-music-ctrl" type="button" title="播放/暂停">
-          <span class="mt-play-icon">▶</span>
-          <span class="mt-pause-icon" hidden>⏸</span>
-        </button>
-        <button id="mt-music-next" class="mt-music-ctrl" type="button" title="下一首">⏭</button>
       </div>
     </div>
   </header>
@@ -77,33 +88,79 @@
   <!-- 详情 / 评论弹层 -->
   <div id="mt-detail" class="mt-detail" hidden>
     <div class="mt-detail-card">
-      <button id="mt-detail-close" class="mt-detail-close" aria-label="关闭">✕</button>
+      <button id="mt-detail-delete" class="mt-detail-close" aria-label="删除该帖子" title="删除该帖子（管理员）" hidden>✕</button>
 
       <div class="mt-detail-media" id="mt-detail-media"></div>
 
       <div class="mt-detail-info">
-        <h2 class="mt-detail-title" id="mt-detail-title"></h2>
-        <p class="mt-detail-meta" id="mt-detail-meta"></p>
+        <div class="mt-detail-header">
+          <div class="mt-detail-eyebrow">
+            <svg class="mt-detail-eyebrow-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
+            <span>精神印记</span>
+          </div>
+          <h2 class="mt-detail-title" id="mt-detail-title"></h2>
+          <div class="mt-detail-meta">
+            <div class="mt-detail-meta-label">拍摄地点 / 备注</div>
+            <div class="mt-detail-meta-value" id="mt-detail-meta"></div>
+          </div>
+        </div>
 
-        <button id="mt-ai-summary" class="mt-btn mt-btn-ai" type="button">✨ AI 生成记忆摘要</button>
-        <div id="mt-summary" class="mt-summary" hidden></div>
+        <div class="mt-detail-body">
+          <div id="mt-summary" class="mt-summary" hidden></div>
 
-        <div class="mt-comments-head">💬 记忆留言 <span class="mt-comments-count" id="mt-comments-count">0</span></div>
-        <div id="mt-comments" class="mt-comments"><div class="mt-comments-empty">还没有留言，来做第一个点亮这段记忆的人</div></div>
+          <div class="mt-comments-head">
+            <span>💬 记忆留言</span>
+            <span class="mt-comments-count" id="mt-comments-count">0</span>
+          </div>
+          <div id="mt-comments" class="mt-comments">
+            <div class="mt-comments-empty">暂无评论，快来抢沙发~</div>
+          </div>
+        </div>
 
         <form id="mt-comment-form" class="mt-comment-form" autocomplete="off">
-          <input id="mt-comment-name" class="mt-input" type="text" maxlength="20" placeholder="你的昵称（可选）" />
-          <textarea id="mt-comment-text" class="mt-input mt-textarea" maxlength="300" placeholder="写下你对这段记忆的感想…（提交后需审核）" required></textarea>
-          <button type="submit" class="mt-btn mt-btn-send">提交留言</button>
-          <span class="mt-comment-hint">留言采用「先审后发」，通过后会显示在星海里 ✦</span>
+          <div class="mt-comment-input-bar">
+            <button type="button" class="mt-comment-image-btn" id="mt-comment-image-btn" aria-label="添加图片">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+            </button>
+            <input id="mt-comment-text" class="mt-comment-input" type="text" maxlength="300" placeholder="输入你的评论..." required />
+            <button type="submit" class="mt-btn-send-text">发送</button>
+          </div>
         </form>
-
-        <!-- 演示模式审核面板 -->
-        <div class="mt-moderation" id="mt-moderation">
-          <div class="mt-moderation-head">🛡️ 待审留言（演示·点通过即展示）</div>
-          <div id="mt-pending" class="mt-pending"><div class="mt-comments-empty">暂无待审</div></div>
-        </div>
       </div>
+    </div>
+  </div>
+
+  <!-- 在记忆树留言 -->
+  <div id="mt-post-modal" class="mt-modal" hidden>
+    <div class="mt-modal-card">
+      <button id="mt-post-close" class="mt-detail-close" type="button" aria-label="关闭">✕</button>
+      <div class="mt-modal-header">
+        <div class="mt-detail-eyebrow">
+          <svg class="mt-detail-eyebrow-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
+          <span>精神印记</span>
+        </div>
+        <h2 class="mt-detail-title">在记忆树留言</h2>
+      </div>
+      <form id="mt-post-form" class="mt-post-form" autocomplete="off">
+        <textarea id="mt-post-text" class="mt-input mt-textarea" maxlength="300" placeholder="写下你想留在记忆树的话…（发布后将作为一颗星挂在树上）" required></textarea>
+        <div class="mt-post-image-row" id="mt-post-image-row" hidden>
+          <img id="mt-post-image-preview" class="mt-post-image-preview" alt="图片预览" />
+          <button type="button" id="mt-post-image-remove" class="mt-post-image-remove" aria-label="移除图片">✕</button>
+        </div>
+        <div class="mt-post-bottom">
+          <button type="button" id="mt-post-image-btn" class="mt-post-image-btn" aria-label="添加照片">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+            <span>添加照片</span>
+          </button>
+          <input type="file" id="mt-post-image-input" accept="image/*" hidden />
+          <label class="mt-post-anon"><input type="checkbox" id="mt-post-anon" checked /> 匿名</label>
+          <span id="mt-post-author-hint" class="mt-post-author-hint"></span>
+        </div>
+        <div class="mt-post-actions">
+          <button type="button" id="mt-post-cancel" class="mt-post-btn mt-post-btn-secondary">取消</button>
+          <button type="submit" class="mt-post-btn mt-post-btn-send">发布</button>
+        </div>
+      </form>
     </div>
   </div>
 
@@ -114,12 +171,13 @@
   </div>
 
   <!-- 依赖：GSAP（已有） → InsForge 客户端 → 场景 → 配置 → 评论/AI → 引导 -->
-  <script src="../js/lib/gsap.min.js?v=1.4.21" defer></script>
-  <script type="module" src="../js/if-client.js?v=1.4.21"></script>
-  <script type="module" src="../js/three-scene.js?v=1.4.21"></script>
-  <script type="module" src="../js/memory-tree-config.js?v=1.4.21"></script>
-  <script type="module" src="../js/memory-comments.js?v=1.4.21"></script>
-  <script type="module" src="../js/memory-ai.js?v=1.4.21"></script>
-  <script type="module" src="../js/memory-tree.js?v=1.4.21"></script>
+  <script src="../js/lib/gsap.min.js?v=1.4.28" defer></script>
+  <script type="module" src="../js/if-client.js?v=1.4.28"></script>
+  <script type="module" src="../js/three-scene.js?v=1.4.28"></script>
+  <script type="module" src="../js/memory-tree-config.js?v=1.4.28"></script>
+  <script type="module" src="../js/memory-comments.js?v=1.4.28"></script>
+  <script type="module" src="../js/memory-ai.js?v=1.4.28"></script>
+  <script type="module" src="../js/memory-posts.js?v=1.4.28"></script>
+  <script type="module" src="../js/memory-tree.js?v=1.4.28"></script>
 </body>
 </html>

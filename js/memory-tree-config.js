@@ -51,15 +51,15 @@ window.MT_CONFIG = {
     meteorCount: 18,
     autoRotateSpeed: 0.14
   },
-  commentsStorageKey: 'mt_comments_v1'
+  commentsStorageKey: 'mt_comments_v1',
+  postsStorageKey: 'mt_posts_v1'
 };
 
 // ===== 静态记忆数据（移植参考仓库 photos.js 思路）=====
 // 注意：URL 用相对 web_build 根的路径（images/...），因为构建后脚本在 web_build/js/，
 // 而图片被复制到 web_build/images/；构建脚本只改写 HTML 内的 ../ 引用，不会改写 JS 内部字符串。
-// gen:true 的节点用 Canvas 程序化生成「记忆卡」纹理（渐变 + emoji + 标题），完全离线。
-// 真实图节点用 url 加载（来自 images/ 校园真实素材）。
-// 字段：id, media_type('image'|'video'), url(可选), gen(可选), emoji, title, location, year, color(可选, gen 用)
+// 所有节点均使用真实照片 url 加载（来自 images/ 校园真实素材），不再生成 AI 占位图。
+// 字段：id, media_type('image'|'video'), url, title, location, year
 window.MT_DATA = [
   { id: 'm01', media_type: 'image', url: 'images/campus-aerial.jpg', title: '校园航拍 · 香山路新校区', location: '宝丰一高', year: '2025' },
   { id: 'm02', media_type: 'image', url: 'images/campus-01.jpg', title: '晨光里的教学楼', location: '教学楼 A 区', year: '2024' },
@@ -67,12 +67,5 @@ window.MT_DATA = [
   { id: 'm04', media_type: 'image', url: 'images/campus-03.jpg', title: '实验室的午后', location: '人工智能实验室', year: '2025' },
   { id: 'm05', media_type: 'image', url: 'images/campus-04.jpg', title: '操场与晚风', location: '田径场', year: '2024' },
   { id: 'm06', media_type: 'image', url: 'images/school-night.jpg', title: '夜色中的校园', location: '宝丰一高', year: '2025' },
-  { id: 'm07', media_type: 'image', url: 'images/starry-nebula.png', title: '星河下的记忆', location: '记忆星海', year: '—' },
-  { id: 'm08', gen: true, emoji: '🎓', title: '毕业典礼', location: '操场主席台', year: '2025', color: ['#6a8cff', '#c08bff'] },
-  { id: 'm09', gen: true, emoji: '🏃', title: '运动会 · 接力冲刺', location: '田径场', year: '2024', color: ['#ff9a6a', '#ff6a8c'] },
-  { id: 'm10', gen: true, emoji: '🌙', title: '晚自习的灯光', location: '高三教学楼', year: '2025', color: ['#5ad1ff', '#6a8cff'] },
-  { id: 'm11', gen: true, emoji: '🎨', title: '社团文化节', location: '中心广场', year: '2024', color: ['#ffd56a', '#ff9a6a'] },
-  { id: 'm12', gen: true, emoji: '🍜', title: '食堂的烟火气', location: '学生食堂', year: '2024', color: ['#9affb0', '#5ad1ff'] },
-  { id: 'm13', gen: true, emoji: '🎉', title: '六十周年校庆', location: '香山路校区', year: '2016', color: ['#ff6ac0', '#c08bff'] },
-  { id: 'm14', gen: true, emoji: '📚', title: '图书馆的午后', location: '图书馆', year: '2025', color: ['#a8ff6a', '#5ad1ff'] }
+  { id: 'm07', media_type: 'image', url: 'images/starry-nebula.png', title: '星河下的记忆', location: '记忆星海', year: '—' }
 ];

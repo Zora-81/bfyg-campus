@@ -80,14 +80,16 @@ body { font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI
   background: rgba(12,14,28,.58); border: 1px solid rgba(255,255,255,.14);
   backdrop-filter: blur(16px) saturate(180%); -webkit-backdrop-filter: blur(16px) saturate(180%);
   box-shadow: 0 6px 26px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.08);
+  cursor: pointer; color: inherit; font: inherit; outline: none;
 }
+.mt-hud-title-wrap:hover { background: rgba(20,24,48,.7); border-color: rgba(150,170,255,.35); box-shadow: 0 0 20px rgba(120,150,255,.25), inset 0 1px 0 rgba(255,255,255,.1); }
 .mt-hud-icon { font-size: 15px; filter: drop-shadow(0 0 10px rgba(150,120,255,.6)); }
 .mt-hud-title { font-size: 14px; font-weight: 700; letter-spacing: 1.5px; text-shadow: 0 0 14px rgba(150,120,255,.7); }
 
-/* 音乐卡片（BobZhang MemoryArchive 同款胶囊播放器） */
+/* 音乐卡片（圆形旋转唱片，单曲目：点击播放 / 暂停） */
 .mt-music-card {
-  display: inline-flex; align-items: center; gap: 12px;
-  padding: 7px 12px 7px 10px; border-radius: 999px;
+  display: inline-flex; align-items: center; gap: 10px;
+  padding: 6px 12px 6px 8px; border-radius: 999px;
   background: rgba(12,14,28,.58); border: 1px solid rgba(255,255,255,.14);
   backdrop-filter: blur(16px) saturate(180%); -webkit-backdrop-filter: blur(16px) saturate(180%);
   box-shadow: 0 6px 26px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.08);
@@ -96,61 +98,34 @@ body { font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI
 .mt-music-card:hover { border-color: rgba(150,170,255,.4); box-shadow: 0 0 24px rgba(120,150,255,.22); }
 .mt-music-card.no-audio { opacity: .85; }
 
-/* 左侧可视化按钮 */
-.mt-music-visual {
-  position: relative; width: 36px; height: 36px; border-radius: 50%;
+/* 圆形旋转唱片 */
+.mt-disc {
+  position: relative; width: 52px; height: 52px; border-radius: 50%; flex-shrink: 0; cursor: pointer; outline: none;
+  border: 1px solid rgba(255,255,255,.18);
+  background:
+    radial-gradient(circle at 50% 50%, #2a2f55 0 17%, rgba(40,46,90,0) 17.5%),
+    repeating-radial-gradient(circle at 50% 50%, rgba(180,190,255,.10) 0 1.5px, rgba(10,12,28,0) 1.5px 4px),
+    radial-gradient(circle at 50% 50%, #14182e 0%, #0a0c1c 72%);
+  box-shadow: 0 6px 26px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.08);
   display: inline-flex; align-items: center; justify-content: center;
-  background: linear-gradient(135deg, rgba(120,80,220,.35), rgba(180,100,240,.22));
-  border: 1px solid rgba(180,130,255,.25);
-  cursor: pointer; transition: all .2s ease; flex-shrink: 0;
+  transition: box-shadow .2s ease;
 }
-.mt-music-visual:hover { transform: scale(1.08); border-color: rgba(180,130,255,.55); box-shadow: 0 0 14px rgba(170,120,255,.35); }
-.mt-music-visual.playing { background: linear-gradient(135deg, rgba(80,180,220,.35), rgba(120,130,255,.32)); border-color: rgba(120,200,255,.45); }
-.mt-music-visual.playing .mt-music-note { opacity: 0; }
-.mt-music-visual.playing .mt-music-bars { opacity: 1; }
-.mt-music-note {
-  font-size: 17px; color: #c39fff;
-  filter: drop-shadow(0 0 6px rgba(170,120,255,.7));
-  transition: opacity .2s ease;
+.mt-disc:hover { box-shadow: 0 0 22px rgba(120,150,255,.4), inset 0 1px 0 rgba(255,255,255,.12); }
+.mt-disc.playing { animation: mtDiscSpin 4.5s linear infinite; }
+.mt-disc-label {
+  width: 18px; height: 18px; border-radius: 50%;
+  background: linear-gradient(135deg, rgba(120,80,220,.55), rgba(180,100,240,.35));
+  border: 1px solid rgba(180,130,255,.45);
+  color: #e3d2ff; font-size: 11px; line-height: 1;
+  display: inline-flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 10px rgba(150,120,255,.55);
 }
-.mt-music-bars {
-  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 3px;
-  opacity: 0; transition: opacity .2s ease; pointer-events: none;
-}
-.mt-music-bars span {
-  width: 3px; border-radius: 2px; background: rgba(170,220,255,.85);
-  box-shadow: 0 0 5px rgba(120,200,255,.5);
-  animation: mtMusicBar 1.2s ease-in-out infinite paused;
-}
-.mt-music-bars span:nth-child(1) { height: 8px; animation-delay: 0s; }
-.mt-music-bars span:nth-child(2) { height: 14px; animation-delay: .2s; }
-.mt-music-bars span:nth-child(3) { height: 10px; animation-delay: .4s; }
-.mt-music-visual.playing .mt-music-bars span { animation-play-state: running; }
-@keyframes mtMusicBar {
-  0%, 100% { transform: scaleY(.6); opacity: .5; }
-  50% { transform: scaleY(1.15); opacity: 1; }
-}
+@keyframes mtDiscSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
 /* 歌曲信息 */
 .mt-music-info { display: flex; flex-direction: column; gap: 1px; min-width: 86px; }
 .mt-music-name { font-size: 13px; font-weight: 700; color: #f0f2ff; letter-spacing: .3px; }
 .mt-music-artist { font-size: 11px; color: rgba(180,195,230,.65); }
-
-/* 控制按钮组 */
-.mt-music-controls {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding-left: 10px; border-left: 1px solid rgba(255,255,255,.1);
-}
-.mt-music-ctrl {
-  width: 30px; height: 30px; border-radius: 50%; border: 1px solid rgba(255,255,255,.14);
-  background: rgba(255,255,255,.06); color: #e8ecff;
-  display: inline-flex; align-items: center; justify-content: center;
-  font-size: 12px; cursor: pointer; transition: all .2s ease; flex-shrink: 0;
-}
-.mt-music-ctrl:hover { background: rgba(150,170,255,.22); border-color: rgba(150,170,255,.5); box-shadow: 0 0 12px rgba(120,150,255,.3); }
-.mt-music-ctrl.playing { background: rgba(150,170,255,.25); border-color: rgba(150,170,255,.6); }
-.mt-music-ctrl .mt-play-icon { margin-left: 1px; }
-.mt-music-ctrl .mt-pause-icon { font-size: 11px; }
 
 .mt-btn {
   border: 1px solid rgba(255,255,255,.16); background: rgba(20,24,46,.5);
@@ -170,33 +145,63 @@ body { font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI
 .mt-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
 /* ===== 详情弹层 ===== */
-.mt-detail { position: fixed; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(4,6,16,.55); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+.mt-detail { position: fixed; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgba(0,0,0,.78); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
 .mt-detail[hidden] { display: none; }
 .mt-detail-card {
-  width: min(880px, 94vw); max-height: 90vh; display: flex; gap: 0; overflow: hidden;
-  background: rgba(14,18,38,.86); border: 1px solid rgba(255,255,255,.12); border-radius: 18px;
-  box-shadow: 0 30px 100px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.08);
+  position: relative; width: min(1000px, 96vw); height: min(720px, 90vh); display: flex; gap: 0; overflow: hidden;
+  background: #0a0a0f; border: 1px solid rgba(255,255,255,.08); border-radius: 24px;
+  box-shadow: 0 40px 120px rgba(0,0,0,.75);
 }
-.mt-detail-close { position: absolute; top: 16px; right: 16px; z-index: 3; width: 38px; height: 38px; border-radius: 50%; border: 1.5px solid rgba(255,255,255,.3); background: rgba(15,15,30,.6); color: #fff; cursor: pointer; font-size: 16px; }
-.mt-detail-close:hover { background: rgba(40,40,70,.8); }
-.mt-detail-media { flex: 0 0 46%; background: #000; display: flex; align-items: center; justify-content: center; overflow: hidden; }
-.mt-detail-media img, .mt-detail-media video { width: 100%; height: 100%; object-fit: cover; display: block; }
-.mt-detail-info { flex: 1; padding: 26px 24px; overflow-y: auto; }
-.mt-detail-info::-webkit-scrollbar { width: 5px; }
-.mt-detail-info::-webkit-scrollbar-thumb { background: rgba(255,255,255,.18); border-radius: 4px; }
-.mt-detail-title { font-size: 21px; font-weight: 800; margin: 6px 0 8px; letter-spacing: 1px; }
-.mt-detail-meta { font-size: 13px; color: rgba(180,195,230,.65); margin: 0 0 18px; line-height: 1.6; }
-.mt-btn-ai { width: 100%; margin-bottom: 12px; background: linear-gradient(90deg, rgba(106,140,255,.25), rgba(192,139,255,.25)); border-color: rgba(160,150,255,.5); }
-.mt-btn-ai:hover { box-shadow: 0 0 20px rgba(150,120,255,.55); }
-.mt-summary { padding: 14px 16px; margin-bottom: 18px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); border-radius: 12px; font-size: 13.5px; line-height: 1.75; color: rgba(210,220,245,.9); }
-.mt-summary[hidden] { display: none; }
-.mt-summary .mt-tags { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; }
-.mt-summary .mt-tag { font-size: 11px; padding: 3px 10px; border-radius: 999px; background: rgba(110,140,255,.18); color: #a8c0ff; border: 1px solid rgba(110,140,255,.3); }
+.mt-detail-close {
+  position: absolute; top: 18px; right: 18px; z-index: 10; width: 40px; height: 40px; border-radius: 50%;
+  border: 1px solid rgba(255,255,255,.14); background: rgba(20,20,28,.72); color: rgba(230,235,255,.9);
+  cursor: pointer; font-size: 17px; display: inline-flex; align-items: center; justify-content: center;
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); transition: all .2s ease;
+}
+.mt-detail-close:hover { background: rgba(45,45,58,.9); border-color: rgba(255,255,255,.3); color: #fff; }
+/* 详情右上角 ✕ 现为管理员删除按钮，hover 用红色提示危险 */
+#mt-detail-delete:hover { background: rgba(255,59,59,.2); border-color: rgba(255,80,80,.45); color: #ff6b6b; }
 
-.mt-comments-head { font-size: 14px; font-weight: 700; margin-bottom: 12px; letter-spacing: .5px; }
-.mt-comments-count { display: inline-block; min-width: 20px; text-align: center; margin-left: 4px; padding: 1px 7px; border-radius: 999px; background: rgba(110,140,255,.22); color: #a8c0ff; font-size: 12px; }
+/* 左侧照片 */
+.mt-detail-media {
+  flex: 0 0 55%; background: #07070a; display: flex; align-items: center; justify-content: center; overflow: hidden;
+  border-radius: 24px 0 0 24px;
+}
+.mt-detail-media img, .mt-detail-media video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.mt-detail-media-placeholder {
+  width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+  background: radial-gradient(circle at 50% 40%, rgba(106,140,255,.18), transparent 60%), #07070a;
+  color: rgba(230,235,255,.9); text-align: center;
+}
+.mt-detail-media-placeholder span { font-size: 64px; opacity: .55; }
+.mt-detail-media-placeholder div { font-size: 18px; font-weight: 700; letter-spacing: 1px; opacity: .8; }
+
+/* 右侧信息面板 */
+.mt-detail-info {
+  flex: 1; display: flex; flex-direction: column; padding: 34px 32px 28px; overflow: hidden;
+  color: #e8ecff;
+}
+.mt-detail-header { flex-shrink: 0; margin-bottom: 22px; }
+.mt-detail-eyebrow {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-size: 11px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase;
+  color: rgba(180,195,230,.55);
+}
+.mt-detail-eyebrow-icon { width: 14px; height: 14px; color: rgba(200,210,255,.75); }
+.mt-detail-title { font-size: 28px; font-weight: 700; margin: 14px 0 18px; letter-spacing: .5px; line-height: 1.2; }
+.mt-detail-meta-label { font-size: 11px; color: rgba(180,195,230,.45); margin-bottom: 5px; letter-spacing: .5px; }
+.mt-detail-meta-value { font-size: 14px; color: rgba(220,228,250,.9); font-weight: 500; }
+.mt-detail-author { color: #a8c4ff; font-weight: 600; }
+.mt-detail-author:hover { color: #d6e4ff; }
+
+.mt-detail-body { flex: 1; overflow-y: auto; padding-right: 4px; }
+.mt-detail-body::-webkit-scrollbar { width: 4px; }
+.mt-detail-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,.12); border-radius: 4px; }
+
+.mt-comments-head { font-size: 13px; font-weight: 700; margin-bottom: 12px; letter-spacing: .5px; color: rgba(220,228,250,.9); }
+.mt-comments-count { display: inline-block; min-width: 20px; text-align: center; margin-left: 6px; padding: 1px 7px; border-radius: 999px; background: rgba(110,140,255,.18); color: #a8c0ff; font-size: 11px; font-weight: 600; }
 .mt-comments { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; min-height: 20px; }
-.mt-comments-empty { font-size: 12.5px; color: rgba(180,195,230,.45); padding: 8px 0; }
+.mt-comments-empty { font-size: 12.5px; color: rgba(180,195,230,.4); padding: 8px 0; }
 .mt-comment { padding: 10px 12px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.06); border-radius: 11px; }
 .mt-comment-top { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
 .mt-comment-avatar { width: 24px; height: 24px; border-radius: 50%; background: linear-gradient(135deg,#6a8cff,#c08bff); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: #fff; flex-shrink: 0; }
@@ -204,22 +209,83 @@ body { font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI
 .mt-comment-time { font-size: 11px; color: rgba(180,195,230,.45); margin-left: auto; }
 .mt-comment-body { font-size: 13px; line-height: 1.6; color: rgba(210,220,245,.88); white-space: pre-wrap; word-break: break-word; }
 
-.mt-comment-form { display: flex; flex-direction: column; gap: 8px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,.08); }
-.mt-input { width: 100%; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.12); border-radius: 10px; color: #e8ecff; font-family: inherit; font-size: 13px; padding: 10px 12px; resize: none; }
-.mt-input:focus { outline: none; border-color: rgba(150,170,255,.55); box-shadow: 0 0 0 3px rgba(120,150,255,.15); }
-.mt-textarea { min-height: 64px; }
-.mt-btn-send { align-self: flex-end; background: linear-gradient(90deg,#6a8cff,#c08bff); border: none; font-weight: 700; }
-.mt-comment-hint { font-size: 11px; color: rgba(180,195,230,.5); align-self: flex-end; }
+/* 底部评论输入栏（参考图单行样式） */
+.mt-comment-form { flex-shrink: 0; margin-top: 16px; }
+.mt-comment-input-bar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 6px 6px 12px;
+  background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1); border-radius: 999px;
+}
+.mt-comment-image-btn {
+  width: 36px; height: 36px; border-radius: 50%; border: none; background: transparent;
+  color: rgba(180,195,230,.55); cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+  transition: all .2s ease; flex-shrink: 0;
+}
+.mt-comment-image-btn:hover { background: rgba(255,255,255,.08); color: rgba(220,228,250,.9); }
+.mt-comment-image-btn svg { width: 20px; height: 20px; }
+.mt-comment-input {
+  flex: 1; min-width: 0; background: transparent; border: none; outline: none;
+  color: #e8ecff; font-family: inherit; font-size: 14px; padding: 8px 6px;
+}
+.mt-comment-input::placeholder { color: rgba(180,195,230,.35); }
+.mt-btn-send-text {
+  flex-shrink: 0; padding: 9px 20px; border-radius: 999px; border: none;
+  background: rgba(255,255,255,.12); color: rgba(230,235,255,.9);
+  font-size: 13px; font-weight: 600; cursor: pointer; transition: all .2s ease;
+}
+.mt-btn-send-text:hover { background: rgba(255,255,255,.2); color: #fff; }
+.mt-btn-send-text:disabled { opacity: .5; cursor: not-allowed; }
 
-.mt-moderation { margin-top: 16px; padding-top: 14px; border-top: 1px dashed rgba(255,255,255,.12); }
-.mt-moderation-head { font-size: 12.5px; font-weight: 700; color: rgba(255,200,150,.85); margin-bottom: 10px; letter-spacing: .5px; }
-.mt-pending { display: flex; flex-direction: column; gap: 8px; }
-.mt-pending-item { padding: 9px 11px; background: rgba(255,180,120,.06); border: 1px solid rgba(255,180,120,.18); border-radius: 10px; }
-.mt-pending-body { font-size: 12.5px; line-height: 1.5; color: rgba(235,220,200,.9); margin-bottom: 7px; white-space: pre-wrap; }
-.mt-pending-actions { display: flex; gap: 6px; }
-.mt-pending-actions .mt-btn { padding: 5px 12px; font-size: 12px; }
-.mt-btn-approve { background: rgba(110,220,150,.18); border-color: rgba(110,220,150,.4); color: #b6f5cf; }
-.mt-btn-reject { background: rgba(255,120,120,.15); border-color: rgba(255,120,120,.35); color: #ffc2c2; }
+/* ===== 在记忆树留言弹窗 ===== */
+.mt-modal { position: fixed; inset: 0; z-index: 35; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(4,6,16,.55); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+.mt-modal[hidden] { display: none; }
+.mt-modal-card {
+  position: relative; width: min(480px, 92vw); max-height: 86vh; overflow-y: auto;
+  background: rgba(14,18,38,.9); border: 1px solid rgba(255,255,255,.12); border-radius: 18px;
+  box-shadow: 0 30px 100px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.08);
+  padding: 34px 32px 28px;
+}
+.mt-modal-header { margin-bottom: 22px; }
+.mt-post-form { display: flex; flex-direction: column; gap: 16px; }
+.mt-input {
+  width: 100%; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.12); border-radius: 12px;
+  color: #e8ecff; font-family: inherit; font-size: 14px; padding: 12px 14px; resize: none; outline: none;
+}
+.mt-input:focus { border-color: rgba(150,170,255,.55); box-shadow: 0 0 0 3px rgba(120,150,255,.15); }
+.mt-input:disabled { opacity: .45; cursor: not-allowed; }
+.mt-textarea { min-height: 120px; line-height: 1.6; }
+.mt-post-author-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.mt-post-anon { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: rgba(220,228,250,.8); cursor: pointer; user-select: none; }
+.mt-post-anon input { width: 16px; height: 16px; accent-color: #6a8cff; cursor: pointer; }
+.mt-post-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 4px; }
+.mt-post-btn { padding: 10px 22px; border-radius: 999px; border: 1px solid rgba(255,255,255,.14); background: rgba(255,255,255,.06); color: rgba(230,235,255,.9); font-size: 13px; font-weight: 600; cursor: pointer; transition: all .2s ease; }
+.mt-post-btn:hover { background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.25); }
+.mt-post-btn-secondary { background: transparent; color: rgba(180,195,230,.75); }
+.mt-post-btn-secondary:hover { background: rgba(255,255,255,.06); color: #e8ecff; }
+.mt-post-btn-send { background: linear-gradient(90deg, #6a8cff, #c08bff); border: none; color: #fff; }
+.mt-post-btn-send:hover { box-shadow: 0 0 18px rgba(150,120,255,.45); }
+
+/* 发帖底部：添加照片 + 匿名 */
+.mt-post-bottom { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.mt-post-image-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 14px; border-radius: 999px; cursor: pointer;
+  background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.14);
+  color: rgba(220,228,250,.85); font-size: 13px; font-weight: 600;
+  transition: all .2s ease;
+}
+.mt-post-image-btn:hover { background: rgba(255,255,255,.12); border-color: rgba(150,170,255,.5); box-shadow: 0 0 14px rgba(120,150,255,.25); }
+.mt-post-image-btn svg { width: 18px; height: 18px; }
+.mt-post-author-hint { font-size: 12px; color: rgba(180,195,230,.6); }
+.mt-post-image-row { position: relative; border-radius: 12px; overflow: hidden; border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.04); }
+.mt-post-image-preview { display: block; width: 100%; max-height: 220px; object-fit: cover; }
+.mt-post-image-remove {
+  position: absolute; top: 8px; right: 8px; width: 30px; height: 30px; border-radius: 50%;
+  border: 1px solid rgba(255,255,255,.2); background: rgba(12,14,28,.72); color: #fff;
+  font-size: 14px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); transition: all .2s ease;
+}
+.mt-post-image-remove:hover { background: rgba(45,45,58,.9); }
 
 /* ===== WebGL 兜底相册 ===== */
 .mt-fallback { position: fixed; inset: 0; z-index: 10; overflow-y: auto; padding: 70px 20px 40px; background: radial-gradient(ellipse at top, #0a0e22, #05060f); }
@@ -228,26 +294,31 @@ body { font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI
 .mt-fallback-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 14px; max-width: 1100px; margin: 0 auto; }
 .mt-fallback-item { border-radius: 14px; overflow: hidden; border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.03); cursor: pointer; transition: transform .2s; }
 .mt-fallback-item:hover { transform: translateY(-4px); box-shadow: 0 12px 30px rgba(0,0,0,.5); }
-.mt-fallback-item img, .mt-fallback-item .mt-gen { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; }
+.mt-fallback-item img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; }
+.mt-fallback-placeholder { width: 100%; aspect-ratio: 1; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, rgba(106,140,255,.25), rgba(192,139,255,.25)); color: #fff; font-size: 42px; }
 .mt-fallback-item-title { padding: 8px 10px; font-size: 12px; color: rgba(220,228,250,.85); }
 
 /* ===== 响应式 ===== */
 @media (max-width: 720px) {
-  .mt-detail-card { flex-direction: column; max-height: 92vh; }
-  .mt-detail-media { flex: 0 0 200px; }
-  .mt-detail-info { padding: 18px 16px; }
+  .mt-detail { padding: 16px; }
+  .mt-detail-card { flex-direction: column; width: 100%; height: auto; max-height: 92vh; border-radius: 20px; }
+  .mt-detail-media { flex: 0 0 220px; border-radius: 20px 20px 0 0; }
+  .mt-detail-info { padding: 22px 20px 20px; }
+  .mt-detail-title { font-size: 22px; margin: 10px 0 14px; }
+  .mt-detail-body { max-height: 38vh; }
   .mt-hud { padding: 10px 12px; gap: 8px; }
   .mt-back-btn { padding: 7px 12px 7px 10px; font-size: 12px; }
   .mt-hud-title-wrap { padding: 6px 10px; }
   .mt-hud-title { font-size: 12px; letter-spacing: 1px; }
-  .mt-music-card { padding: 5px 10px 5px 8px; gap: 8px; }
-  .mt-music-info { min-width: 62px; }
-  .mt-music-name { font-size: 12px; }
-  .mt-music-artist { font-size: 10px; }
+  .mt-music-card { padding: 4px; gap: 0; }
+  .mt-music-info { display: none; }
+  .mt-disc { width: 44px; height: 44px; }
 }
 @media (max-width: 420px) {
-  .mt-hud-title-wrap { display: none; }
+  .mt-hud-title-wrap { display: inline-flex; padding: 6px 8px; }
+  .mt-hud-title { font-size: 11px; letter-spacing: .5px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .mt-loader-canvas { opacity: .85; }
 }
+

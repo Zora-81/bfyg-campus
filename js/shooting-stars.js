@@ -97,8 +97,23 @@
     meteors.push(m);
   }
 
-  // ── 动画循环 ──
+  // ── 可启停的动画循环 ──
+  // 登录成功后 #view-login 仅被 CSS 隐藏（去掉 active 类），但画布仍在后台。
+  // 若不主动 cancelAnimationFrame，隐藏画布会一直满帧重绘 → 进主频道后持续空吃 CPU/GPU。
+  // 故：登录视图非 active 或标签页切到后台时彻底停掉 rAF，恢复时再开。
+  var loginView = document.getElementById('view-login');
+  function loginViewActive() {
+    return !!(loginView && loginView.classList.contains('active'));
+  }
+  function shouldRun() {
+    return !document.hidden && loginViewActive();
+  }
+
+  var running = false;
+  var rafId = null;
+
   function frame() {
+    if (!shouldRun()) { stop(); return; }   // 条件不满足立即停止，不再排下一帧
     ctx.clearRect(0, 0, W, H);
     for (var j = 0; j < meteors.length; j++) {
       var o = meteors[j];
@@ -112,9 +127,38 @@
       }
       drawMeteor(o);
     }
-    requestAnimationFrame(frame);
+    rafId = requestAnimationFrame(frame);
   }
 
-  requestAnimationFrame(frame);
-  console.log("Shooting Stars — Starry Sky Meteor ×" + POOL_SIZE + " (左上→右下, 火流星" + Math.round(BOLIDE_CHANCE*100) + "%)");
+  function start() {
+    if (running || rafId) return;     // 已在跑则忽略
+    if (!shouldRun()) return;        // 当前不该跑（隐藏/后台）则不开
+    running = true;
+    rafId = requestAnimationFrame(frame);
+  }
+
+  function stop() {
+    running = false;
+    if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+  }
+
+  // 标签页切到后台 → 立即停；切回前台且登录视图可见 → 恢复
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) stop();
+    else start();
+  });
+
+  // 登录视图显隐（active 类切换）→ 登录后停、退出登录回登录页时恢复
+  if (loginView && 'MutationObserver' in window) {
+    new MutationObserver(function (muts) {
+      for (var k = 0; k < muts.length; k++) {
+        if (muts[k].attributeName === 'class') {
+          if (loginViewActive()) start(); else stop();
+        }
+      }
+    }).observe(loginView, { attributes: true, attributeFilter: ['class'] });
+  }
+
+  start();   // 初始登录视图为 active，正常启动
+  console.log("Shooting Stars — Starry Sky Meteor ×" + POOL_SIZE + " (左上→右下, 火流星" + Math.round(BOLIDE_CHANCE*100) + "%, 可启停)");
 })();

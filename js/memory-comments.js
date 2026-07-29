@@ -30,9 +30,9 @@ window.MTComments = (function () {
     },
     async submit({ itemId, content, authorName, authorId }) {
       const arr = readLocal();
-      const rec = { id: uid(), itemId, content, authorName: authorName || '匿名同学', authorId: authorId || null, status: 0, created_at: Date.now() };
+      const rec = { id: uid(), itemId, content, authorName: authorName || '匿名同学', authorId: authorId || null, status: 1, created_at: Date.now() };
       arr.push(rec); writeLocal(arr);
-      return { ok: true, status: 0, message: '已提交，等待审核通过后展示' };
+      return { ok: true, status: 1, message: '评论已发布' };
     },
     async approve(id) {
       const arr = readLocal(); const c = arr.find(x => x.id === id); if (c) c.status = 1; writeLocal(arr); return { ok: true };

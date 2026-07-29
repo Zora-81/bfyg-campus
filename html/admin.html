@@ -32,6 +32,9 @@
           <span class="nav-icon">📋</span> 帖子审核
           <span class="nav-badge" id="pending-count" style="display:none">0</span>
         </button>
+        <button class="admin-nav-item" data-module="memory">
+          <span class="nav-icon">🌳</span> 记忆树
+        </button>
         <button class="admin-nav-item" data-module="dashboard">
           <span class="nav-icon">📊</span> 数据看板
         </button>
@@ -149,6 +152,37 @@
         <div class="admin-pagination" id="post-pagination">
           <span class="pagination-info" id="post-pagination-info">共 0 条</span>
           <div class="pagination-btns" id="post-pagination-btns"></div>
+        </div>
+      </section>
+
+      <!-- ── Module: 记忆树留言 ── -->
+      <section class="admin-module" id="module-memory">
+        <div class="admin-toolbar">
+          <div class="admin-search">
+            <span class="search-icon">🔍</span>
+            <input type="text" id="mt-search" placeholder="搜索内容或作者..." />
+          </div>
+          <button class="btn-primary btn-sm" id="btn-mt-batch-approve">标记已审</button>
+          <button class="btn-danger btn-sm" id="btn-mt-batch-reject">批量删除</button>
+        </div>
+        <div class="admin-table-wrap">
+          <table class="admin-table" id="mt-table">
+            <thead>
+              <tr>
+                <th style="width:40px;"><input type="checkbox" class="admin-checkbox" id="mt-select-all" /></th>
+                <th style="width:100px;">作者</th>
+                <th>内容预览</th>
+                <th style="width:70px;">类型</th>
+                <th style="width:90px;">时间</th>
+                <th style="width:80px;">状态</th>
+                <th style="width:210px;">操作</th>
+              </tr>
+            </thead>
+            <tbody id="mt-tbody"></tbody>
+          </table>
+        </div>
+        <div class="admin-pagination" id="mt-pagination">
+          <span class="pagination-info" id="mt-pagination-info">共 0 条</span>
         </div>
       </section>
 
@@ -399,6 +433,8 @@
 
   <!-- InsForge 客户端（注入 window.IF，供 admin.js 调用；module 脚本 defer，就绪后派发 IF_READY） -->
   <script type="module" src="../js/if-client.js?v=1.2.63"></script>
+  <!-- 记忆树留言本地存储后端（与记忆树页面同源 localStorage 共享），供后台记忆树模块读取/删除 -->
+  <script src="../js/memory-posts.js?v=1.2.63"></script>
   <script src="../js/admin.js?v=1.2.64"></script>
 </body>
 </html>

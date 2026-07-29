@@ -70,6 +70,7 @@
     bindUserModule();
     bindPostModule();
     bindWordModule();
+    bindMemoryModule();
     bindModals();
     // 先加载 profiles / channels 映射，再加载各模块数据
     Promise.all([loadProfileMap(), loadChannelMap()]).then(function () {
@@ -187,8 +188,8 @@
     document.querySelectorAll('.admin-module').forEach(function (m) {
       m.classList.toggle('active', m.id === 'module-' + module);
     });
-    var titles = { users: '用户管理', posts: '帖子审核', dashboard: '数据看板', wordlist: '敏感词库', logs: '审核日志' };
-    var descs = { users: '管理系统用户与权限', posts: '审核与管理频道内容', dashboard: '平台数据概览与分析', wordlist: '管理与配置 AI 审核敏感词', logs: '谁在何时审了什么、结果如何' };
+    var titles = { users: '用户管理', posts: '帖子审核', memory: '记忆树管理', dashboard: '数据看板', wordlist: '敏感词库', logs: '审核日志' };
+    var descs = { users: '管理系统用户与权限', posts: '审核与管理频道内容', memory: '审核与管理记忆树留言', dashboard: '平台数据概览与分析', wordlist: '管理与配置 AI 审核敏感词', logs: '谁在何时审了什么、结果如何' };
     document.getElementById('admin-header-title').textContent = titles[module] || '';
     document.getElementById('admin-header-desc').textContent = descs[module] || '';
     if (module === 'dashboard') {
@@ -213,6 +214,7 @@
   function renderModule(module) {
     if (module === 'users') renderUsers();
     else if (module === 'posts') renderPosts();
+    else if (module === 'memory') renderMemory();
     else if (module === 'dashboard') renderDashboard();
     else if (module === 'wordlist') loadWordlist();
     else if (module === 'logs') loadLogs();
@@ -1019,6 +1021,160 @@
     }
     var pBtns = document.getElementById('post-pagination-btns');
     if (pBtns) pBtns.innerHTML = '';
+  }
+
+  /* ========== 记忆树留言模块 ==========
+     数据来自 window.MTPosts（与记忆树页面同源 localStorage 共享）。
+     先发后审：留言发完即可见，后台提供「标记已审」+「删除」按钮，语义与频道消息审核一致。 */
+  function bindMemoryModule() {
+    var search = document.getElementById('mt-search');
+    if (search) search.addEventListener('input', function () { renderMemory(); });
+    var selAll = document.getElementById('mt-select-all');
+    if (selAll) selAll.addEventListener('change', function () {
+      document.querySelectorAll('#mt-tbody .mt-checkbox').forEach(function (cb) { cb.checked = selAll.checked; });
+    });
+    var batchApprove = document.getElementById('btn-mt-batch-approve');
+    if (batchApprove) batchApprove.addEventListener('click', function () {
+      var ids = getSelectedMemoryIds();
+      if (!ids.length) { showToast('请先勾选要标记已审的留言', 'info'); return; }
+      ids.forEach(function (id) { if (window.MTPosts && window.MTPosts.markReviewed) window.MTPosts.markReviewed(id); });
+      showToast('已标记 ' + ids.length + ' 条为已审', 'success');
+      logAdmin('approve', '记忆树标记已审', ids.length + ' 条');
+      renderMemory();
+    });
+    var batchReject = document.getElementById('btn-mt-batch-reject');
+    if (batchReject) batchReject.addEventListener('click', function () {
+      var ids = getSelectedMemoryIds();
+      if (!ids.length) { showToast('请先勾选要删除的留言', 'info'); return; }
+      if (!confirm('确认删除选中的 ' + ids.length + ' 条记忆树留言？此操作不可恢复！')) return;
+      ids.forEach(function (id) { if (window.MTPosts && window.MTPosts.remove) window.MTPosts.remove(id); });
+      showToast('已删除 ' + ids.length + ' 条留言', 'success');
+      logAdmin('reject', '记忆树批量删除', ids.length + ' 条');
+      renderMemory();
+    });
+  }
+  function getSelectedMemoryIds() {
+    var ids = [];
+    document.querySelectorAll('#mt-tbody .mt-checkbox:checked').forEach(function (cb) { ids.push(cb.dataset.id); });
+    return ids;
+  }
+  function renderMemory() {
+    var tbody = document.getElementById('mt-tbody');
+    if (!tbody) return;
+    var search = (document.getElementById('mt-search') && document.getElementById('mt-search').value || '').toLowerCase();
+    var posts = (window.MTPosts && window.MTPosts.list) ? window.MTPosts.list() : [];
+    if (search) {
+      posts = posts.filter(function (p) {
+        return ((p.content || '').toLowerCase().indexOf(search) !== -1) ||
+               ((p.authorName || '').toLowerCase().indexOf(search) !== -1);
+      });
+    }
+    tbody.innerHTML = '';
+    var info = document.getElementById('mt-pagination-info');
+    if (info) info.textContent = '共 ' + posts.length + ' 条';
+    if (!posts.length) {
+      tbody.innerHTML = '<tr><td colspan="7"><div class="admin-empty"><div class="empty-icon">🌳</div><div class="empty-text">暂无记忆树留言</div></div></td></tr>';
+      return;
+    }
+    posts.forEach(function (p) {
+      var tr = document.createElement('tr');
+      var timeStr = p.created_at ? formatTime(p.created_at) : '';
+      var hasImg = !!(p.imageUrl && /^https?:\/\/|\/|images\//.test(p.imageUrl));
+      var typeLabel = hasImg ? '🖼 图片' : '💬 文字';
+      var preview = hasImg ? '[图片留言]' : (p.content || '').substring(0, 80);
+      var statusCell = p.reviewed
+        ? '<span class="badge badge-default">已审</span>'
+        : '<span class="badge badge-warning">待审</span>';
+      var actionBtns =
+        '<button class="btn-ghost btn-xs" data-action="mt-detail" data-id="' + p.id + '">查看</button>' +
+        (p.reviewed ? '' : '<button class="btn-primary btn-xs" data-action="mt-approve" data-id="' + p.id + '">标记已审</button>') +
+        '<button class="btn-danger btn-xs" data-action="mt-delete" data-id="' + p.id + '">删除</button>';
+      tr.innerHTML =
+        '<td><input type="checkbox" class="admin-checkbox mt-checkbox" data-id="' + p.id + '" /></td>' +
+        '<td><span style="font-weight:500;color:var(--text);">' + esc(p.authorName || '匿名同学') + '</span></td>' +
+        '<td><div class="tbl-post-preview"><span class="tbl-post-text">' + esc(preview) + '</span></div></td>' +
+        '<td>' + typeLabel + '</td>' +
+        '<td>' + timeStr + '</td>' +
+        '<td class="col-status">' + statusCell + '</td>' +
+        '<td><div class="col-actions">' + actionBtns + '</div></td>';
+      tbody.appendChild(tr);
+    });
+
+    tbody.querySelectorAll('[data-action="mt-detail"]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var post = posts.find(function (x) { return x.id === btn.dataset.id; });
+        if (post) openMemoryDetail(post);
+      });
+    });
+    tbody.querySelectorAll('[data-action="mt-approve"]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var id = this.dataset.id;
+        if (window.MTPosts && window.MTPosts.markReviewed) window.MTPosts.markReviewed(id);
+        showToast('已标记为已审核', 'success');
+        logAdmin('approve', '记忆树标记已审', id);
+        renderMemory();
+      });
+    });
+    tbody.querySelectorAll('[data-action="mt-delete"]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var id = this.dataset.id;
+        if (!confirm('确认删除此记忆树留言？此操作不可恢复！')) return;
+        if (window.MTPosts && window.MTPosts.remove) window.MTPosts.remove(id);
+        showToast('已删除', 'success');
+        logAdmin('reject', '记忆树删除留言', id);
+        renderMemory();
+      });
+    });
+  }
+  // 复用 posts 详情弹窗（post-detail-modal-overlay）展示记忆树留言
+  function openMemoryDetail(post) {
+    var overlay = document.getElementById('post-detail-modal-overlay');
+    var titleEl = document.getElementById('post-detail-title');
+    var bodyEl = document.getElementById('post-detail-body');
+    var actionsEl = document.getElementById('post-detail-actions');
+    if (!overlay || !bodyEl) return;
+    titleEl.textContent = '记忆树 · ' + (post.authorName || '匿名同学');
+    var statusBadge = post.reviewed ? '<span class="badge badge-default">已审</span>' : '<span class="badge badge-warning">待审</span>';
+    var html = '<div class="pd-status-row">' + statusBadge + '</div>';
+    if (post.imageUrl) {
+      html += '<div class="pd-section-label">图片</div><div class="pd-content"><img src="' + esc(post.imageUrl) + '" style="max-width:100%;border-radius:12px;" onerror="this.style.display=\'none\'" /></div>';
+    }
+    html += '<div class="pd-section-label">留言内容</div><div class="pd-content pd-main">' + esc(post.content || '（空）') + '</div>';
+    html += '<div class="pd-section-label">元数据</div><div class="pd-meta-grid">' +
+      metaItem('作者', esc(post.authorName || '匿名同学')) +
+      metaItem('匿名', post.anonymous ? '是' : '否') +
+      metaItem('类型', post.imageUrl ? '图片' : '文字') +
+      metaItem('发布时间', esc(formatFull(post.created_at))) +
+      metaItem('留言ID', esc(post.id || '—')) +
+      '</div>';
+    bodyEl.innerHTML = html;
+    actionsEl.innerHTML = '';
+    if (!post.reviewed) {
+      var bApp = document.createElement('button');
+      bApp.className = 'btn-primary btn-sm';
+      bApp.textContent = '标记已审';
+      bApp.addEventListener('click', function () {
+        if (window.MTPosts && window.MTPosts.markReviewed) window.MTPosts.markReviewed(post.id);
+        showToast('已标记为已审核', 'success');
+        logAdmin('approve', '记忆树标记已审', post.id);
+        closePostDetail();
+        renderMemory();
+      });
+      actionsEl.appendChild(bApp);
+    }
+    var bDel = document.createElement('button');
+    bDel.className = 'btn-danger btn-sm';
+    bDel.textContent = '删除';
+    bDel.addEventListener('click', function () {
+      if (!confirm('确认删除此记忆树留言？此操作不可恢复！')) return;
+      if (window.MTPosts && window.MTPosts.remove) window.MTPosts.remove(post.id);
+      showToast('已删除', 'success');
+      logAdmin('reject', '记忆树删除留言', post.id);
+      closePostDetail();
+      renderMemory();
+    });
+    actionsEl.appendChild(bDel);
+    overlay.classList.add('active');
   }
 
   function formatTime(ts) {

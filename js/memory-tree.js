@@ -144,13 +144,19 @@ const el = {
   loader: $('#mt-loader'), loaderCanvas: $('#mt-loader-canvas'),
   canvas: $('#mt-canvas'), hud: $('#mt-hud'), toast: $('#mt-toast'),
   detail: $('#mt-detail'), detailMedia: $('#mt-detail-media'), detailTitle: $('#mt-detail-title'),
-  detailMeta: $('#mt-detail-meta'), summary: $('#mt-summary'), comments: $('#mt-comments'),
-  commentsCount: $('#mt-comments-count'), pending: $('#mt-pending'),
-  form: $('#mt-comment-form'), name: $('#mt-comment-name'), text: $('#mt-comment-text'),
-  aiBtn: $('#mt-ai-summary'), back: $('#mt-back'),
-  musicCard: $('#mt-music-card'), musicVisual: $('#mt-music-visual'),
+  detailMeta: $('#mt-detail-meta'), detailDelete: $('#mt-detail-delete'),
+  summary: $('#mt-summary'), comments: $('#mt-comments'),
+  commentsCount: $('#mt-comments-count'),
+  form: $('#mt-comment-form'), text: $('#mt-comment-text'),
+  postModal: $('#mt-post-modal'), postTrigger: $('#mt-post-trigger'), postClose: $('#mt-post-close'),
+  postCancel: $('#mt-post-cancel'), postForm: $('#mt-post-form'), postText: $('#mt-post-text'),
+  postAnon: $('#mt-post-anon'),
+  postImageBtn: $('#mt-post-image-btn'), postImageInput: $('#mt-post-image-input'),
+  postImageRow: $('#mt-post-image-row'), postImagePreview: $('#mt-post-image-preview'),
+  postImageRemove: $('#mt-post-image-remove'), postAuthorHint: $('#mt-post-author-hint'),
+  back: $('#mt-back'),
+  musicCard: $('#mt-music-card'), musicDisc: $('#mt-music-disc'),
   musicName: $('#mt-music-name'), musicArtist: $('#mt-music-artist'),
-  musicToggle: $('#mt-music-toggle'), musicPrev: $('#mt-music-prev'), musicNext: $('#mt-music-next'),
   fallback: $('#mt-fallback'), fallbackGrid: $('#mt-fallback-grid')
 };
 
@@ -168,40 +174,18 @@ function updateMusicUI() {
   if (el.musicName) el.musicName.textContent = track.title;
   if (el.musicArtist) {
     el.musicArtist.textContent = memoryMusic.isAvailable()
-      ? track.artist
-      : track.artist + ' · 放置 MP3 可切真实音乐';
+      ? (track.artist || '记忆树原声')
+      : '放置 MP3 可切真实音乐';
   }
   if (el.musicCard) el.musicCard.classList.toggle('no-audio', !memoryMusic.isAvailable());
-  if (el.musicVisual) el.musicVisual.classList.toggle('playing', on);
-  if (el.musicToggle) {
-    el.musicToggle.classList.toggle('playing', on);
-    const playIcon = el.musicToggle.querySelector('.mt-play-icon');
-    const pauseIcon = el.musicToggle.querySelector('.mt-pause-icon');
-    if (playIcon) playIcon.hidden = on;
-    if (pauseIcon) pauseIcon.hidden = !on;
-  }
+  if (el.musicDisc) el.musicDisc.classList.toggle('playing', on);
 }
 function fmtTime(ts) {
   const d = new Date(ts);
   const p = (n) => (n < 10 ? '0' : '') + n;
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
-function genCardURL(item) {
-  const cv = document.createElement('canvas'); cv.width = cv.height = 512;
-  const ctx = cv.getContext('2d');
-  const [c1, c2] = item.color || ['#6a8cff', '#c08bff'];
-  const bg = ctx.createLinearGradient(0, 0, 512, 512); bg.addColorStop(0, c1); bg.addColorStop(1, c2);
-  ctx.fillStyle = bg; ctx.fillRect(0, 0, 512, 512);
-  const vg = ctx.createRadialGradient(256, 256, 100, 256, 256, 360);
-  vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.45)');
-  ctx.fillStyle = vg; ctx.fillRect(0, 0, 512, 512);
-  ctx.font = '180px serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText(item.emoji || '✦', 256, 226);
-  ctx.font = 'bold 40px "Noto Sans SC", sans-serif'; ctx.fillStyle = 'rgba(255,255,255,0.95)';
-  ctx.fillText(item.title || '', 256, 442);
-  return cv.toDataURL('image/png');
-}
-function mediaURL(item) { return item.gen ? genCardURL(item) : item.url; }
+function mediaURL(item) { return item.url || ''; }
 
 // ---------- 加载动画：E · 星海隧道（canvas 粒子 + GSAP 收束） ----------
 let loaderCanvas, lctx, lraf = 0, lW = 0, lH = 0, lDPR = 1, lcx = 0, lcy = 0;
@@ -348,6 +332,58 @@ function finishLoad() {
   loaderFinish();
 }
 
+// ---------- 记忆种子（把预设照片变成真实帖子：发布人 管理员T0 + AI 记忆档案员评语）----------
+const SEED_AI_CAPTIONS = [
+  '哇！这张航拍也太有感觉了吧！新校区刚醒过来的样子，香山路的风一吹，整个人都被拽回早读偷瞄窗外的日子了～ ✨',
+  '晨光洒在教学楼上的瞬间，连粉笔灰都在发光诶！这就是青春自带的滤镜吧，谁懂啊！ 🌅',
+  '林荫道上的读书声真的绝了……每次走过都觉得，这大概就是学校最温柔的背景音吧！ 🍃',
+  '实验室的午后永远yyds！试管里晃来晃去的光，跟那时候偷偷憧憬的未来一模一样～ 🔬',
+  '操场晚风我真的会哭！那些年跑过的圈、喊过的口号，全被这阵风记住了吧…… 🏃',
+  '夜色里的校园也太像一封情书了，还是写给每一个舍不得毕业的我们的！ 💌',
+  '星河下的校园美得不真实……所有瞬间都被收进同一片光里，像梦一样！ 🌌'
+];
+const ADMIN_USER_ID = '176a6707-9234-4e1c-bda6-42f8d5231bc1';
+const SEED_POSTS = (window.MT_DATA || []).map((d, i) => ({
+  id: 'seed_' + d.id,
+  content: d.title || '校园记忆',
+  authorName: '管理员T0',
+  anonymous: false,
+  imageUrl: d.url,
+  authorId: ADMIN_USER_ID,
+  created_at: Date.now() - (window.MT_DATA.length - i) * 86400000,
+  isPost: true,
+  seeded: true,
+  reviewed: true
+}));
+const SEED_COMMENTS = SEED_POSTS.map((p, i) => ({
+  id: 'seed_c_' + p.id,
+  itemId: p.id,
+  content: SEED_AI_CAPTIONS[i] || '这张照片记录了一段珍贵的校园时光。',
+  authorName: 'AI 记忆档案员',
+  authorId: null,
+  status: 1,
+  is_ai: true,
+  created_at: p.created_at + 60000
+}));
+function seedMemoryData() {
+  try {
+    // 帖子：idempotent 同步，每次启动都确保字段与当前种子一致（作者、文案等更新可自动落地）
+    if (window.MTPosts && window.MTPosts.ensureSeed) window.MTPosts.ensureSeed(SEED_POSTS);
+
+    // 评论：idempotent 同步，覆盖旧语气的 AI 评语
+    const ckey = (window.MT_CONFIG && window.MT_CONFIG.commentsStorageKey) || 'mt_comments_v1';
+    let cs = [];
+    try { cs = JSON.parse(localStorage.getItem(ckey) || '[]'); } catch (e) {}
+    SEED_COMMENTS.forEach(sc => {
+      const i = cs.findIndex(c => c.id === sc.id);
+      if (i >= 0) cs[i] = { ...cs[i], ...sc };
+      else cs.push(sc);
+    });
+    localStorage.setItem(ckey, JSON.stringify(cs));
+    localStorage.setItem('mt_seeded_v1', '1');
+  } catch (e) { /* 种子失败不影响主流程 */ }
+}
+
 // ---------- 场景初始化 ----------
 function init() {
   if (!CFG || !DATA) { toast('配置未加载'); return; }
@@ -364,7 +400,7 @@ function init() {
     const runScene = function () {
       try {
         sceneApi = window.MTScene.create({
-          canvas: el.canvas, config: CFG, data: DATA, reducedMotion: reduced,
+          canvas: el.canvas, config: CFG, data: [], reducedMotion: reduced,
           onNodeClick: openDetail,
           onReady: finishLoad
         });
@@ -373,7 +409,9 @@ function init() {
 
       bindUI();
       initMusicPlayer();
+      seedMemoryData();
       buildFallbackGrid();
+      loadPosts();
       tryAuth();
       // 延迟尝试自动播放（与 BobZhang 同款 800ms 延迟），
       // 浏览器策略可能阻止，失败时仍可点击播放。
@@ -396,8 +434,9 @@ function init() {
 }
 
 function tryAuth() {
-  const start = () => {
-    try { currentUser = (window.IF && window.IF.getCurrentUser && window.IF.getCurrentUser()) || null; } catch (e) {}
+  const start = async () => {
+    try { currentUser = await window.IF.getCurrentUser(); } catch (e) { currentUser = null; }
+    updatePostAuthorHint();
   };
   if (window.IF) start();
   else window.addEventListener('IF_READY', start, { once: true });
@@ -406,25 +445,52 @@ function tryAuth() {
 // ---------- 详情 / 评论 ----------
 async function openDetail(item) {
   currentItem = item;
+  const isPost = item.isPost || (!item.url && item.content);
+  const title = isPost ? (item.content.length > 22 ? item.content.slice(0, 22) + '…' : item.content) : (item.title || '记忆');
   el.detailMedia.innerHTML = '';
-  const img = document.createElement('img');
-  img.src = mediaURL(item); img.alt = item.title || '';
-  el.detailMedia.appendChild(img);
-  el.detailTitle.textContent = item.title || '记忆';
-  el.detailMeta.textContent = `${item.location || ''} · ${item.year || ''}`;
+  const url = mediaURL(item);
+  if (url) {
+    const img = document.createElement('img');
+    img.src = url; img.alt = item.title || '';
+    el.detailMedia.appendChild(img);
+  } else {
+    const ph = document.createElement('div');
+    ph.className = 'mt-detail-media-placeholder';
+    ph.innerHTML = `<span>${item.emoji || '✦'}</span><div>${escapeHtml(title)}</div>`;
+    el.detailMedia.appendChild(ph);
+  }
+  el.detailTitle.textContent = title;
+  // 发布人可点击：帖子显示真实用户昵称 + 时间，点击打开用户信息卡（与频道消息一致）
+  const authorName = item.location || item.authorName || '匿名同学';
+  const timePart = item.year || '—';
+  if (isPost && item.authorId) {
+    el.detailMeta.innerHTML = `<span class="mt-detail-author" data-author-id="${escapeHtml(item.authorId)}">${escapeHtml(authorName)}</span> · ${escapeHtml(timePart)}`;
+    const authorEl = el.detailMeta.querySelector('.mt-detail-author');
+    if (authorEl) {
+      authorEl.style.cursor = 'pointer';
+      authorEl.style.textDecoration = 'underline';
+      authorEl.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const opener = window.parent || window;
+        if (opener.openUserProfile) opener.openUserProfile(item.authorId);
+      });
+    }
+  } else {
+    el.detailMeta.textContent = [authorName, timePart].filter(Boolean).join(' · ') || '—';
+  }
+  // 仅管理员在详情右上角看到删除按钮
+  if (el.detailDelete) el.detailDelete.hidden = !isAdmin();
   el.summary.hidden = true; el.summary.innerHTML = '';
   el.detail.hidden = false;
 
   // 评论
   const list = await MTComments.list(item.id).catch(() => []);
   renderComments(list);
-  const pending = await MTComments.pending().catch(() => []);
-  renderPending(pending);
 }
 
 function renderComments(list) {
   el.commentsCount.textContent = list.length;
-  if (!list.length) { el.comments.innerHTML = '<div class="mt-comments-empty">还没有留言，来做第一个点亮这段记忆的人</div>'; return; }
+  if (!list.length) { el.comments.innerHTML = '<div class="mt-comments-empty">暂无评论，快来抢沙发~</div>'; return; }
   el.comments.innerHTML = list.map(c => `
     <div class="mt-comment">
       <div class="mt-comment-top">
@@ -435,19 +501,91 @@ function renderComments(list) {
       <div class="mt-comment-body">${escapeHtml(c.content)}</div>
     </div>`).join('');
 }
-function renderPending(list) {
-  if (!list.length) { el.pending.innerHTML = '<div class="mt-comments-empty">暂无待审</div>'; return; }
-  el.pending.innerHTML = list.map(c => `
-    <div class="mt-pending-item" data-id="${c.id}">
-      <div class="mt-pending-body">${escapeHtml(c.content)}</div>
-      <div class="mt-comment-time" style="margin-bottom:6px">${(c.authorName || '匿')} · ${fmtTime(c.created_at)}</div>
-      <div class="mt-pending-actions">
-        <button class="mt-btn mt-btn-approve" data-act="approve" data-id="${c.id}">通过</button>
-        <button class="mt-btn mt-btn-reject" data-act="reject" data-id="${c.id}">拒绝</button>
-      </div>
-    </div>`).join('');
-}
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m])); }
+
+// ---------- 用户留言（记忆树留言） ----------
+let postIds = new Set();           // 当前已挂到场景的帖子 id（用于管理员删除叉识别）
+function loadPosts() {
+  if (!window.MTPosts || !sceneApi || !sceneApi.addPostNode) return;
+  const posts = window.MTPosts.list();
+  postIds = new Set(posts.map(p => p.id));
+  posts.forEach(p => sceneApi.addPostNode(p));
+}
+
+// ---------- 管理员判定 ----------
+function isAdmin() {
+  return !!(currentUser && (currentUser.role === 'admin' || currentUser.is_project_admin));
+}
+
+// ---------- 删除当前详情帖子（仅管理员从详情弹窗右上角触发） ----------
+async function deleteCurrentPost() {
+  if (!currentItem) return;
+  const id = currentItem.id;
+  try { if (window.MTPosts && window.MTPosts.remove) window.MTPosts.remove(id); } catch (e) {}
+  try { if (window.MTPosts && window.MTPosts.removeRemote) await window.MTPosts.removeRemote(id); } catch (e) {}
+  // 热移除 3D 节点 + 更新本地索引与兜底相册，无需刷新页面
+  if (sceneApi && sceneApi.removeNode) sceneApi.removeNode(id);
+  if (postIds) postIds.delete(id);
+  el.detail.hidden = true; currentItem = null;
+  buildFallbackGrid();
+  toast('已删除该帖子');
+}
+function resetPostImage() {
+  if (el.postImageInput) el.postImageInput.value = '';
+  if (el.postImagePreview) el.postImagePreview.src = '';
+  if (el.postImageRow) el.postImageRow.hidden = true;
+}
+function updatePostAuthorHint() {
+  if (!el.postAuthorHint) return;
+  if (el.postAnon.checked) {
+    el.postAuthorHint.textContent = '匿名发布';
+  } else {
+    const name = (currentUser && (currentUser.nickname || currentUser.email)) || '你的账号';
+    el.postAuthorHint.textContent = '将以「' + name + '」身份发布';
+  }
+}
+
+async function submitPost() {
+  const content = el.postText.value.trim();
+  if (!content) return;
+  const anonymous = el.postAnon.checked;
+  // 匿名直接匿名；非匿名自动用当前登录用户名，不读手动昵称输入框
+  let authorName = anonymous ? '匿名同学' : (currentUser && (currentUser.nickname || currentUser.email)) || '';
+  // 上传图片（若有）
+  let imageUrl = '';
+  const file = el.postImageInput && el.postImageInput.files && el.postImageInput.files[0];
+  if (file && window.IF && window.IF.uploadFile) {
+    toast('正在上传图片…');
+    try {
+      const data = await window.IF.uploadFile(file);
+      imageUrl = data && data.url ? data.url : '';
+    } catch (e) {
+      toast('图片上传失败，将以纯文字发布');
+    }
+  }
+  const res = window.MTPosts.submit({ content, authorName, anonymous, imageUrl });
+  if (!res || !res.ok) { toast('发布失败，请重试'); return; }
+
+  toast('留言已挂上记忆树 ✦');
+  el.postText.value = '';
+  resetPostImage();
+  el.postModal.hidden = true;
+
+  if (sceneApi && sceneApi.addPostNode) sceneApi.addPostNode(res.post);
+  postIds.add(res.post.id);
+  buildFallbackGrid();
+
+  // 自动生成一条 AI 评语（仅发帖时触发一次，杜绝刷屏）
+  const aiItem = { title: res.post.content.slice(0, 40), location: res.post.authorName || '记忆树', year: '' };
+  MTAI.generateComment(aiItem, res.post.content).then(async ai => {
+    if (!ai || !ai.comment) return;
+    await MTComments.submit({ itemId: res.post.id, content: ai.comment, authorName: 'AI 记忆档案员', authorId: null }).catch(() => null);
+  }).catch(() => {});
+
+  // 打开刚发布的留言详情
+  const postItem = { ...res.post, title: res.post.content.length > 18 ? res.post.content.slice(0, 18) + '…' : res.post.content, location: res.post.authorName || '匿名同学', year: fmtTime(res.post.created_at), url: res.post.imageUrl || '', emoji: '✦', isPost: true };
+  openDetail(postItem);
+}
 
 // ---------- 音乐播放器初始化 ----------
 function initMusicPlayer() {
@@ -456,8 +594,6 @@ function initMusicPlayer() {
   updateMusicUI();
   memoryMusic.on('play', updateMusicUI);
   memoryMusic.on('pause', updateMusicUI);
-  memoryMusic.on('next', updateMusicUI);
-  memoryMusic.on('prev', updateMusicUI);
   memoryMusic.on('load', updateMusicUI);
   memoryMusic.on('error', () => {
     updateMusicUI();
@@ -474,7 +610,7 @@ function bindUI() {
       return;
     }
     // 兜底：直接打开记忆树（无父页面，如书签/新标签）时，带版本号跳回主频道
-    let v = '1.4.21';
+    let v = '1.4.28';
     try {
       v = localStorage.getItem('mt_v') || v;
       if (!v) {
@@ -485,29 +621,11 @@ function bindUI() {
     location.href = 'index.html?v=' + v;
   });
 
-  // 音乐卡片：播放/暂停、上一首、下一首
-  if (el.musicVisual) {
-    el.musicVisual.addEventListener('click', () => {
+  // 音乐卡片：圆形唱片点击播放 / 暂停（单曲目，无上一首 / 下一首）
+  if (el.musicDisc) {
+    el.musicDisc.addEventListener('click', () => {
       if (!memoryMusic) initMusicPlayer();
       memoryMusic.toggle();
-    });
-  }
-  if (el.musicToggle) {
-    el.musicToggle.addEventListener('click', () => {
-      if (!memoryMusic) initMusicPlayer();
-      memoryMusic.toggle();
-    });
-  }
-  if (el.musicPrev) {
-    el.musicPrev.addEventListener('click', () => {
-      if (!memoryMusic) initMusicPlayer();
-      memoryMusic.prev();
-    });
-  }
-  if (el.musicNext) {
-    el.musicNext.addEventListener('click', () => {
-      if (!memoryMusic) initMusicPlayer();
-      memoryMusic.next();
     });
   }
 
@@ -520,66 +638,104 @@ function bindUI() {
     }
   }, { once: true });
 
-  $('#mt-detail-close').addEventListener('click', () => { el.detail.hidden = true; });
+  // 详情弹窗：管理员右上角 ✕ 用于删除帖子；普通用户通过点空白处 / ESC 关闭
+  if (el.detailDelete) {
+    el.detailDelete.addEventListener('click', () => {
+      if (!currentItem) return;
+      if (!window.confirm('确定删除这条记忆树帖子？此操作不可撤销。')) return;
+      deleteCurrentPost();
+    });
+  }
   el.detail.addEventListener('click', (e) => { if (e.target === el.detail) el.detail.hidden = true; });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !el.detail.hidden) el.detail.hidden = true; });
 
   el.form.addEventListener('submit', async (e) => {
     e.preventDefault();
     if (!currentItem) return;
     const content = el.text.value.trim();
     if (!content) return;
-    const name = el.name.value.trim() || (currentUser && (currentUser.nickname || currentUser.email)) || '';
+    const name = (currentUser && (currentUser.nickname || currentUser.email)) || '';
     const res = await MTComments.submit({
       itemId: currentItem.id, content, authorName: name,
       authorId: currentUser && currentUser.id
     }).catch(err => ({ ok: false, message: '提交失败' }));
     if (res && res.ok) {
-      toast('已提交，等待审核通过后展示 ✦');
+      toast('评论已发布 ✦');
       el.text.value = '';
-      const pending = await MTComments.pending().catch(() => []);
-      renderPending(pending);
+      const updated = await MTComments.list(currentItem.id).catch(() => []);
+      renderComments(updated);
     } else {
       toast((res && res.message) || '提交失败，请重试');
     }
   });
 
-  el.aiBtn.addEventListener('click', async () => {
-    if (!currentItem) return;
-    el.aiBtn.disabled = true; el.aiBtn.textContent = '✨ 生成中…';
-    const r = await MTAI.summarize(currentItem).catch(() => null);
-    el.aiBtn.disabled = false; el.aiBtn.textContent = '✨ AI 生成记忆摘要';
-    if (r && r.summary) {
-      const tags = (r.tags || []).map(t => `<span class="mt-tag">${escapeHtml(t)}</span>`).join('');
-      el.summary.innerHTML = `<div>${escapeHtml(r.summary)}</div><div class="mt-tags">${tags}</div>` + (r.local ? '<div style="margin-top:8px;font-size:11px;color:rgba(180,195,230,.45)">（本地生成，部署后接真实 AI）</div>' : '');
-      el.summary.hidden = false;
-    } else {
-      toast('摘要生成失败');
-    }
-  });
-
-  el.pending.addEventListener('click', async (e) => {
-    const btn = e.target.closest('button[data-act]');
-    if (!btn) return;
-    const id = btn.getAttribute('data-id');
-    const act = btn.getAttribute('data-act');
-    if (act === 'approve') { await MTComments.approve(id); toast('已通过，将展示在星海'); }
-    else { await MTComments.reject(id); toast('已拒绝'); }
-    const list = currentItem ? await MTComments.list(currentItem.id).catch(() => []) : [];
-    renderComments(list);
-    renderPending(await MTComments.pending().catch(() => []));
-  });
+  // 在记忆树留言弹窗
+  if (el.postTrigger) {
+    el.postTrigger.addEventListener('click', () => {
+      el.postAnon.checked = true;
+      updatePostAuthorHint();
+      resetPostImage();
+      el.postModal.hidden = false;
+      setTimeout(() => el.postText.focus(), 50);
+    });
+  }
+  if (el.postClose) el.postClose.addEventListener('click', () => { el.postModal.hidden = true; });
+  if (el.postCancel) el.postCancel.addEventListener('click', () => { el.postModal.hidden = true; });
+  if (el.postModal) {
+    el.postModal.addEventListener('click', (e) => { if (e.target === el.postModal) el.postModal.hidden = true; });
+  }
+  if (el.postAnon) {
+    el.postAnon.addEventListener('change', updatePostAuthorHint);
+  }
+  // 发帖图片：选择 / 预览 / 移除
+  if (el.postImageBtn) {
+    el.postImageBtn.addEventListener('click', () => { if (el.postImageInput) el.postImageInput.click(); });
+  }
+  if (el.postImageInput) {
+    el.postImageInput.addEventListener('change', () => {
+      const f = el.postImageInput.files && el.postImageInput.files[0];
+      if (!f) return;
+      if (!/^image\//.test(f.type)) { toast('请选择图片文件'); el.postImageInput.value = ''; return; }
+      if (f.size > 8 * 1024 * 1024) { toast('图片不能超过 8MB'); el.postImageInput.value = ''; return; }
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        if (el.postImagePreview) el.postImagePreview.src = ev.target.result;
+        if (el.postImageRow) el.postImageRow.hidden = false;
+      };
+      reader.readAsDataURL(f);
+    });
+  }
+  if (el.postImageRemove) {
+    el.postImageRemove.addEventListener('click', resetPostImage);
+  }
+  if (el.postForm) {
+    el.postForm.addEventListener('submit', (e) => { e.preventDefault(); submitPost(); });
+  }
 }
 
 // ---------- 兜底相册 ----------
 function buildFallbackGrid() {
-  el.fallbackGrid.innerHTML = DATA.map(it => `
-    <div class="mt-fallback-item" data-id="${it.id}">
-      <img src="${mediaURL(it)}" alt="${escapeHtml(it.title || '')}" loading="lazy" />
+  const posts = (window.MTPosts && window.MTPosts.list()) || [];
+  const allItems = [
+    ...posts.map(p => ({ ...p, title: p.content.length > 18 ? p.content.slice(0, 18) + '…' : p.content, location: p.authorName || '匿名同学', year: fmtTime(p.created_at), url: p.imageUrl || '', emoji: '✦', isPost: true, _kind: 'post' }))
+  ];
+  el.fallbackGrid.innerHTML = allItems.map(it => {
+    const url = mediaURL(it);
+    const media = url
+      ? `<img src="${url}" alt="${escapeHtml(it.title || '')}" loading="lazy" />`
+      : `<div class="mt-fallback-placeholder"><span>${it.emoji || '✦'}</span></div>`;
+    return `<div class="mt-fallback-item" data-id="${it.id}" data-kind="${it._kind}">
+      ${media}
       <div class="mt-fallback-item-title">${escapeHtml(it.title || '')}</div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
   el.fallbackGrid.querySelectorAll('.mt-fallback-item').forEach(node => {
     node.addEventListener('click', () => {
-      const it = DATA.find(d => d.id === node.getAttribute('data-id'));
+      const id = node.getAttribute('data-id');
+      const kind = node.getAttribute('data-kind');
+      const it = kind === 'post'
+        ? posts.find(p => p.id === id)
+        : DATA.find(d => d.id === id);
       if (it) openDetail(it);
     });
   });

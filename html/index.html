@@ -16,20 +16,33 @@
 
     (function(){
 
-      var v = '1.4.21';
+      var v = '1.4.28';
 
       try {
 
-        // 只要打开的是裸域名（没带版本号），就强制跳到带版本号的新地址
-        // 绕过微信 WebView 对根路径文档的顽固缓存（无视 no-store）
-        if (!location.search.includes('v=' + v)) {
-
+        // 绕过微信 WebView 对文档的顽固缓存（无视 no-store）
+        // 1) URL 版本旧于当前 HTML → 跳当前版本
+        // 2) localStorage 记住过更高版本 → 说明当前是缓存的旧 HTML，直接跳最高版本
+        function newer(a, b) {
+          if (!b) return true;
+          var pa = String(a).split('.'), pb = String(b).split('.');
+          for (var i = 0; i < Math.max(pa.length, pb.length); i++) {
+            var na = parseInt(pa[i] || 0, 10) || 0, nb = parseInt(pb[i] || 0, 10) || 0;
+            if (na > nb) return true;
+            if (na < nb) return false;
+          }
+          return false;
+        }
+        var m = location.search.match(/[?&]v=([^&]+)/);
+        var cur = m ? m[1] : '';
+        var latest = localStorage.getItem('site_v_latest') || '';
+        if (newer(v, cur) && newer(v, latest)) {
           location.replace(location.href.split('?')[0] + '?v=' + v);
-
+        } else if (latest && newer(latest, v)) {
+          location.replace(location.href.split('?')[0] + '?v=' + latest);
         } else {
-
           localStorage.setItem('site_v', v);
-
+          localStorage.setItem('site_v_latest', v);
         }
 
       } catch(e) {}
@@ -50,7 +63,7 @@
 
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap" rel="stylesheet" />
 
-  <link rel="stylesheet" href="../css/style.css?v=1.4.21" />
+  <link rel="stylesheet" href="../css/style.css?v=1.4.28" />
 
 </head>
 
@@ -1017,20 +1030,20 @@
 
 
 
-  <script src="../js/lib/gsap.min.js?v=1.4.21" defer></script>
+  <script src="../js/lib/gsap.min.js?v=1.4.28" defer></script>
 
-  <script src="../js/shooting-stars.js?v=1.4.21"></script>
+  <script src="../js/shooting-stars.js?v=1.4.28"></script>
 
-  <script src="../js/main-bg.js?v=1.4.21"></script>
+  <script src="../js/main-bg.js?v=1.4.28"></script>
 
   <!-- InsForge SDK 客户端（ESM，CDN 引入），注入 window.IF 并派发 IF_READY -->
 
-  <script type="module" src="../js/if-client.js?v=1.4.21"></script>
+  <script type="module" src="../js/if-client.js?v=1.4.28"></script>
 
   <!-- 消息线程纯函数：parent_id 子消息与主 feed 分流 -->
-  <script src="../js/message-thread.js?v=1.4.21" defer></script>
+  <script src="../js/message-thread.js?v=1.4.28" defer></script>
 
-  <script src="../js/app.js?v=1.4.21" defer></script>
+  <script src="../js/app.js?v=1.4.28" defer></script>
 
   <!-- ════════════════════════════════════════════
        学校介绍弹窗：点击侧栏校徽/校园频道 触发
