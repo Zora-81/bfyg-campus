@@ -15,8 +15,7 @@ let currentUser = null;
 // 把 MP3 文件放到项目根目录 audio/memory-tree/ 下即可自动播放；
 // 无文件时会自动回退到 three-scene.js 的合成环境音。
 const MUSIC_PLAYLIST = [
-  { title: '星空旋律', artist: '记忆树原声', url: '/audio/memory-tree/track-1.mp3' },
-  { title: '小半', artist: '陈粒', url: '/audio/memory-tree/track-2.mp3' },
+  { title: '小半', artist: '陈粒', url: '/audio/memory-tree/track-1.mp3' },
   { title: 'Angel', artist: '尹美莱', url: '/audio/memory-tree/track-3.mp3' }
 ];
 
@@ -475,7 +474,7 @@ function bindUI() {
       return;
     }
     // 兜底：直接打开记忆树（无父页面，如书签/新标签）时，带版本号跳回主频道
-    let v = '1.4.17';
+    let v = '1.4.18';
     try {
       v = localStorage.getItem('mt_v') || v;
       if (!v) {
