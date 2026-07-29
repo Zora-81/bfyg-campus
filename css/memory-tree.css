@@ -145,13 +145,19 @@ body { font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI
 .mt-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
 /* ===== 详情弹层 ===== */
-.mt-detail { position: fixed; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgba(0,0,0,.78); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.mt-detail { position: fixed; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgba(0,0,0,.78); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); opacity: 0; transition: opacity .35s ease; }
 .mt-detail[hidden] { display: none; }
+.mt-detail.mt-detail-open { opacity: 1; }
 .mt-detail-card {
   position: relative; width: min(1000px, 96vw); height: min(720px, 90vh); display: flex; gap: 0; overflow: hidden;
   background: #0a0a0f; border: 1px solid rgba(255,255,255,.08); border-radius: 24px;
   box-shadow: 0 40px 120px rgba(0,0,0,.75);
+  transform: scale(.94); transition: transform .4s cubic-bezier(.2,.7,.2,1);
 }
+.mt-detail.mt-detail-open .mt-detail-card { transform: scale(1); }
+/* 文字星帖子（无图）：隐藏左侧媒体区，内容全宽居中 */
+.mt-detail.no-image .mt-detail-media { display: none; }
+.mt-detail.no-image .mt-detail-info { justify-content: center; }
 .mt-detail-close {
   position: absolute; top: 18px; right: 18px; z-index: 10; width: 40px; height: 40px; border-radius: 50%;
   border: 1px solid rgba(255,255,255,.14); background: rgba(20,20,28,.72); color: rgba(230,235,255,.9);

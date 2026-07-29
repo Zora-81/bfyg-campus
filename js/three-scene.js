@@ -839,30 +839,68 @@ window.MTScene = {
       pickables.push(mesh);
       nodes.push(container);
     }
+    function makeEmblemTexture(item) {
+      // 在星正面刻印帖子首字，增加细节、区分不同帖子
+      const c = document.createElement('canvas'); c.width = c.height = 256;
+      const ctx = c.getContext('2d');
+      ctx.clearRect(0, 0, 256, 256);
+      ctx.fillStyle = 'rgba(255,243,196,0.96)';
+      ctx.font = 'bold 160px serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      const ch = ((item.content || item.title || '✦').trim().charAt(0)) || '✦';
+      ctx.fillText(ch, 128, 140);
+      const tex = new THREE.CanvasTexture(c);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      return tex;
+    }
     function makeStarNode(item, idx) {
-      // 纯文字帖：3D 挤出星，区分于照片卡与背景 2D 光点（暖金色 + 自转 + 发光）
-      const shape = new THREE.Shape();
-      const spikes = 5, outer = 1.7, inner = 0.72;
-      for (let i = 0; i < spikes * 2; i++) {
-        const r = (i % 2 === 0) ? outer : inner;
-        const a = (i / (spikes * 2)) * Math.PI * 2 - Math.PI / 2;
-        const x = Math.cos(a) * r, y = Math.sin(a) * r;
-        if (i === 0) shape.moveTo(x, y); else shape.lineTo(x, y);
-      }
-      shape.closePath();
-      const geo = new THREE.ExtrudeGeometry(shape, { depth: 0.55, bevelEnabled: true, bevelThickness: 0.14, bevelSize: 0.14, bevelSegments: 2 });
+      // 纯文字帖：立体星（暖金主体 + 亮色内芯 + 正面首字刻印 + 环绕卫星 + 自转脉冲），明显区别于图片卡与背景 2D 光点
+      const starShape = (s) => {
+        const sh = new THREE.Shape();
+        const spikes = 5, outer = s, inner = s * 0.42;
+        for (let i = 0; i < spikes * 2; i++) {
+          const r = (i % 2 === 0) ? outer : inner;
+          const a = (i / (spikes * 2)) * Math.PI * 2 - Math.PI / 2;
+          const x = Math.cos(a) * r, y = Math.sin(a) * r;
+          if (i === 0) sh.moveTo(x, y); else sh.lineTo(x, y);
+        }
+        sh.closePath();
+        return sh;
+      };
+      const geo = new THREE.ExtrudeGeometry(starShape(1.7), { depth: 0.55, bevelEnabled: true, bevelThickness: 0.18, bevelSize: 0.18, bevelSegments: 3 });
       geo.center();
       const COLOR = 0xffd36a; // 暖金，明显区别于白色背景星
       const mat = new THREE.MeshBasicMaterial({ color: COLOR, transparent: true, opacity: 0.97, side: THREE.DoubleSide });
       const mesh = new THREE.Mesh(geo, mat);
-      const glowMat = new THREE.MeshBasicMaterial({ map: glowTex, color: COLOR, transparent: true, opacity: 0.28, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
-      const glow = new THREE.Mesh(new THREE.PlaneGeometry(6.5, 6.5), glowMat);
+      // 内芯亮星（更小更亮、向前偏移，露出层次）
+      const coreGeo = new THREE.ExtrudeGeometry(starShape(0.95), { depth: 0.35, bevelEnabled: true, bevelThickness: 0.12, bevelSize: 0.12, bevelSegments: 2 });
+      coreGeo.center();
+      const core = new THREE.Mesh(coreGeo, new THREE.MeshBasicMaterial({ color: 0xfff3c4, transparent: true, opacity: 0.95, side: THREE.DoubleSide }));
+      core.position.z = 0.45;
+      // 正面首字刻印
+      const face = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 1.6), new THREE.MeshBasicMaterial({ map: makeEmblemTexture(item), transparent: true, depthWrite: false }));
+      face.position.z = 0.62;
+      const starObj = new THREE.Group();
+      starObj.add(mesh); starObj.add(core); starObj.add(face);
+      // 发光晕
+      const glowMat = new THREE.MeshBasicMaterial({ map: glowTex, color: COLOR, transparent: true, opacity: 0.3, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+      const glow = new THREE.Mesh(new THREE.PlaneGeometry(7, 7), glowMat);
       glow.position.z = -0.6;
+      // 环绕卫星
+      const orbit = new THREE.Group();
+      const sats = [];
+      const SAT_N = 3;
+      for (let i = 0; i < SAT_N; i++) {
+        const sMat = new THREE.MeshBasicMaterial({ color: 0xffe6a0, transparent: true, opacity: 0.9 });
+        const s = new THREE.Mesh(new THREE.SphereGeometry(0.12, 10, 10), sMat);
+        s.userData = { a0: (i / SAT_N) * Math.PI * 2, r: 2.5, speed: 0.4 + Math.random() * 0.3 };
+        orbit.add(s); sats.push(s);
+      }
       const container = new THREE.Group();
-      container.add(glow); container.add(mesh);
+      container.add(glow); container.add(orbit); container.add(starObj);
       const base = getMemoryPos(idx, data.length + (window.MTPosts ? 20 : 0), cfg);
       container.position.copy(base);
-      container.userData = { item, baseY: container.position.y, phase: Math.random() * Math.PI * 2, mesh, glow, hovered: false, isStar: true, spin: 0.6 + Math.random() * 0.5 };
+      container.userData = { item, baseY: container.position.y, baseX: container.position.x, phase: Math.random() * Math.PI * 2, mesh, glow, starObj, orbit, sats, hovered: false, isStar: true, spin: 0.6 + Math.random() * 0.5 };
       mediaGroup.add(container);
       pickables.push(mesh);
       nodes.push(container);
@@ -893,11 +931,12 @@ window.MTScene = {
       const hits = raycaster.intersectObjects(pickables, false);
       return hits.length ? hits[0].object : null;
     }
+    function nodeOf(obj) { let n = obj; while (n) { if (n.userData && (n.userData.item || n.userData.isStar)) return n; n = n.parent; } return null; }
     function onMove(e) {
       if (reducedMotion) return;
       setPointer(e);
       const obj = pick();
-      const cont = obj ? obj.parent : null;
+      const cont = obj ? nodeOf(obj) : null;
       if (hovered && hovered !== cont) { hovered.userData.hovered = false; api.playSfx('out'); }
       hovered = cont;
       if (cont) {
@@ -915,16 +954,21 @@ window.MTScene = {
       const camFrom = camera.position.clone();
       const tgtFrom = controls.target.clone();
       const dir = camFrom.clone().sub(targetPos).normalize();
-      const camDest = targetPos.clone().add(dir.multiplyScalar(15)).add(new THREE.Vector3(0, 2.5, 0));
+      // 落点更近（7 单位）并略抬高，让帖子几乎占满屏幕中心
+      const camDest = targetPos.clone().add(dir.multiplyScalar(7)).add(new THREE.Vector3(0, 1.5, 0));
       const proxy = { p: 0 };
-      const done = () => { controls.target.copy(targetPos); controls.enabled = true; flying = false; if (onDone) onDone(); };
+      let fired = false;
+      const fire = () => { if (fired) return; fired = true; if (onDone) onDone(); };
+      const done = () => { controls.target.copy(targetPos); controls.enabled = true; flying = false; fire(); };
       if (window.gsap) {
         gsap.to(proxy, {
-          p: 1, duration: 1.25, ease: 'power2.inOut',
+          p: 1, duration: 1.4, ease: 'power3.inOut',
           onUpdate: () => {
             camera.position.lerpVectors(camFrom, camDest, proxy.p);
             controls.target.lerpVectors(tgtFrom, targetPos, proxy.p);
             camera.lookAt(controls.target);
+            // 落地前先唤起弹窗，让淡入与相机收尾重叠，形成顺滑衔接
+            if (proxy.p > 0.82) fire();
           },
           onComplete: done
         });
@@ -935,9 +979,9 @@ window.MTScene = {
     function onClick(e) {
       setPointer(e);
       const obj = pick();
-      if (obj && obj.parent && obj.parent.userData.item) {
+      const node = obj ? nodeOf(obj) : null;
+      if (node && node.userData.item) {
         api.playSfx('click');
-        const node = obj.parent;
         flyTo(node, () => { onNodeClick && onNodeClick(node.userData.item); });
       }
     }
@@ -1027,14 +1071,20 @@ window.MTScene = {
       for (const c of nodes) {
         c.position.y = c.userData.baseY + Math.sin(t * 0.28 + c.userData.phase) * 0.55;
         if (c.userData.isStar) {
-          // 3D 星：自身缓慢自转（露出立体厚度）+ 脉冲 + 悬停放大
-          c.userData.mesh.rotation.y += 0.012 * c.userData.spin;
-          c.userData.mesh.rotation.z += 0.004;
+          // 3D 星：整体自转（露出立体厚度）+ 环绕卫星公转 + 脉冲 + 悬停放大 + 轻微左右摇摆
+          const so = c.userData.starObj;
+          so.rotation.y += 0.012 * c.userData.spin;
+          so.rotation.z += 0.004;
+          for (const s of c.userData.sats) {
+            const a = (s.userData.a0 += s.userData.speed * 0.02);
+            s.position.set(Math.cos(a) * s.userData.r, Math.sin(a) * s.userData.r * 0.4, Math.sin(a) * s.userData.r * 0.6);
+          }
           const pulse = 1 + Math.sin(t * 1.6 + c.userData.phase) * 0.06;
           const target = c.userData.hovered ? 1.28 : pulse;
-          const s = c.scale.x + (target - c.scale.x) * 0.12;
-          c.scale.setScalar(s);
-          c.userData.glow.material.opacity = c.userData.hovered ? 0.6 : 0.28;
+          const sc = c.scale.x + (target - c.scale.x) * 0.12;
+          c.scale.setScalar(sc);
+          c.userData.glow.material.opacity = c.userData.hovered ? 0.6 : 0.3;
+          c.position.x = c.userData.baseX + Math.sin(t * 0.22 + c.userData.phase) * 0.35;
         } else {
           // 照片卡：billboard 始终正对相机
           c.parent.getWorldQuaternion(_invQ).invert();
