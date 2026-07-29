@@ -491,8 +491,13 @@ async function searchUsers(keyword, limit) {
 // storage
 // ---------------------------------------------------------------------------
 async function uploadFile(file) {
-  const { data, error } = await insforge.storage.from('uploads').uploadAuto(file)
+  // 跨国链路偶发抖动，加 20s 超时避免按钮无限卡在上传态
+  const { data, error } = await withTimeout(
+    insforge.storage.from('uploads').uploadAuto(file),
+    20000
+  ) || {}
   if (error) throw error
+  if (!data) throw new Error('图片上传超时，请检查网络后重试')
   // ⚠️ InsForge 返回的 url 指向新加坡直连主机（*.insforge.app 国内不可达），
   // 必须改写为 Worker 反代域名 api.bfgzlt.cc.cd，否则 <img> 在大陆加载失败（破损图标）。
   let url = (data && data.url) || ''

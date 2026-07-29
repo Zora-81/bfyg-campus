@@ -8,7 +8,7 @@
 
   <script>
     (function(){
-      var v = '1.4.32';
+      var v = '1.4.33';
       try {
         function newer(a, b) {
           if (!b) return true;
@@ -35,7 +35,7 @@
     })();
   </script>
 
-  <link rel="stylesheet" href="../css/memory-tree.css?v=1.4.32" />
+  <link rel="stylesheet" href="../css/memory-tree.css?v=1.4.33" />
 
   <!-- Three.js 走 CDN importmap，与 if-client.js 一致 -->
   <script type="importmap">
@@ -158,7 +158,7 @@
         </div>
         <div class="mt-post-actions">
           <button type="button" id="mt-post-cancel" class="mt-post-btn mt-post-btn-secondary">取消</button>
-          <button type="submit" class="mt-post-btn mt-post-btn-send">发布</button>
+          <button type="submit" class="mt-post-btn mt-post-btn-send" id="mt-post-send">发布</button>
         </div>
       </form>
     </div>
@@ -171,13 +171,13 @@
   </div>
 
   <!-- 依赖：GSAP（已有） → InsForge 客户端 → 场景 → 配置 → 评论/AI → 引导 -->
-  <script src="../js/lib/gsap.min.js?v=1.4.32" defer></script>
-  <script type="module" src="../js/if-client.js?v=1.4.32"></script>
-  <script type="module" src="../js/three-scene.js?v=1.4.32"></script>
-  <script type="module" src="../js/memory-tree-config.js?v=1.4.32"></script>
-  <script type="module" src="../js/memory-comments.js?v=1.4.32"></script>
-  <script type="module" src="../js/memory-ai.js?v=1.4.32"></script>
-  <script type="module" src="../js/memory-posts.js?v=1.4.32"></script>
-  <script type="module" src="../js/memory-tree.js?v=1.4.32"></script>
+  <script src="../js/lib/gsap.min.js?v=1.4.33" defer></script>
+  <script type="module" src="../js/if-client.js?v=1.4.33"></script>
+  <script type="module" src="../js/three-scene.js?v=1.4.33"></script>
+  <script type="module" src="../js/memory-tree-config.js?v=1.4.33"></script>
+  <script type="module" src="../js/memory-comments.js?v=1.4.33"></script>
+  <script type="module" src="../js/memory-ai.js?v=1.4.33"></script>
+  <script type="module" src="../js/memory-posts.js?v=1.4.33"></script>
+  <script type="module" src="../js/memory-tree.js?v=1.4.33"></script>
 </body>
 </html>

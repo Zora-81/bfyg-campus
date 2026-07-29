@@ -154,6 +154,7 @@ const el = {
   postImageBtn: $('#mt-post-image-btn'), postImageInput: $('#mt-post-image-input'),
   postImageRow: $('#mt-post-image-row'), postImagePreview: $('#mt-post-image-preview'),
   postImageRemove: $('#mt-post-image-remove'), postAuthorHint: $('#mt-post-author-hint'),
+  postSendBtn: $('#mt-post-send'),
   back: $('#mt-back'),
   musicCard: $('#mt-music-card'), musicDisc: $('#mt-music-disc'),
   musicName: $('#mt-music-name'), musicArtist: $('#mt-music-artist'),
@@ -656,46 +657,66 @@ function updatePostAuthorHint() {
   }
 }
 
+let isSubmitting = false;
+
 async function submitPost() {
+  if (isSubmitting) return;
   const content = el.postText.value.trim();
   if (!content) return;
-  const anonymous = el.postAnon.checked;
-  // 匿名直接匿名；非匿名自动用当前登录用户名，不读手动昵称输入框
-  let authorName = anonymous ? '匿名同学' : (currentUser && (currentUser.nickname || currentUser.email)) || '';
-  // 上传图片（若有）
-  let imageUrl = '';
-  const file = el.postImageInput && el.postImageInput.files && el.postImageInput.files[0];
-  if (file && window.IF && window.IF.uploadFile) {
-    toast('正在上传图片…');
-    try {
-      const data = await window.IF.uploadFile(file);
-      imageUrl = data && data.url ? data.url : '';
-    } catch (e) {
-      toast('图片上传失败，将以纯文字发布');
+
+  const sendBtn = el.postSendBtn || el.postForm.querySelector('.mt-post-btn-send');
+  const originalText = sendBtn ? sendBtn.textContent : '发布';
+  isSubmitting = true;
+  if (sendBtn) {
+    sendBtn.disabled = true;
+    sendBtn.innerHTML = '<span class="mt-spinner"></span> 上传中…';
+  }
+
+  try {
+    const anonymous = el.postAnon.checked;
+    // 匿名直接匿名；非匿名自动用当前登录用户名，不读手动昵称输入框
+    let authorName = anonymous ? '匿名同学' : (currentUser && (currentUser.nickname || currentUser.email)) || '';
+    // 上传图片（若有）
+    let imageUrl = '';
+    const file = el.postImageInput && el.postImageInput.files && el.postImageInput.files[0];
+    if (file && window.IF && window.IF.uploadFile) {
+      try {
+        const data = await window.IF.uploadFile(file);
+        imageUrl = data && data.url ? data.url : '';
+      } catch (e) {
+        toast('图片上传失败，请重试或移除图片后发布');
+        return;
+      }
+    }
+    const res = window.MTPosts.submit({ content, authorName, anonymous, imageUrl, authorId: (currentUser && currentUser.id) || null });
+    if (!res || !res.ok) { toast('发布失败，请重试'); return; }
+
+    toast('留言已挂上记忆树 ✦');
+    el.postText.value = '';
+    resetPostImage();
+    el.postModal.hidden = true;
+
+    if (sceneApi && sceneApi.addPostNode) sceneApi.addPostNode(res.post);
+    postIds.add(res.post.id);
+    buildFallbackGrid();
+
+    // 自动生成一条 AI 评语（仅发帖时触发一次，杜绝刷屏）
+    const aiItem = { title: res.post.content.slice(0, 40), location: res.post.authorName || '记忆树', year: '' };
+    MTAI.generateComment(aiItem, res.post.content).then(async ai => {
+      if (!ai || !ai.comment) return;
+      await MTComments.submit({ itemId: res.post.id, content: ai.comment, authorName: 'AI 记忆档案员', authorId: null }).catch(() => null);
+    }).catch(() => {});
+
+    // 打开刚发布的留言详情
+    const postItem = { ...res.post, title: res.post.content.length > 18 ? res.post.content.slice(0, 18) + '…' : res.post.content, location: res.post.authorName || '匿名同学', year: fmtTime(res.post.created_at), url: res.post.imageUrl || '', emoji: '✦', isPost: true };
+    openDetail(postItem);
+  } finally {
+    isSubmitting = false;
+    if (sendBtn) {
+      sendBtn.disabled = false;
+      sendBtn.textContent = originalText;
     }
   }
-  const res = window.MTPosts.submit({ content, authorName, anonymous, imageUrl, authorId: (currentUser && currentUser.id) || null });
-  if (!res || !res.ok) { toast('发布失败，请重试'); return; }
-
-  toast('留言已挂上记忆树 ✦');
-  el.postText.value = '';
-  resetPostImage();
-  el.postModal.hidden = true;
-
-  if (sceneApi && sceneApi.addPostNode) sceneApi.addPostNode(res.post);
-  postIds.add(res.post.id);
-  buildFallbackGrid();
-
-  // 自动生成一条 AI 评语（仅发帖时触发一次，杜绝刷屏）
-  const aiItem = { title: res.post.content.slice(0, 40), location: res.post.authorName || '记忆树', year: '' };
-  MTAI.generateComment(aiItem, res.post.content).then(async ai => {
-    if (!ai || !ai.comment) return;
-    await MTComments.submit({ itemId: res.post.id, content: ai.comment, authorName: 'AI 记忆档案员', authorId: null }).catch(() => null);
-  }).catch(() => {});
-
-  // 打开刚发布的留言详情
-  const postItem = { ...res.post, title: res.post.content.length > 18 ? res.post.content.slice(0, 18) + '…' : res.post.content, location: res.post.authorName || '匿名同学', year: fmtTime(res.post.created_at), url: res.post.imageUrl || '', emoji: '✦', isPost: true };
-  openDetail(postItem);
 }
 
 // ---------- 音乐播放器初始化 ----------
@@ -721,7 +742,7 @@ function bindUI() {
       return;
     }
     // 兜底：直接打开记忆树（无父页面，如书签/新标签）时，带版本号跳回主频道
-    let v = '1.4.32';
+    let v = '1.4.33';
     try {
       v = localStorage.getItem('mt_v') || v;
       if (!v) {
