@@ -43,6 +43,12 @@ if (fs.existsSync('_headers')) {
   console.log('copied _headers');
 }
 
+// Service Worker：复制到构建根，供 /sw.js 注册（同源作用域 /，控制整站含记忆树 iframe）
+if (fs.existsSync('sw.js')) {
+  fs.copyFileSync('sw.js', path.join(out, 'sw.js'));
+  console.log('copied sw.js');
+}
+
 // HTML：../css|js|images/ -> css|js|images/
 const htmlFiles = ['index.html', 'admin.html', 'memory-tree.html'];
 const htmlSrc = {};

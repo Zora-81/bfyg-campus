@@ -12,11 +12,14 @@
 
   <title>校园频道 - 登录</title>
 
+  <!-- 图片走 api.bfgzlt.cc.cd（Worker 代理），预连接省去首开 DNS+TLS 握手 -->
+  <link rel="preconnect" href="https://api.bfgzlt.cc.cd" crossorigin />
+
   <script>
 
     (function(){
 
-      var v = '1.4.41';
+      var v = '1.4.42';
 
       try {
 
@@ -63,7 +66,7 @@
 
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap" rel="stylesheet" />
 
-  <link rel="stylesheet" href="../css/style.css?v=1.4.41" />
+  <link rel="stylesheet" href="../css/style.css?v=1.4.42" />
 
 </head>
 
@@ -1030,20 +1033,20 @@
 
 
 
-  <script src="../js/lib/gsap.min.js?v=1.4.41" defer></script>
+  <script src="../js/lib/gsap.min.js?v=1.4.42" defer></script>
 
-  <script src="../js/shooting-stars.js?v=1.4.41"></script>
+  <script src="../js/shooting-stars.js?v=1.4.42"></script>
 
-  <script src="../js/main-bg.js?v=1.4.41"></script>
+  <script src="../js/main-bg.js?v=1.4.42"></script>
 
   <!-- InsForge SDK 客户端（ESM，CDN 引入），注入 window.IF 并派发 IF_READY -->
 
-  <script type="module" src="../js/if-client.js?v=1.4.41"></script>
+  <script type="module" src="../js/if-client.js?v=1.4.42"></script>
 
   <!-- 消息线程纯函数：parent_id 子消息与主 feed 分流 -->
-  <script src="../js/message-thread.js?v=1.4.41" defer></script>
+  <script src="../js/message-thread.js?v=1.4.42" defer></script>
 
-  <script src="../js/app.js?v=1.4.41" defer></script>
+  <script src="../js/app.js?v=1.4.42" defer></script>
 
   <!-- ════════════════════════════════════════════
        学校介绍弹窗：点击侧栏校徽/校园频道 触发
@@ -1315,6 +1318,15 @@
     if(phaseInfo)phaseInfo.addEventListener('click',function(e){if(e.target===closeBtn)return;e.stopPropagation();toggleCard();});
     document.addEventListener('keydown',function(e){if(e.key==='Escape'&&open)closeSchool()});
   })();
+  </script>
+
+  <script>
+    // 注册 Service Worker：缓存同源静态资源与跨域图片，二次打开零网络（兼容失败静默）
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('/sw.js').catch(function () {});
+      });
+    }
   </script>
 
 </body>

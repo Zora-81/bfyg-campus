@@ -494,9 +494,26 @@ async function searchUsers(keyword, limit) {
 // 屏幕显示（详情卡 400~600px / lightbox 最多 1080px）肉眼无损——省下的全是
 // 你根本显示不出来的多余像素。小图(≤300KB)与 HEIC 等浏览器无法 decode 的情况
 // 直接回退原文件，不画蛇添足。单版本策略：只存压缩版用于展示，前端不保留原图。
+// WebP 编码支持探测：Safari 的 canvas.toBlob 编不出 WebP（会回退或返回 null），
+// 必须探测后决定输出格式，否则新图在 Safari 上要么不压缩、要么回退原文件。
+// 模块级缓存一次，避免每次上传都重建探测 canvas。
+let _webpEncodeOk = null;
+function detectWebpEncode() {
+  return new Promise((resolve) => {
+    try {
+      const c = document.createElement('canvas');
+      c.width = c.height = 2;
+      c.toBlob((b) => resolve(!!(b && b.type === 'image/webp')), 'image/webp', 0.8);
+    } catch (e) { resolve(false); }
+  });
+}
+
 async function compressImage(file, maxEdge = 1600, quality = 0.8) {
   if (!file || !/^image\//.test(file.type)) return file;
   if (file.size <= 300 * 1024) return file;
+  if (_webpEncodeOk === null) _webpEncodeOk = await detectWebpEncode();
+  // WebP 同画质比 JPEG 小 30-40%，且主流浏览器（含微信 X5）解码无压力；
+  // Safari canvas 编不出 WebP 时退回 JPEG（探测已保证 _webpEncodeOk 准确）。
   return new Promise((resolve) => {
     const url = URL.createObjectURL(file);
     const img = new Image();
@@ -510,11 +527,14 @@ async function compressImage(file, maxEdge = 1600, quality = 0.8) {
         canvas.width = w; canvas.height = h;
         canvas.getContext('2d').drawImage(img, 0, 0, w, h);
         URL.revokeObjectURL(url);
-        canvas.toBlob((blob) => {
-          if (!blob) return resolve(file);
+        // emit：输出目标格式；WebP 编码失败时（极少数环境）回退 JPEG，绝不用原文件
+        const emit = (type, ext, onFail) => canvas.toBlob((blob) => {
+          if (!blob) { if (onFail) return onFail(); return resolve(file); }
           const base = (file.name || 'image').replace(/\.[^.]+$/, '');
-          resolve(new File([blob], base + '.jpg', { type: 'image/jpeg', lastModified: Date.now() }));
-        }, 'image/jpeg', quality);
+          resolve(new File([blob], base + ext, { type, lastModified: Date.now() }));
+        }, type, quality);
+        if (_webpEncodeOk) emit('image/webp', '.webp', () => emit('image/jpeg', '.jpg'));
+        else emit('image/jpeg', '.jpg');
       } catch (e) {
         URL.revokeObjectURL(url);
         resolve(file);

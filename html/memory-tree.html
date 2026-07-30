@@ -6,9 +6,12 @@
   <meta name="theme-color" content="#000000" />
   <title>星空档案 · 记忆树</title>
 
+  <!-- 图片走 api.bfgzlt.cc.cd（Worker 代理），预连接省去首开 DNS+TLS 握手 -->
+  <link rel="preconnect" href="https://api.bfgzlt.cc.cd" crossorigin />
+
   <script>
     (function(){
-      var v = '1.4.41';
+      var v = '1.4.42';
       try {
         function newer(a, b) {
           if (!b) return true;
@@ -35,7 +38,7 @@
     })();
   </script>
 
-  <link rel="stylesheet" href="../css/memory-tree.css?v=1.4.41" />
+  <link rel="stylesheet" href="../css/memory-tree.css?v=1.4.42" />
 
   <!-- Three.js 走 CDN importmap，与 if-client.js 一致 -->
   <script type="importmap">
@@ -177,13 +180,22 @@
   </div>
 
   <!-- 依赖：GSAP（已有） → InsForge 客户端 → 场景 → 配置 → 评论/AI → 引导 -->
-  <script src="../js/lib/gsap.min.js?v=1.4.41" defer></script>
-  <script type="module" src="../js/if-client.js?v=1.4.41"></script>
-  <script type="module" src="../js/three-scene.js?v=1.4.41"></script>
-  <script type="module" src="../js/memory-tree-config.js?v=1.4.41"></script>
-  <script type="module" src="../js/memory-comments.js?v=1.4.41"></script>
-  <script type="module" src="../js/memory-ai.js?v=1.4.41"></script>
-  <script type="module" src="../js/memory-posts.js?v=1.4.41"></script>
-  <script type="module" src="../js/memory-tree.js?v=1.4.41"></script>
+  <script src="../js/lib/gsap.min.js?v=1.4.42" defer></script>
+  <script type="module" src="../js/if-client.js?v=1.4.42"></script>
+  <script type="module" src="../js/three-scene.js?v=1.4.42"></script>
+  <script type="module" src="../js/memory-tree-config.js?v=1.4.42"></script>
+  <script type="module" src="../js/memory-comments.js?v=1.4.42"></script>
+  <script type="module" src="../js/memory-ai.js?v=1.4.42"></script>
+  <script type="module" src="../js/memory-posts.js?v=1.4.42"></script>
+  <script type="module" src="../js/memory-tree.js?v=1.4.42"></script>
+  <script>
+    // 注册 Service Worker：缓存同源静态资源与跨域图片，二次打开零网络（兼容失败静默）
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('/sw.js').catch(function () {});
+      });
+    }
+  </script>
+
 </body>
 </html>
