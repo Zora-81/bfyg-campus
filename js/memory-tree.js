@@ -453,7 +453,7 @@ function tryAuth() {
 }
 
 // ---------- 详情 / 评论 ----------
-async function openDetail(item) {
+async function openDetail(item, origin) {
   currentItem = item;
   const isPost = item.isPost || (!item.url && item.content);
   const title = isPost ? (item.content.length > 22 ? item.content.slice(0, 22) + '…' : item.content) : (item.title || '记忆');
@@ -512,9 +512,18 @@ async function openDetail(item) {
   // 无图（文字星帖子）：隐藏左侧媒体区，内容全宽
   if (url) el.detail.classList.remove('no-image');
   else el.detail.classList.add('no-image');
+  // 文字星点击：让详情卡从那颗星的屏幕落点绽放，而非从屏幕正中凭空出现
+  const card = el.detail.querySelector('.mt-detail-card');
+  if (origin && card) {
+    el.detail.classList.add('mt-detail-anchored');
+    card.style.setProperty('--ox', origin.x + 'px');
+    card.style.setProperty('--oy', origin.y + 'px');
+  } else {
+    el.detail.classList.remove('mt-detail-anchored');
+  }
   el.summary.hidden = true; el.summary.innerHTML = '';
   el.detail.hidden = false;
-  // 触发淡入（与相机落位重叠，形成顺滑衔接）
+  // 触发淡入+绽放（与相机落位重叠，形成顺滑衔接）
   requestAnimationFrame(() => { el.detail.classList.add('mt-detail-open'); });
 
   // 评论
@@ -661,6 +670,7 @@ async function deleteCurrentPost() {
   if (sceneApi && sceneApi.removeNode) sceneApi.removeNode(id);
   if (postIds) postIds.delete(id);
   el.detail.classList.remove('mt-detail-open');
+  el.detail.classList.remove('mt-detail-anchored');
   el.detail.hidden = true; currentItem = null;
   buildFallbackGrid();
   toast('已删除该帖子');
@@ -765,7 +775,7 @@ function bindUI() {
       return;
     }
     // 兜底：直接打开记忆树（无父页面，如书签/新标签）时，带版本号跳回主频道
-    let v = '1.4.37';
+    let v = '1.4.38';
     try {
       v = localStorage.getItem('mt_v') || v;
       if (!v) {
@@ -801,7 +811,7 @@ function bindUI() {
       deleteCurrentPost();
     });
   }
-  el.detail.addEventListener('click', (e) => { if (e.target === el.detail) { el.detail.classList.remove('mt-detail-open'); el.detail.hidden = true; } });
+  el.detail.addEventListener('click', (e) => { if (e.target === el.detail) { el.detail.classList.remove('mt-detail-open'); el.detail.classList.remove('mt-detail-anchored'); el.detail.hidden = true; } });
   // ESC 关闭：lightbox 优先（避免关放大图时把详情也一起关掉）
   const lightbox = document.getElementById('mt-lightbox');
   const lightboxClose = document.getElementById('mt-lightbox-close');
@@ -810,7 +820,7 @@ function bindUI() {
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     if (lightbox && !lightbox.hidden) { closeLightbox(); return; }
-    if (!el.detail.hidden) { el.detail.classList.remove('mt-detail-open'); el.detail.hidden = true; }
+    if (!el.detail.hidden) { el.detail.classList.remove('mt-detail-open'); el.detail.classList.remove('mt-detail-anchored'); el.detail.hidden = true; }
   });
 
   el.form.addEventListener('submit', async (e) => {

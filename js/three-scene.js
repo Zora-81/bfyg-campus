@@ -958,7 +958,17 @@ window.MTScene = {
       const camDest = targetPos.clone().add(dir.multiplyScalar(7)).add(new THREE.Vector3(0, 1.5, 0));
       const proxy = { p: 0 };
       let fired = false;
-      const fire = () => { if (fired) return; fired = true; if (onDone) onDone(); };
+      const fire = () => {
+        if (fired) return; fired = true;
+        if (onDone) {
+          // 把星的世界坐标投影成屏幕像素，传给详情卡作为绽放原点
+          const v = new THREE.Vector3();
+          node.getWorldPosition(v); v.project(camera);
+          const x = Math.round((v.x * 0.5 + 0.5) * window.innerWidth);
+          const y = Math.round((-v.y * 0.5 + 0.5) * window.innerHeight);
+          onDone({ x, y });
+        }
+      };
       const done = () => { controls.target.copy(targetPos); controls.enabled = true; flying = false; fire(); };
       if (window.gsap) {
         gsap.to(proxy, {
@@ -982,7 +992,7 @@ window.MTScene = {
       const node = obj ? nodeOf(obj) : null;
       if (node && node.userData.item) {
         api.playSfx('click');
-        flyTo(node, () => { onNodeClick && onNodeClick(node.userData.item); });
+        flyTo(node, (origin) => { onNodeClick && onNodeClick(node.userData.item, origin); });
       }
     }
     dom.addEventListener('pointermove', onMove);

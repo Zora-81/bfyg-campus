@@ -145,7 +145,7 @@ body { font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI
 .mt-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
 /* ===== 详情弹层 ===== */
-.mt-detail { position: fixed; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgba(0,0,0,.78); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); opacity: 0; transition: opacity .35s ease; }
+.mt-detail { position: fixed; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgba(0,0,0,.45); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); opacity: 0; transition: opacity .4s ease; }
 .mt-detail[hidden] { display: none; }
 .mt-detail.mt-detail-open { opacity: 1; }
 .mt-detail-card {
@@ -155,6 +155,17 @@ body { font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI
   transform: scale(.94); transition: transform .4s cubic-bezier(.2,.7,.2,1);
 }
 .mt-detail.mt-detail-open .mt-detail-card { transform: scale(1); }
+/* 从被点击的星位置绽放展开：相机贴近→星在眼前绽成详情卡，而非屏幕正中凭空出现 */
+.mt-detail-anchored .mt-detail-card {
+  position: fixed;
+  left: var(--ox, 50%); top: var(--oy, 50%);
+  transform: translate(-50%, -50%) scale(.12);
+  transition: left .5s cubic-bezier(.2,.7,.2,1), top .5s cubic-bezier(.2,.7,.2,1), transform .5s cubic-bezier(.2,.7,.2,1);
+}
+.mt-detail-anchored.mt-detail-open .mt-detail-card {
+  left: 50%; top: 50%;
+  transform: translate(-50%, -50%) scale(1);
+}
 /* 文字星帖子（无图）：隐藏左侧媒体区，内容全宽居中 */
 .mt-detail.no-image .mt-detail-media { display: none; }
 .mt-detail.no-image .mt-detail-info { justify-content: center; }
