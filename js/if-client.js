@@ -490,10 +490,48 @@ async function searchUsers(keyword, limit) {
 // ---------------------------------------------------------------------------
 // storage
 // ---------------------------------------------------------------------------
+// 上传前前端压缩：最长边缩到 1600px、JPEG q0.8，体积从数 MB 降到 ~300KB。
+// 屏幕显示（详情卡 400~600px / lightbox 最多 1080px）肉眼无损——省下的全是
+// 你根本显示不出来的多余像素。小图(≤300KB)与 HEIC 等浏览器无法 decode 的情况
+// 直接回退原文件，不画蛇添足。单版本策略：只存压缩版用于展示，前端不保留原图。
+async function compressImage(file, maxEdge = 1600, quality = 0.8) {
+  if (!file || !/^image\//.test(file.type)) return file;
+  if (file.size <= 300 * 1024) return file;
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const longest = Math.max(img.width, img.height) || 0;
+      const scale = longest > maxEdge ? maxEdge / longest : 1;
+      const w = Math.max(1, Math.round(img.width * scale));
+      const h = Math.max(1, Math.round(img.height * scale));
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        URL.revokeObjectURL(url);
+        canvas.toBlob((blob) => {
+          if (!blob) return resolve(file);
+          const base = (file.name || 'image').replace(/\.[^.]+$/, '');
+          resolve(new File([blob], base + '.jpg', { type: 'image/jpeg', lastModified: Date.now() }));
+        }, 'image/jpeg', quality);
+      } catch (e) {
+        URL.revokeObjectURL(url);
+        resolve(file);
+      }
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+    img.src = url;
+  });
+}
+
 async function uploadFile(file) {
+  // 先压缩（单版本：只存压缩版用于展示），失败兜底用原文件
+  let toUpload = file;
+  try { toUpload = await compressImage(file); } catch (e) { toUpload = file; }
   // 跨国链路偶发抖动，加 20s 超时避免按钮无限卡在上传态
   const { data, error } = await withTimeout(
-    insforge.storage.from('uploads').uploadAuto(file),
+    insforge.storage.from('uploads').uploadAuto(toUpload),
     20000
   ) || {}
   if (error) throw error

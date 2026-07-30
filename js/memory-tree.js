@@ -461,8 +461,12 @@ async function openDetail(item, origin) {
   const url = mediaURL(item);
   if (url) {
     const img = document.createElement('img');
+    img.className = 'mt-detail-img';
     img.src = url; img.alt = item.title || '';
     img.title = '点击放大查看';
+    // 渐进式：先透明，加载完淡入；加载中由 CSS 骨架微光占位，消除"白等后啪一下出现"
+    img.addEventListener('load', () => img.classList.add('loaded'));
+    img.addEventListener('error', () => img.classList.add('mt-img-error'));
     img.addEventListener('click', (e) => { e.stopPropagation(); openLightbox(url); });
     el.detailMedia.appendChild(img);
   } else {
@@ -536,6 +540,8 @@ function openLightbox(src) {
   const lb = document.getElementById('mt-lightbox');
   const img = document.getElementById('mt-lightbox-img');
   if (!lb || !img || !src) return;
+  img.classList.remove('loaded');
+  img.onload = () => img.classList.add('loaded');
   img.src = src;
   lb.hidden = false;
 }
@@ -780,7 +786,7 @@ function bindUI() {
       return;
     }
     // 兜底：直接打开记忆树（无父页面，如书签/新标签）时，带版本号跳回主频道
-    let v = '1.4.39';
+    let v = '1.4.40';
     try {
       v = localStorage.getItem('mt_v') || v;
       if (!v) {

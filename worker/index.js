@@ -255,6 +255,12 @@ export default {
     const resp = await fetch(targetUrl, init)
     const out = new Response(resp.body, resp)
     for (const [k, v] of Object.entries(corsHeaders(origin, request.headers.get('access-control-request-headers') || ''))) out.headers.set(k, v)
+    // ★ 图片类 GET 响应加缓存头：Cloudflare 边缘缓存，重复打开秒开（根治"每次回源慢"）。
+    // immutable 表示对象内容不变，可长期缓存；仅对 image/* 的 GET/HEAD 生效，不影响 API。
+    const ct = resp.headers.get('content-type') || ''
+    if ((request.method === 'GET' || request.method === 'HEAD') && ct.indexOf('image/') === 0) {
+      out.headers.set('Cache-Control', 'public, max-age=86400, immutable')
+    }
     return out
   }
 }
