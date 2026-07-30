@@ -696,6 +696,11 @@ async function submitPost() {
   if (isSubmitting) return;
   const content = el.postText.value.trim();
   if (!content) return;
+  // 不能只发 emoji / 空白 / 标点，必须包含至少一个真实文字或数字
+  if (!/[\p{L}\p{N}]/u.test(content)) {
+    toast('请至少输入一些文字，不能只发表情 ✦');
+    return;
+  }
 
   const sendBtn = el.postSendBtn || el.postForm.querySelector('.mt-post-btn-send');
   const originalText = sendBtn ? sendBtn.textContent : '发布';
@@ -775,7 +780,7 @@ function bindUI() {
       return;
     }
     // 兜底：直接打开记忆树（无父页面，如书签/新标签）时，带版本号跳回主频道
-    let v = '1.4.38';
+    let v = '1.4.39';
     try {
       v = localStorage.getItem('mt_v') || v;
       if (!v) {

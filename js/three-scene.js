@@ -845,9 +845,10 @@ window.MTScene = {
       const ctx = c.getContext('2d');
       ctx.clearRect(0, 0, 256, 256);
       ctx.fillStyle = 'rgba(255,243,196,0.96)';
-      ctx.font = 'bold 160px serif';
+      ctx.font = 'bold 160px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",serif';
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      const ch = ((item.content || item.title || '✦').trim().charAt(0)) || '✦';
+      // 用 Array.from 按码点拆分，避免 emoji 代理对被 charAt 截成半个导致乱码
+      const ch = Array.from((item.content || item.title || '✦').trim())[0] || '✦';
       ctx.fillText(ch, 128, 140);
       const tex = new THREE.CanvasTexture(c);
       tex.colorSpace = THREE.SRGBColorSpace;
