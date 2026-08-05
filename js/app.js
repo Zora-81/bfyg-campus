@@ -5707,8 +5707,6 @@
     +       '</div>'
     +     '</div>'
     +   '</div>'
-    +   '<div class="chip-flip-tip">点卡片翻面 · 左右/上下边翻转方向不同 · 四角侧着翻</div>'
-    + '</div>'
     + '<input type="file" id="chip-avatar-input" accept="image/*" style="display:none;">';
 
   var chipOverlay, chipStage, chipEntrance, chipFlip, chipBuilt = false;
@@ -5801,6 +5799,26 @@
     }catch(e){ return '—'; }
   }
 
+  function chipFmtCardnum(raw){
+    if(!raw) return '—';
+    var s = String(raw).trim();
+    if(s.indexOf('@') > 0){
+      // 邮箱 → user · @domain · com 分散格式
+      var parts = s.split('@');
+      var dom = parts[1] || '';
+      var dot = dom.lastIndexOf('.');
+      var suffix = dot > 0 ? dom.slice(dot) : '';
+      var domain = dot > 0 ? dom.slice(0, dot) : dom;
+      return parts[0] + ' · @' + domain + (suffix ? ' ·' + suffix : '');
+    }
+    // 纯数字/手机号 → 每4位一组分散
+    if(/^\d{8,}$/.test(s)){
+      var groups = s.match(/.{1,4}/g);
+      return groups ? groups.join(' · ') : s;
+    }
+    return s;
+  }
+
   function chipPopulate(){
     var u = currentUser; if(!u) return;
     var roleMeta = ROLE_META[u.role] || ROLE_META.student;
@@ -5812,7 +5830,7 @@
     } else {
       av.textContent = init;
     }
-    chipEl('chip-cardnum').textContent = u.username || '';
+    chipEl('chip-cardnum').textContent = chipFmtCardnum(u.username || '');
     chipEl('chip-holder').textContent = u.nickname || u.username || '';
     var handle = (function(){ try{ return localStorage.getItem('chip-handle'); }catch(e){ return null; } })() || (u.username ? u.username.split('@')[0] : (u.nickname||''));
     chipEl('chip-handle').textContent = '@' + handle;
@@ -5823,7 +5841,7 @@
     chipEl('chip-role').textContent = roleMeta.label;
     var ca = u.created_at || (IF && IF.resolveAuthor ? (IF.resolveAuthor(u.id)||{}).created_at : null);
     chipEl('chip-valid').textContent = ca ? chipFmtDate(ca) : '—';
-    chipEl('chip-back-num').textContent = u.username || '';
+    chipEl('chip-back-num').textContent = chipFmtCardnum(u.username || '');
     var sig = (function(){ try{ return localStorage.getItem('chip-signature'); }catch(e){ return null; } })() || (u.nickname||u.username||'');
     chipEl('chip-back-sig').textContent = sig;
     var cvv = (function(){ try{ return localStorage.getItem('chip-cvv'); }catch(e){ return null; } })() || '019';
