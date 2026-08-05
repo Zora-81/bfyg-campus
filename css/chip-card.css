@@ -1,0 +1,397 @@
+/* ============================================================
+   校园频道 — Chip 信用卡资料卡（点击侧栏头像弹出）
+   全部类名前缀 chip- 以避免与项目 style.css 冲突
+   ============================================================ */
+
+/* ── 遮罩 + 舞台 ── */
+.chip-overlay{
+  position:fixed; inset:0; z-index:8000; display:flex; align-items:center; justify-content:center;
+  background:radial-gradient(circle at 50% 40%, rgba(8,11,20,.55), rgba(4,6,12,.86));
+  backdrop-filter:blur(7px); opacity:0; visibility:hidden;
+  font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+}
+.chip-overlay.show{opacity:1; visibility:visible}
+.chip-stage{
+  perspective:1900px; position:relative;
+  width:min(92vw,500px); height:calc(min(92vw,500px) * 0.631);
+  /* 皮肤变量默认值（深海蓝） */
+  --surface-bg:
+    radial-gradient(130% 150% at 14% 12%, rgba(125,185,255,.30), transparent 48%),
+    radial-gradient(120% 150% at 88% 90%, rgba(0,210,185,.20), transparent 55%),
+    linear-gradient(135deg,#0a2746 0%,#114069 42%,#0a3357 72%,#08263f 100%);
+  --edit-bg:
+    radial-gradient(130% 150% at 14% 12%, rgba(125,185,255,.18), transparent 48%),
+    linear-gradient(135deg,#0a2746 0%,#114069 42%,#0a3357 72%,#08263f 100%);
+  --text:#eef4ff; --sub:#8fb6e8;
+  --num-shadow:0 1px 0 rgba(0,0,0,.55), 0 -1px 0 rgba(255,255,255,.12);
+  --tier-bg:linear-gradient(135deg,#f9e7a0,#d4a437); --tier-col:#1a1205;
+  --role-bg:linear-gradient(135deg,#bfe9ff,#7fc8ff); --role-col:#0a2240;
+  --speck-o:.10;
+}
+.chip-entrance{width:100%; height:100%; transform-style:preserve-3d}
+.chip-flip{
+  position:relative; width:100%; height:100%;
+  transform-style:preserve-3d;
+}
+.chip-face{
+  position:absolute; inset:0; border-radius:20px; overflow:hidden;
+  backface-visibility:hidden; -webkit-backface-visibility:hidden;
+  box-shadow:
+    0 36px 70px -18px rgba(0,0,0,.72),
+    0 8px 22px rgba(0,0,0,.5),
+    inset 0 1px 0 rgba(255,255,255,.28),
+    inset 0 0 0 1px rgba(255,255,255,.09);
+}
+.chip-face.back{transform:rotateY(180deg)}
+
+/* 卡面底色（由皮肤变量驱动） */
+.chip-surface{
+  position:absolute; inset:0; border-radius:20px;
+  background:var(--surface-bg);
+}
+.chip-surface::after{
+  content:""; position:absolute; inset:0; border-radius:20px;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  opacity:var(--speck-o); mix-blend-mode:overlay; pointer-events:none;
+}
+.chip-surface::before{
+  content:""; position:absolute; inset:0; border-radius:20px;
+  background-image:repeating-radial-gradient(circle at 78% 130%, rgba(255,255,255,.05) 0 1px, transparent 1px 7px);
+  opacity:.5; pointer-events:none;
+}
+.chip-holo{
+  position:absolute; inset:0; border-radius:20px; pointer-events:none;
+  background:linear-gradient(115deg,transparent 30%,rgba(255,255,255,.22) 47%,rgba(160,200,255,.18) 53%,transparent 70%);
+  mix-blend-mode:screen; opacity:.7;
+}
+
+/* ── 卡面字体凹凸质感（仿真信用卡压纹） ──
+ *  凸 emboss = 浮起压纹（左上光源·右下阴影）→ 品牌/卡号/持卡人/有效期/徽章/头像字母/签名
+ *  凹 deboss = 凹陷印刷 → 副标题/标签/@handle/CVV/背面提示
+ */
+.chip-emboss{
+  text-shadow:
+    0 1.4px 0 rgba(255,255,255,.18),
+    0 -1.2px 0 rgba(0,0,0,.48),
+    1px 1.8px 2.5px rgba(0,0,0,.28);
+}
+.chip-deboss{
+  text-shadow:
+    0 -1px 0 rgba(0,0,0,.42),
+    0 1px 0 rgba(255,255,255,.07),
+    inset 0 1.5px 3px rgba(0,0,0,.15);
+}
+.chip-deboss-light{
+  text-shadow:
+    0 -.6px 0 rgba(0,0,0,.30),
+    0 .6px 0 rgba(255,255,255,.05);
+}
+
+/* 顶部品牌 */
+.chip-brand-row{position:absolute; top:7%; left:7%; right:7%; display:flex; justify-content:space-between; align-items:center; z-index:3}
+.chip-brand-row .iss{font-weight:800; font-size:clamp(13px,3.4vw,17px); letter-spacing:.6px; color:var(--text);
+  text-shadow:
+    0 1.5px 0 rgba(255,255,255,.20),
+    0 -1.3px 0 rgba(0,0,0,.50),
+    1.2px 2px 3px rgba(0,0,0,.28);
+}
+.chip-brand-row .iss small{display:block; font-weight:600; font-size:9px; letter-spacing:2px; color:var(--sub); opacity:.85;
+  text-shadow:0 -.7px 0 rgba(0,0,0,.32), 0 .7px 0 rgba(255,255,255,.05);
+}
+/* 称号徽章（右上角 · 凸） */
+.chip-tier{font-size:10px; font-weight:700; letter-spacing:1px; padding:4px 9px; border-radius:999px; color:var(--tier-col); background:var(--tier-bg);
+  box-shadow:0 2px 6px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.25), 0 1px 0 rgba(0,0,0,.3);
+  max-width:46%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+
+/* 芯片 → 电路板（金色走线循环流动 · 方正装饰） */
+.chip-chip{
+  position:absolute; left:7%; top:32%; width:clamp(52px,13.5%,68px); aspect-ratio:1.28;
+  border-radius:10px; overflow:hidden; z-index:3;
+  background:
+    radial-gradient(130% 130% at 28% 18%, #4a3a12 0%, #2e2409 55%, #160f02 100%),
+    #1a1303;
+  box-shadow:0 0 24px rgba(246,196,83,.42), 0 5px 12px rgba(0,0,0,.55), inset 0 0 0 1px rgba(246,196,83,.42);
+  transition:transform .25s cubic-bezier(.34,1.56,.64,1), box-shadow .25s;
+}
+.chip-chip:hover{ transform:scale(1.06); box-shadow:0 0 30px rgba(246,196,83,.65), 0 5px 12px rgba(0,0,0,.55), inset 0 0 0 1px rgba(255,224,138,.7); }
+.chip-chip:active{ transform:scale(.96); }
+.chip-chip::before{
+  content:""; position:absolute; inset:0; z-index:1; pointer-events:none;
+  background-image:
+    linear-gradient(rgba(246,196,83,.10) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(246,196,83,.10) 1px, transparent 1px);
+  background-size:8px 8px;
+}
+.chip-chip-circuit{position:absolute; inset:0; width:100%; height:100%; z-index:2; mix-blend-mode:normal}
+.chip-chip-trace{ fill:none; stroke:#f6c453; stroke-width:1.5; stroke-linecap:round; stroke-linejoin:round;
+  filter:drop-shadow(0 0 2.4px rgba(246,196,83,.85)); }
+.chip-chip-trace.flow{ stroke-dasharray:5 7; animation:chipTraceFlow 1.05s linear infinite; }
+.chip-chip-trace.flow.rev{ animation:chipTracRev 1.3s linear infinite; }
+@keyframes chipTraceFlow{ to{ stroke-dashoffset:-24; } }
+@keyframes chipTracRev{ to{ stroke-dashoffset:24; } }
+.chip-chip-pad{ fill:#3a2c0e; stroke:#f6c453; stroke-width:1.3; filter:drop-shadow(0 0 3px rgba(246,196,83,.95)); }
+.chip-chip-pad.pulse{ animation:chipPadPulse 1.7s ease-in-out infinite; }
+@keyframes chipPadPulse{ 0%,100%{ opacity:.5 } 50%{ opacity:1 } }
+.chip-chip-die{ fill:#7a5a14; stroke:#ffe08a; stroke-width:1.5; filter:drop-shadow(0 0 5px rgba(255,224,138,.9)); }
+.chip-chip-die-core{ fill:#fff4cf; filter:drop-shadow(0 0 4px rgba(255,224,138,1)); animation:chipDieCore 1.4s ease-in-out infinite; }
+@keyframes chipDieCore{ 0%,100%{ opacity:.5 } 50%{ opacity:1 } }
+.chip-chip-signal{ fill:#fff6dd; filter:drop-shadow(0 0 4px rgba(255,224,138,1)); }
+.chip-chip-gloss{
+  position:absolute; inset:0; z-index:4; border-radius:10px; pointer-events:none;
+  background:linear-gradient(135deg,rgba(255,255,255,.22),transparent 45%,rgba(255,255,255,.06) 62%,transparent);
+  mix-blend-mode:screen;
+}
+
+/* 头像（卡面右上圆形 · 点击更换） */
+.chip-av{
+  position:absolute; right:7%; top:24%; width:clamp(46px,13%,62px); aspect-ratio:1; border-radius:50%;
+  background:conic-gradient(from 210deg,#7c83ff,#a06bff,#ff7eb6,#7c83ff);
+  display:flex; align-items:center; justify-content:center; font-weight:800; font-size:clamp(16px,5vw,22px); color:#fff;
+  box-shadow:0 0 0 2px rgba(255,255,255,.35), 0 0 0 4px rgba(0,0,0,.25), 0 6px 16px rgba(0,0,0,.5); z-index:3;
+  text-shadow:0 1.5px 2px rgba(0,0,0,.35), 0 0 8px rgba(124,131,255,.4);
+  cursor:pointer; overflow:hidden;
+}
+.chip-av img{ width:100%; height:100%; object-fit:cover; border-radius:50%; display:block; }
+.chip-av::after{
+  content:"📷"; position:absolute; right:1px; bottom:1px; font-size:11px;
+  background:rgba(0,0,0,.55); border-radius:50%; width:18px; height:18px; display:flex;
+  align-items:center; justify-content:center; opacity:0; transition:opacity .2s;
+}
+.chip-av:hover::after{ opacity:1; }
+
+/* 卡号 → 邮箱（凸 · 压纹浮起 · 换行显示完整邮箱便于联系） */
+.chip-cardnum{
+  position:absolute; left:7%; top:58%; right:7%; z-index:3;
+  font-family:"SFMono-Regular",Consolas,"Roboto Mono",monospace;
+  font-size:clamp(12px,3.4vw,16px); letter-spacing:.5px; color:var(--text); font-weight:600;
+  line-height:1.25; word-break:break-all;
+  text-shadow:
+    0 1.6px 0 rgba(255,255,255,.16),
+    0 -1.4px 0 rgba(0,0,0,.50),
+    1.2px 2px 3px rgba(0,0,0,.26);
+}
+
+/* 持卡人 + 有效期 */
+.chip-holder{position:absolute; left:7%; bottom:9%; z-index:3; line-height:1.35; max-width:55%}
+.chip-holder .lbl{font-size:8px; letter-spacing:2px; color:var(--sub); opacity:.8;
+  text-shadow:0 -.6px 0 rgba(0,0,0,.30), 0 .6px 0 rgba(255,255,255,.05);
+}
+.chip-holder .val{font-size:clamp(13px,3.6vw,17px); font-weight:700; color:var(--text); text-transform:uppercase; letter-spacing:.5px;
+  text-shadow:
+    0 1.4px 0 rgba(255,255,255,.18),
+    0 -1.2px 0 rgba(0,0,0,.46),
+    1px 1.6px 2.5px rgba(0,0,0,.25);
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.chip-holder .handle{font-size:11px; color:var(--sub);
+  text-shadow:0 -.5px 0 rgba(0,0,0,.28), 0 .5px 0 rgba(255,255,255,.04);
+}
+.chip-valid{position:absolute; right:7%; bottom:9%; z-index:3; text-align:right; line-height:1.35}
+.chip-valid .lbl{font-size:8px; letter-spacing:2px; color:var(--sub); opacity:.8;
+  text-shadow:0 -.5px 0 rgba(0,0,0,.28), 0 .5px 0 rgba(255,255,255,.04);
+}
+.chip-valid .val{font-size:clamp(12px,3.2vw,15px); font-weight:700; color:var(--text); letter-spacing:1px;
+  text-shadow:
+    0 1.2px 0 rgba(255,255,255,.16),
+    0 -1px 0 rgba(0,0,0,.44),
+    1px 1.4px 2px rgba(0,0,0,.24);
+}
+.chip-role-badge{display:inline-block; margin-top:4px; font-size:9px; font-weight:700; letter-spacing:.5px; padding:2px 8px; border-radius:999px; color:var(--role-col); background:var(--role-bg);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.22), 0 1px 0 rgba(0,0,0,.28), 0 2px 5px rgba(0,0,0,.18);
+  max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; vertical-align:top;
+}
+
+/* ── 背面 ── */
+.chip-face.back .chip-mag{position:absolute; top:11%; left:0; right:0; height:18%; background:#0b0d12; box-shadow:inset 0 1px 0 rgba(255,255,255,.06)}
+.chip-face.back .chip-sig{
+  position:absolute; left:7%; top:38%; width:62%; height:17%; border-radius:5px;
+  background:repeating-linear-gradient(45deg,#f6f3e8 0 8px,#ece8d8 8px 16px);
+  display:flex; align-items:center; padding:0 12px;
+  font-family:"Snell Roundhand","Brush Script MT","Segoe Script","Bradley Hand",cursive;
+  font-style:italic; font-size:24px; color:#1b2336; letter-spacing:.5px;
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,.15),
+    inset 1px 1px 3px rgba(0,0,0,.10), 0 1px 0 rgba(255,255,255,.4);
+  text-shadow:0 1px 0 rgba(255,255,255,.35), 1px 2px 3px rgba(0,0,0,.15);
+  overflow:hidden;
+}
+.chip-face.back .chip-cvv{
+  position:absolute; right:7%; top:38%; width:24%; height:17%; border-radius:5px;
+  background:linear-gradient(#fff,#e6e6e6); display:flex; align-items:center; justify-content:center;
+  font-family:monospace; font-weight:700; color:#222; letter-spacing:2px; font-size:15px;
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,.12),
+    inset 0 2px 4px rgba(0,0,0,.06), 0 1px 0 rgba(255,255,255,.8);
+  text-shadow:inset 0 1px 2px rgba(0,0,0,.20), 0 .5px 0 rgba(255,255,255,.6);
+}
+.chip-face.back .chip-cvv small{position:absolute; top:-14px; right:2px; font-size:7px; letter-spacing:1px; color:var(--sub);
+  text-shadow:0 -.5px 0 rgba(0,0,0,.25), 0 .5px 0 rgba(255,255,255,.04);
+}
+.chip-face.back .chip-actions{position:absolute; left:7%; right:7%; bottom:8%; display:flex; gap:10px; z-index:3; align-items:center}
+.chip-face.back .chip-hint{position:absolute; left:7%; bottom:24%; font-size:10px; color:var(--sub); letter-spacing:.5px;
+  text-shadow:0 -.5px 0 rgba(0,0,0,.25), 0 .5px 0 rgba(255,255,255,.04);
+}
+.chip-face.back .chip-num-print{position:absolute; left:7%; top:30%; font-family:monospace; font-size:11px; letter-spacing:1px; color:var(--sub); opacity:.7;
+  text-shadow:0 -.5px 0 rgba(0,0,0,.28), 0 .5px 0 rgba(255,255,255,.04); word-break:break-all; right:7%;
+}
+
+/* ── 背面操作按钮（Uiverse btn-17 风格 · 斜切扫光） ── */
+.chip-actions .btn-17,
+.chip-actions .btn-17 *,
+.chip-actions .btn-17 :after,
+.chip-actions .btn-17 :before,
+.chip-actions .btn-17:after,
+.chip-actions .btn-17:before {
+  border: 0 solid;
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+.chip-actions .btn-17{
+  background-color:#000; background-image:none; color:#fff;
+  cursor:pointer; font-family:inherit; font-weight:900; line-height:1.5;
+  margin:0; padding:0; text-transform:uppercase;
+  border-radius:99rem; border-width:2px;
+  position:relative; overflow:hidden; z-index:0;
+  display:inline-flex; align-items:center; justify-content:center; gap:6px;
+  transition:transform .2s, box-shadow .2s; flex:none;
+  font-size:11px; letter-spacing:.5px;
+}
+.chip-actions .btn-17 .text-container{
+  display:block; position:relative; mix-blend-mode:difference; width:100%; text-align:center;
+}
+.chip-actions .btn-17 .text{display:block; position:relative; white-space:nowrap}
+.chip-actions .btn-17:hover .text{
+  -webkit-animation:chipMoveUp .3s forwards;
+  animation:chipMoveUp .3s forwards;
+}
+@keyframes chipMoveUp{
+  0%{transform:translateY(0)} 50%{transform:translateY(80%)} 51%{transform:translateY(-80%)} to{transform:translateY(0)}
+}
+.chip-actions .btn-17:after,
+.chip-actions .btn-17:before{
+  --skew:.2; background:#fff; content:""; display:block; height:102%;
+  left:calc(-50% - 50% * var(--skew)); pointer-events:none;
+  position:absolute; top:-104%;
+  transform:skew(calc(150deg * var(--skew))) translateY(var(--progress, 0));
+  transition:transform .2s ease; width:100%;
+}
+.chip-actions .btn-17:after{
+  --progress:0%; left:calc(50% + 50% * var(--skew)); top:102%; z-index:-1;
+}
+.chip-actions .btn-17:hover:before{ --progress:100%; }
+.chip-actions .btn-17:hover:after{ --progress:-102%; }
+
+/* 按钮尺寸：编辑长 / 管理退出等宽 */
+.chip-actions .btn-edit{ padding:.65rem 2.4rem; }
+.chip-actions .btn-admin,
+.chip-actions .btn-logout{ padding:.65rem 1.4rem; }
+.chip-actions .btn-17:hover{
+  transform:translateY(-2px); box-shadow:0 8px 22px rgba(0,0,0,.45);
+}
+.chip-actions .btn-17:active{ transform:translateY(0); }
+
+/* ── 编辑面板（背面编辑模式） ── */
+.chip-edit-panel{
+  position:absolute; inset:0; z-index:8;
+  background:var(--edit-bg);
+  border-radius:20px; padding:4% 6% 3%;
+  display:flex; flex-direction:column; gap:5px;
+  opacity:0; visibility:hidden; transform:translateY(8px);
+  transition:opacity .3s, visibility .3s, transform .3s;
+}
+.chip-edit-panel.show{ opacity:1; visibility:visible; transform:translateY(0); }
+.chip-edit-panel .chip-ep-header{
+  display:flex; align-items:center; justify-content:space-between; margin-bottom:2px;
+}
+.chip-edit-panel .chip-ep-title{
+  font-size:13px; font-weight:800; letter-spacing:1px; color:var(--text);
+  text-shadow:0 1px 2px rgba(0,0,0,.4);
+}
+.chip-edit-panel .chip-ep-title small{display:block; font-weight:400; font-size:8px; color:var(--sub); letter-spacing:2px; margin-top:1px}
+/* 退出按钮（展开式 X · 向左展开避免被卡片边缘裁切） */
+.chip-exit-btn{
+  display:flex; align-items:center; justify-content:flex-end;
+  width:38px; height:38px; border:none; border-radius:50%;
+  cursor:pointer; position:relative; overflow:hidden;
+  transition-duration:.3s; flex-shrink:0;
+  box-shadow:2px 2px 10px rgba(0,0,0,.199);
+  background-color:#fff; padding:0;
+  border:1px solid rgba(0,0,0,.10);
+}
+.chip-exit-btn .sign{
+  width:38px; height:38px; flex:none;
+  display:flex; align-items:center; justify-content:center;
+}
+.chip-exit-btn .sign svg{width:15px}
+.chip-exit-btn .sign svg path{fill:black; transition:fill .3s}
+.chip-exit-btn .text{
+  white-space:nowrap; color:#fff; font-size:11px; font-weight:600;
+  width:0; opacity:0; overflow:hidden;
+  display:flex; align-items:center;
+  transition-duration:.3s; pointer-events:none;
+}
+.chip-exit-btn:hover{
+  background-color:#000; width:104px; border-radius:40px; transition-duration:.3s;
+}
+.chip-exit-btn:hover .sign svg path{ fill:#fff; }
+.chip-exit-btn:hover .text{ opacity:1; width:auto; padding-left:12px; padding-right:10px; transition-duration:.3s; }
+.chip-exit-btn:active{ transform:translate(2px,2px); }
+.chip-edit-panel .chip-ep-field{ display:flex; flex-direction:column; gap:2px; }
+.chip-edit-panel .chip-ep-field label{
+  font-size:8px; letter-spacing:1.5px; color:var(--sub); text-transform:uppercase; font-weight:600;
+}
+.chip-edit-panel .chip-ep-field input{
+  background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.15); border-radius:9px;
+  padding:7px 10px; color:var(--text); font-size:12px; font-family:inherit; outline:none;
+  transition:border-color .2s, box-shadow .2s;
+}
+.chip-edit-panel .chip-ep-field input:focus{
+  border-color:rgba(124,131,255,.6); box-shadow:0 0 0 3px rgba(124,131,255,.15);
+}
+.chip-edit-panel .chip-ep-field input::placeholder{ color:var(--sub); opacity:.7 }
+.chip-edit-panel .chip-ep-row{ display:flex; gap:10px; }
+.chip-edit-panel .chip-ep-row .chip-ep-field{ flex:1; }
+.chip-edit-panel .chip-ep-btns{ display:flex; gap:8px; margin-top:1px; }
+.chip-edit-panel .chip-ep-btns button{
+  flex:1; padding:8px 0; border-radius:10px; border:none; font-weight:700; font-size:12px;
+  cursor:pointer; transition:.22s;
+}
+.chip-edit-panel .chip-ep-save{
+  background:linear-gradient(135deg,#5b8cff,#7c5bff); color:#fff;
+  box-shadow:0 4px 14px rgba(91,140,255,.35);
+}
+.chip-edit-panel .chip-ep-save:hover{ transform:translateY(-1px); box-shadow:0 6px 20px rgba(91,140,255,.45); }
+.chip-edit-panel .chip-ep-cancel{
+  background:rgba(255,255,255,.06); color:var(--sub); border:1px solid rgba(255,255,255,.15);
+}
+.chip-edit-panel .chip-ep-cancel:hover{ background:rgba(255,255,255,.1); color:var(--text); }
+.chip-edit-panel .chip-ep-msg{
+  font-size:11px; text-align:center; min-height:16px; margin-top:2px;
+  transition:opacity .2s; opacity:0;
+}
+.chip-edit-panel .chip-ep-msg.ok{ color:#6fe3a1 }
+.chip-edit-panel .chip-ep-msg.err{ color:#ff8a8a }
+/* 编辑内：卡面选择 */
+.chip-edit-panel .chip-ep-skin{ display:flex; gap:5px; flex-wrap:wrap; margin-top:1px; }
+.chip-edit-panel .chip-skin-sw{ width:56px; height:30px; border-radius:8px; cursor:pointer;
+  border:2px solid transparent; overflow:hidden; padding:0;
+  box-shadow:0 3px 10px rgba(0,0,0,.4), inset 0 0 0 1px rgba(255,255,255,.12);
+  transition:transform .18s, border-color .18s; position:relative;
+}
+.chip-edit-panel .chip-skin-sw:hover{transform:translateY(-2px)}
+.chip-edit-panel .chip-skin-sw.active{border-color:#f6c453; box-shadow:0 4px 16px rgba(246,196,83,.4), inset 0 0 0 1px rgba(255,255,255,.2)}
+.chip-edit-panel .chip-skin-sw span{
+  position:absolute; left:0; right:0; bottom:0; padding:2px 3px;
+  font-size:8px; font-weight:700; letter-spacing:.5px; text-align:left;
+  background:linear-gradient(transparent, rgba(0,0,0,.55));
+  color:#fff; text-shadow:0 1px 2px rgba(0,0,0,.8);
+}
+
+.chip-flip-tip{
+  position:absolute; bottom:-34px; left:50%; transform:translateX(-50%);
+  font-size:12px; color:#7e8aa3; letter-spacing:.5px; white-space:nowrap;
+}
+.chip-flip-tip b{color:#9fb0d0}
+
+@media (max-width:480px){
+  .chip-stage{ width:94vw; height:calc(94vw * 0.631); }
+}

@@ -608,7 +608,7 @@
       userAvatarEl.style.background = getAvatarColor(currentUser.username);
       userAvatarEl.style.cursor = 'pointer';
       userAvatarEl.title = '点击查看个人主页';
-      userAvatarEl.onclick = function(){ showProfile(); };
+      userAvatarEl.onclick = function(){ openChipCard(); };
     }
     if(userTagEl) userTagEl.innerHTML = '<span class="status-dot online" style="width:8px;height:8px;display:inline-block;border-radius:50%;border:none"></span> 在线';
 
@@ -659,7 +659,7 @@
       userAvatarEl.style.background = getAvatarColor(currentUser.username);
       userAvatarEl.style.cursor = 'pointer';
       userAvatarEl.title = '点击查看个人主页';
-      userAvatarEl.onclick = function(){ showProfile(); };
+      userAvatarEl.onclick = function(){ openChipCard(); };
     }
     if(userTagEl) userTagEl.innerHTML = '<span class="status-dot online" style="width:8px;height:8px;display:inline-block;border-radius:50%;border:none"></span> 在线';
     var navAvatar = document.getElementById('nav-avatar');
@@ -5576,5 +5576,414 @@
       if (REDUCED_MOTION || typeof gsap === 'undefined') return;
       gsap.to(dmBackBtn, { x: 0, scale: 1, duration: 0.2, ease: 'power2.out' });
     });
+  }
+
+  // ==================== CHIP 信用卡资料卡 ====================
+  // 触发：侧栏底部 #user-avatar → openChipCard()
+  // 数据：currentUser（nickname / title=称号 / role / avatar_url / username=邮箱 / created_at=注册时间）
+  // 管理按钮：仅 role==='admin' 显示（部署时由后端角色控制）
+
+  var CHIP_SKINS = {
+    blue: {
+      name:'深海蓝',
+      surface:'radial-gradient(130% 150% at 14% 12%, rgba(125,185,255,.30), transparent 48%), radial-gradient(120% 150% at 88% 90%, rgba(0,210,185,.20), transparent 55%), linear-gradient(135deg,#0a2746,#114069,#0a3357,#08263f)',
+      edit:'radial-gradient(130% 150% at 14% 12%, rgba(125,185,255,.18), transparent 48%), linear-gradient(135deg,#0a2746,#114069,#0a3357,#08263f)',
+      text:'#eef4ff', sub:'#8fb6e8',
+      numShadow:'0 1px 0 rgba(0,0,0,.55), 0 -1px 0 rgba(255,255,255,.12)',
+      tierBg:'linear-gradient(135deg,#f9e7a0,#d4a437)', tierCol:'#1a1205',
+      roleBg:'linear-gradient(135deg,#bfe9ff,#7fc8ff)', roleCol:'#0a2240',
+      speck:0.10
+    },
+    obsidian: {
+      name:'暗夜黑金',
+      surface:'radial-gradient(130% 150% at 16% 14%, rgba(246,196,83,.16), transparent 46%), radial-gradient(120% 150% at 86% 88%, rgba(246,196,83,.07), transparent 55%), linear-gradient(135deg,#1c1c22,#101014,#08080c,#050507)',
+      edit:'radial-gradient(130% 150% at 16% 14%, rgba(246,196,83,.10), transparent 46%), linear-gradient(135deg,#1c1c22,#101014,#08080c,#050507)',
+      text:'#f3ecd9', sub:'#c9b27a',
+      numShadow:'0 1px 0 rgba(0,0,0,.7), 0 -1px 0 rgba(255,255,255,.10)',
+      tierBg:'linear-gradient(135deg,#f9e7a0,#caa23a)', tierCol:'#1a1205',
+      roleBg:'linear-gradient(135deg,#f9e7a0,#caa23a)', roleCol:'#1a1205',
+      speck:0.07
+    },
+    emerald: {
+      name:'极光翡翠',
+      surface:'radial-gradient(130% 150% at 16% 14%, rgba(120,255,205,.26), transparent 48%), radial-gradient(120% 150% at 88% 90%, rgba(40,210,170,.18), transparent 55%), linear-gradient(135deg,#06382c,#0a5a47,#064034,#042a22)',
+      edit:'radial-gradient(130% 150% at 16% 14%, rgba(120,255,205,.16), transparent 48%), linear-gradient(135deg,#06382c,#0a5a47,#064034,#042a22)',
+      text:'#eafff7', sub:'#7fe6c4',
+      numShadow:'0 1px 0 rgba(0,0,0,.5), 0 -1px 0 rgba(255,255,255,.10)',
+      tierBg:'linear-gradient(135deg,#bff7e2,#5fd6ab)', tierCol:'#06382c',
+      roleBg:'linear-gradient(135deg,#bff7e2,#5fd6ab)', roleCol:'#06382c',
+      speck:0.10
+    },
+    titanium: {
+      name:'钛银镜面',
+      surface:'radial-gradient(130% 150% at 14% 12%, rgba(255,255,255,.75), transparent 50%), radial-gradient(120% 150% at 88% 90%, rgba(180,195,215,.35), transparent 55%), linear-gradient(135deg,#eef1f6,#cbd2dd,#aab3c2,#d9dee7)',
+      edit:'radial-gradient(130% 150% at 14% 12%, rgba(255,255,255,.55), transparent 50%), linear-gradient(135deg,#eef1f6,#cbd2dd,#aab3c2,#d9dee7)',
+      text:'#1c2533', sub:'#5a6678',
+      numShadow:'0 1px 0 rgba(255,255,255,.6), 0 2px 3px rgba(0,0,0,.12)',
+      tierBg:'linear-gradient(135deg,#2c3543,#11161e)', tierCol:'#eef1f6',
+      roleBg:'linear-gradient(135deg,#2c3543,#11161e)', roleCol:'#eef1f6',
+      speck:0.05
+    },
+    nebula: {
+      name:'星云紫',
+      surface:'radial-gradient(130% 150% at 16% 14%, rgba(190,120,255,.30), transparent 48%), radial-gradient(120% 150% at 88% 90%, rgba(120,90,255,.20), transparent 55%), linear-gradient(135deg,#241046,#3a1066,#2a0d52,#1a0838)',
+      edit:'radial-gradient(130% 150% at 16% 14%, rgba(190,120,255,.18), transparent 48%), linear-gradient(135deg,#241046,#3a1066,#2a0d52,#1a0838)',
+      text:'#f3eaff', sub:'#c39cf0',
+      numShadow:'0 1px 0 rgba(0,0,0,.5), 0 -1px 0 rgba(255,255,255,.10)',
+      tierBg:'linear-gradient(135deg,#d8b8ff,#9a6bff)', tierCol:'#1a0838',
+      roleBg:'linear-gradient(135deg,#d8b8ff,#9a6bff)', roleCol:'#1a0838',
+      speck:0.10
+    },
+    vermillion: {
+      name:'朱砂红',
+      surface:'radial-gradient(130% 150% at 16% 14%, rgba(255,170,150,.24), transparent 48%), radial-gradient(120% 150% at 88% 90%, rgba(255,120,90,.16), transparent 55%), linear-gradient(135deg,#5a0f1a,#7a1220,#5e0f1c,#3f0a13)',
+      edit:'radial-gradient(130% 150% at 16% 14%, rgba(255,170,150,.15), transparent 48%), linear-gradient(135deg,#5a0f1a,#7a1220,#5e0f1c,#3f0a13)',
+      text:'#ffeef0', sub:'#f0a9a0',
+      numShadow:'0 1px 0 rgba(0,0,0,.5), 0 -1px 0 rgba(255,255,255,.10)',
+      tierBg:'linear-gradient(135deg,#f9e7a0,#d4a437)', tierCol:'#1a1205',
+      roleBg:'linear-gradient(135deg,#f9e7a0,#d4a437)', roleCol:'#1a1205',
+      speck:0.10
+    }
+  };
+  var CHIP_SKIN_ORDER = ['blue','obsidian','emerald','titanium','nebula','vermillion'];
+
+  var CHIP_MARKUP = ''
+    + '<div class="chip-stage" id="chip-stage">'
+    +   '<div class="chip-entrance" id="chip-entrance">'
+    +     '<div class="chip-flip" id="chip-flip">'
+    // 正面
+    +       '<div class="chip-face front">'
+    +         '<div class="chip-surface"></div>'
+    +         '<div class="chip-holo" id="chip-holo"></div>'
+    +         '<div class="chip-brand-row"><div class="iss">BAOFENG<small>CAMPUS BANK</small></div><div class="chip-tier" id="chip-tier">USER</div></div>'
+    +         '<div class="chip-chip" id="chip-chip">'
+    +           '<svg class="chip-chip-circuit" viewBox="0 0 64 50" xmlns="http://www.w3.org/2000/svg">'
+    +             '<rect x="3" y="3" width="58" height="44" rx="8" fill="none" stroke="rgba(246,196,83,.32)" stroke-width="1"/>'
+    +             '<g stroke="rgba(246,196,83,.22)" stroke-width="1" fill="none">'
+    +               '<path d="M10,12 H26 V36 H10"/><path d="M54,12 H38 V36 H54"/><path d="M32,5 V19 M32,33 V45"/><path d="M14,25 H24 M40,25 H50"/><path d="M26,18 H38 M26,34 H38"/>'
+    +             '</g>'
+    +             '<path class="chip-chip-trace flow" d="M10,12 H26 V36 H10"/><path class="chip-chip-trace flow rev" d="M54,12 H38 V36 H54"/><path class="chip-chip-trace flow" d="M32,5 V19 M32,33 V45"/><path class="chip-chip-trace flow rev" d="M14,25 H24 M40,25 H50"/><path class="chip-chip-trace flow" d="M26,18 H38 M26,34 H38"/>'
+    +             '<circle class="chip-chip-pad pulse" cx="10" cy="12" r="2.4"/><circle class="chip-chip-pad pulse" cx="26" cy="36" r="2.4"/><circle class="chip-chip-pad pulse" cx="54" cy="12" r="2.4"/><circle class="chip-chip-pad pulse" cx="38" cy="36" r="2.4"/>'
+    +             '<circle class="chip-chip-pad" cx="32" cy="5" r="2"/><circle class="chip-chip-pad" cx="32" cy="45" r="2"/><circle class="chip-chip-pad pulse" cx="14" cy="25" r="2"/><circle class="chip-chip-pad pulse" cx="50" cy="25" r="2"/>'
+    +             '<rect class="chip-chip-die" x="25.5" y="19.5" width="13" height="11" rx="2" transform="rotate(45 32 25)"/>'
+    +             '<circle class="chip-chip-die-core" cx="32" cy="25" r="2.5"/>'
+    +             '<circle class="chip-chip-signal" r="1.8"><animateMotion dur="2s" repeatCount="indefinite" path="M10,12 H26 V36 H10"/></circle>'
+    +             '<circle class="chip-chip-signal" r="1.8"><animateMotion dur="2.4s" repeatCount="indefinite" path="M54,12 H38 V36 H54"/></circle>'
+    +             '<circle class="chip-chip-signal" r="1.6"><animateMotion dur="1.8s" repeatCount="indefinite" path="M32,5 V19 M32,33 V45"/></circle>'
+    +           '</svg>'
+    +           '<div class="chip-chip-gloss"></div>'
+    +         '</div>'
+    +         '<div class="chip-av" id="chip-avatar" title="点击更换头像">U</div>'
+    +         '<div class="chip-cardnum" id="chip-cardnum"></div>'
+    +         '<div class="chip-holder"><div class="lbl">CARDHOLDER</div><div class="val" id="chip-holder"></div><div class="handle" id="chip-handle"></div></div>'
+    +         '<div class="chip-valid"><div class="lbl">VALID</div><div class="val" id="chip-valid"></div><span class="chip-role-badge" id="chip-role"></span></div>'
+    +       '</div>'
+    // 背面
+    +       '<div class="chip-face back">'
+    +         '<div class="chip-surface"></div>'
+    +         '<div class="chip-holo" id="chip-holo2"></div>'
+    +         '<div class="chip-mag"></div>'
+    +         '<div class="chip-num-print" id="chip-back-num"></div>'
+    +         '<div class="chip-sig" id="chip-back-sig"></div>'
+    +         '<div class="chip-cvv"><small>CVV</small><span id="chip-back-cvv">019</span></div>'
+    +         '<div class="chip-hint" id="chip-back-hint"></div>'
+    +         '<div class="chip-edit-panel" id="chip-edit-panel">'
+    +           '<div class="chip-ep-header"><div class="chip-ep-title">编辑身份信息<small>EDIT IDENTITY</small></div>'
+    +             '<button class="chip-exit-btn" id="chip-ep-exit-btn" title="退出编辑"><span class="text">退出</span><div class="sign"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg></div></button>'
+    +           '</div>'
+    +           '<div class="chip-ep-row"><div class="chip-ep-field"><label>昵称</label><input type="text" id="chip-ep-nickname" maxlength="16" placeholder="你的昵称"></div>'
+    +             '<div class="chip-ep-field"><label>称号</label><input type="text" id="chip-ep-title" maxlength="12" placeholder="如：学习委员"></div></div>'
+    +           '<div class="chip-ep-row"><div class="chip-ep-field"><label>@handle</label><input type="text" id="chip-ep-handle" maxlength="20" placeholder="@用户名"></div>'
+    +             '<div class="chip-ep-field"><label>CVV 安全码</label><input type="text" id="chip-ep-cvv" maxlength="4" placeholder="019"></div></div>'
+    +           '<div class="chip-ep-field"><label>签名</label><input type="text" id="chip-ep-signature" maxlength="20" placeholder="手写签名"></div>'
+    +           '<div class="chip-ep-field"><label>卡面皮肤</label><div class="chip-ep-skin" id="chip-ep-skin-row"></div></div>'
+    +           '<div class="chip-ep-btns"><button class="chip-ep-save" id="chip-ep-save-btn">保存更改</button><button class="chip-ep-cancel" id="chip-ep-cancel-btn">取消</button></div>'
+    +           '<div class="chip-ep-msg" id="chip-ep-msg"></div>'
+    +         '</div>'
+    +         '<div class="chip-actions">'
+    +           '<button class="btn-17 btn-edit" data-act="edit"><span class="text-container"><span class="text">✎ 编辑</span></span></button>'
+    +           '<button class="btn-17 btn-admin" data-act="admin" id="chip-btn-admin"><span class="text-container"><span class="text">⚙ 管理</span></span></button>'
+    +           '<button class="btn-17 btn-logout" data-act="logout"><span class="text-container"><span class="text">⏻ 退出</span></span></button>'
+    +         '</div>'
+    +       '</div>'
+    +     '</div>'
+    +   '</div>'
+    +   '<div class="chip-flip-tip">点卡片翻面 · 左右/上下边翻转方向不同 · 四角侧着翻</div>'
+    + '</div>'
+    + '<input type="file" id="chip-avatar-input" accept="image/*" style="display:none;">';
+
+  var chipOverlay, chipStage, chipEntrance, chipFlip, chipBuilt = false;
+  var chipFlipped = false, chipBackAxis = 'Y', chipOpen = false, chipShimmer;
+  var chipAvatarInput;
+
+  function chipEl(id){ return document.getElementById(id); }
+
+  function chipBuildSkinPicker(container){
+    if(!container) return;
+    container.innerHTML = '';
+    CHIP_SKIN_ORDER.forEach(function(key){
+      var s = CHIP_SKINS[key];
+      var b = document.createElement('button');
+      b.className = 'chip-skin-sw'; b.setAttribute('data-skin', key); b.style.background = s.surface;
+      b.innerHTML = '<span>'+s.name+'</span>';
+      b.addEventListener('click', function(e){ e.stopPropagation(); chipApplySkin(key); });
+      container.appendChild(b);
+    });
+  }
+
+  function chipApplySkin(key){
+    var s = CHIP_SKINS[key]; if(!s || !chipStage) return;
+    chipStage.style.setProperty('--surface-bg', s.surface);
+    chipStage.style.setProperty('--edit-bg', s.edit);
+    chipStage.style.setProperty('--text', s.text);
+    chipStage.style.setProperty('--sub', s.sub);
+    chipStage.style.setProperty('--num-shadow', s.numShadow);
+    chipStage.style.setProperty('--tier-bg', s.tierBg);
+    chipStage.style.setProperty('--tier-col', s.tierCol);
+    chipStage.style.setProperty('--role-bg', s.roleBg);
+    chipStage.style.setProperty('--role-col', s.roleCol);
+    chipStage.style.setProperty('--speck-o', s.speck);
+    chipStage.setAttribute('data-skin', key);
+    try{ localStorage.setItem('chip-skin', key); }catch(e){}
+    var sws = document.querySelectorAll('.chip-skin-sw');
+    for(var i=0;i<sws.length;i++){ sws[i].classList.toggle('active', sws[i].getAttribute('data-skin')===key); }
+  }
+
+  function chipBuildCard(){
+    if(chipBuilt) return;
+    var overlay = document.createElement('div');
+    overlay.className = 'chip-overlay';
+    overlay.id = 'chip-overlay';
+    overlay.innerHTML = CHIP_MARKUP;
+    document.body.appendChild(overlay);
+    chipOverlay = overlay;
+    chipStage = chipEl('chip-stage');
+    chipEntrance = chipEl('chip-entrance');
+    chipFlip = chipEl('chip-flip');
+    chipAvatarInput = chipEl('chip-avatar-input');
+    chipBuildSkinPicker(chipEl('chip-ep-skin-row'));
+    chipApplySkin((function(){ try{ return localStorage.getItem('chip-skin'); }catch(e){ return null; } })() || 'blue');
+
+    chipEl('chip-avatar').addEventListener('click', function(e){ e.stopPropagation(); if(chipAvatarInput) chipAvatarInput.click(); });
+    chipAvatarInput.addEventListener('change', chipOnAvatarChange);
+    chipEl('chip-ep-exit-btn').addEventListener('click', function(e){ e.stopPropagation(); chipCloseEdit(); });
+    chipEl('chip-ep-save-btn').addEventListener('click', function(e){ e.stopPropagation(); chipSaveEdit(); });
+    chipEl('chip-ep-cancel-btn').addEventListener('click', function(e){ e.stopPropagation(); chipCloseEdit(); });
+    chipOverlay.addEventListener('click', function(e){ if(e.target===chipOverlay) chipCloseCard(); });
+    chipStage.addEventListener('click', chipStageClick);
+
+    var actBtns = chipOverlay.querySelectorAll('.chip-actions .btn-17');
+    for(var i=0;i<actBtns.length;i++){
+      (function(b){
+        b.addEventListener('click', function(e){
+          e.stopPropagation();
+          var act = b.getAttribute('data-act');
+          if(act==='edit'){ chipOpenEdit(); }
+          else if(act==='admin'){ if(currentUser && currentUser.role==='admin') window.location.href='admin.html'; }
+          else if(act==='logout'){ if(IF) IF.signOut().catch(function(){}); currentUser=null; chipCloseCard(); showLogin(); }
+        });
+      })(actBtns[i]);
+    }
+    document.addEventListener('keydown', function(e){ if(e.key==='Escape' && chipOpen) chipCloseCard(); });
+    chipBuilt = true;
+  }
+
+  function chipStageClick(e){
+    if(e.target.closest('.chip-actions')) return;
+    if(e.target.closest('.chip-edit-panel')) return;
+    if(e.target.closest('.chip-av')) return;
+    chipFlipCard(e);
+  }
+
+  function chipFmtDate(iso){
+    try{ var d=new Date(iso); if(isNaN(d.getTime())) return '—';
+      var y=d.getFullYear(); var m=('0'+(d.getMonth()+1)).slice(-2); var day=('0'+d.getDate()).slice(-2);
+      return y+'.'+m+'.'+day;
+    }catch(e){ return '—'; }
+  }
+
+  function chipPopulate(){
+    var u = currentUser; if(!u) return;
+    var roleMeta = ROLE_META[u.role] || ROLE_META.student;
+    var init = getInitial(u.nickname || u.username);
+    var av = chipEl('chip-avatar');
+    av.style.background = getAvatarColor(u.username);
+    if(u.avatar_url){
+      av.innerHTML = '<img src="'+escapeHtml(u.avatar_url)+'" alt="" onerror="this.style.display=\'none\';this.parentNode.textContent=\''+init+'\'">';
+    } else {
+      av.textContent = init;
+    }
+    chipEl('chip-cardnum').textContent = u.username || '';
+    chipEl('chip-holder').textContent = u.nickname || u.username || '';
+    var handle = (function(){ try{ return localStorage.getItem('chip-handle'); }catch(e){ return null; } })() || (u.username ? u.username.split('@')[0] : (u.nickname||''));
+    chipEl('chip-handle').textContent = '@' + handle;
+    var title = u.title || '';
+    var tierEl = chipEl('chip-tier');
+    if(title){ tierEl.textContent = title.length>8?title.slice(0,8)+'…':title; tierEl.style.background='linear-gradient(135deg,#f9e7a0,#d4a437)'; tierEl.style.color='#1a1205'; }
+    else { tierEl.textContent = roleMeta.label; tierEl.style.background='var(--tier-bg)'; tierEl.style.color='var(--tier-col)'; }
+    chipEl('chip-role').textContent = roleMeta.label;
+    var ca = u.created_at || (IF && IF.resolveAuthor ? (IF.resolveAuthor(u.id)||{}).created_at : null);
+    chipEl('chip-valid').textContent = ca ? chipFmtDate(ca) : '—';
+    chipEl('chip-back-num').textContent = u.username || '';
+    var sig = (function(){ try{ return localStorage.getItem('chip-signature'); }catch(e){ return null; } })() || (u.nickname||u.username||'');
+    chipEl('chip-back-sig').textContent = sig;
+    var cvv = (function(){ try{ return localStorage.getItem('chip-cvv'); }catch(e){ return null; } })() || '019';
+    chipEl('chip-back-cvv').textContent = cvv;
+    chipEl('chip-back-hint').textContent = '欢迎回来，'+(u.nickname||'用户')+' · 点击卡片翻回正面';
+    var adminBtn = chipEl('chip-btn-admin');
+    if(adminBtn) adminBtn.style.display = (u.role==='admin') ? '' : 'none';
+  }
+
+  function chipStartShimmer(){
+    var holos = [chipEl('chip-holo'), chipEl('chip-holo2')];
+    holos.forEach(function(h){ if(h) gsap.set(h,{xPercent:-60}); });
+    chipShimmer = gsap.to(holos, { xPercent:60, duration:3.6, ease:'sine.inOut', repeat:-1, yoyo:true, stagger:{each:0.4, from:'random'} });
+  }
+
+  function openChipCard(){
+    if(!isLoggedIn()){ showLogin(); return; }
+    if(!chipBuilt) chipBuildCard();
+    chipPopulate();
+    chipEl('chip-edit-panel').classList.remove('show');
+    gsap.set('.chip-face.back .chip-actions, .chip-face.back .chip-hint', { autoAlpha:1 });
+    chipOpen = true;
+    chipOverlay.classList.add('show');
+    gsap.set(chipEntrance, { rotationY:-175, scale:0.28, x:-window.innerWidth*0.32, y:window.innerHeight*0.34, autoAlpha:0, transformOrigin:'50% 50%' });
+    gsap.set(chipFlip, { rotationX:0, rotationY:0, rotationZ:0 });
+    chipFlip.querySelector('.chip-face.back').style.transform = 'rotateY(180deg)';
+    chipFlip.querySelector('.chip-face.front').style.pointerEvents = 'auto';
+    chipFlip.querySelector('.chip-face.back').style.pointerEvents = 'none';
+    chipFlipped = false; chipBackAxis = 'Y';
+    var frontEls = chipFlip.querySelectorAll('.chip-face.front .chip-brand-row, .chip-face.front .chip-chip, .chip-face.front .chip-av, .chip-face.front .chip-cardnum, .chip-face.front .chip-holder, .chip-face.front .chip-valid');
+    var tl = gsap.timeline();
+    tl.to(chipEntrance, { rotationY:0, scale:1, x:0, y:0, autoAlpha:1, duration:1.05, ease:'back.out(1.5)' })
+      .fromTo(frontEls, { y:18, autoAlpha:0 }, { y:0, autoAlpha:1, duration:.5, stagger:.06, ease:'power2.out' }, '-=0.45');
+    if(!chipShimmer) chipStartShimmer();
+  }
+
+  function chipCloseCard(){
+    if(!chipOpen) return;
+    var tl = gsap.timeline({ onComplete:function(){ chipOverlay.classList.remove('show'); chipOpen=false; } });
+    tl.to(chipEntrance, { rotationY:160, scale:0.3, x:-window.innerWidth*0.32, y:window.innerHeight*0.34, autoAlpha:0, duration:.7, ease:'back.in(1.2)' }, 0);
+  }
+
+  function chipFlipCard(e){
+    var rect = chipStage.getBoundingClientRect();
+    var px = rect.width ? (e.clientX - rect.left)/rect.width - 0.5 : 0;
+    var py = rect.height ? (e.clientY - rect.top)/rect.height - 0.5 : 0;
+    var ax = Math.abs(px), ay = Math.abs(py);
+    var back = chipFlip.querySelector('.chip-face.back');
+    var frontFace = chipFlip.querySelector('.chip-face.front');
+    var tRX=0, tRY=0, tRZ=0;
+    if(!chipFlipped){
+      if(ax>0.26 && ay>0.26){
+        chipBackAxis='Y'; back.style.transform='rotateY(180deg)'; tRY=180; tRZ=(px>0?16:-16);
+      } else if(ax>=ay){
+        chipBackAxis='Y'; back.style.transform='rotateY(180deg)'; tRY=(px>0?180:-180);
+      } else {
+        chipBackAxis='X'; back.style.transform='rotateX(180deg)'; tRX=(py>0?180:-180);
+      }
+    } else {
+      tRZ=0;
+      if(chipBackAxis==='X'){ tRX=0; back.style.transform='rotateX(180deg)'; }
+      else { tRY=0; back.style.transform='rotateY(180deg)'; }
+    }
+    chipFlipped = !chipFlipped;
+    frontFace.style.pointerEvents = chipFlipped ? 'none' : 'auto';
+    back.style.pointerEvents = chipFlipped ? 'auto' : 'none';
+    gsap.to(chipFlip, { rotationX:tRX, rotationY:tRY, rotationZ:tRZ, duration:.85, ease:'power3.inOut',
+      onComplete:function(){
+        if(!chipFlipped){ gsap.set(chipFlip, { rotationX:0, rotationY:0, rotationZ:0 }); back.style.transform='rotateY(180deg)'; }
+      }
+    });
+  }
+
+  function chipOpenEdit(){
+    var u = currentUser; if(!u) return;
+    var handle = (function(){ try{ return localStorage.getItem('chip-handle'); }catch(e){ return null; } })() || (u.username ? u.username.split('@')[0] : '');
+    var cvv = (function(){ try{ return localStorage.getItem('chip-cvv'); }catch(e){ return null; } })() || '019';
+    var sig = (function(){ try{ return localStorage.getItem('chip-signature'); }catch(e){ return null; } })() || (u.nickname||u.username||'');
+    chipEl('chip-ep-nickname').value = u.nickname || u.username || '';
+    chipEl('chip-ep-title').value = u.title || '';
+    chipEl('chip-ep-handle').value = handle;
+    chipEl('chip-ep-cvv').value = cvv;
+    chipEl('chip-ep-signature').value = sig;
+    chipEl('chip-edit-panel').classList.add('show');
+    gsap.to('.chip-face.back .chip-actions, .chip-face.back .chip-hint', { autoAlpha:0, duration:.2 });
+  }
+
+  function chipCloseEdit(){
+    chipEl('chip-edit-panel').classList.remove('show');
+    gsap.to('.chip-face.back .chip-actions, .chip-face.back .chip-hint', { autoAlpha:1, duration:.25, delay:.1 });
+  }
+
+  function chipShowMsg(text, type){
+    var m = chipEl('chip-ep-msg'); if(!m) return;
+    m.textContent = text; m.className = 'chip-ep-msg ' + (type||'ok'); m.style.opacity = '1';
+    clearTimeout(chipShowMsg._t);
+    chipShowMsg._t = setTimeout(function(){ m.style.opacity='0'; }, 2200);
+  }
+
+  function chipSaveEdit(){
+    var u = currentUser; if(!u) return;
+    var nn = (chipEl('chip-ep-nickname').value||'').trim();
+    if(!nn){ chipShowMsg('昵称不能为空','err'); chipEl('chip-ep-nickname').focus(); return; }
+    var ttl = (chipEl('chip-ep-title').value||'').trim();
+    var handle = (chipEl('chip-ep-handle').value||'').trim();
+    var cvv = (chipEl('chip-ep-cvv').value||'').trim() || '019';
+    var sig = (chipEl('chip-ep-signature').value||'').trim() || nn;
+    try{ localStorage.setItem('chip-handle', handle); localStorage.setItem('chip-cvv', cvv); localStorage.setItem('chip-signature', sig); }catch(e){}
+    var btn = chipEl('chip-ep-save-btn');
+    Promise.resolve(IF && IF.updateMyProfile ? IF.updateMyProfile(u.id, { nickname: nn, title: ttl }) : Promise.reject(new Error('后端未就绪')))
+      .then(function(){
+        u.nickname = nn; u.title = ttl;
+        var navName = chipEl('user-name'); if(navName) navName.textContent = nn;
+        showToast('资料已保存 ✅');
+        chipPopulate();
+        renderSettingsAccount();
+        chipShowMsg('✓ 已保存，卡片已更新','ok');
+        setTimeout(chipCloseEdit, 900);
+      })
+      .catch(function(e){
+        chipShowMsg('保存失败：'+((e&&e.message)||'请重试'),'err');
+      })
+      .finally(function(){ if(btn){ btn.disabled=false; btn.textContent='保存更改'; } });
+    if(btn){ btn.disabled=true; btn.textContent='保存中…'; }
+  }
+
+  function chipOnAvatarChange(){
+    var file = this.files && this.files[0]; if(!file) return;
+    if(!file.type || !file.type.startsWith('image/')){ alert('请选择图片文件'); return; }
+    if(file.size > 5*1024*1024){ alert('图片不能超过 5MB'); return; }
+    var av = chipEl('chip-avatar');
+    var init = getInitial(currentUser.nickname || currentUser.username);
+    var reader = new FileReader();
+    reader.onload = function(ev){
+      av.innerHTML = '<img src="'+ev.target.result+'" alt="" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">';
+      av.style.background = 'transparent';
+    };
+    reader.readAsDataURL(file);
+    (IF && IF.uploadFile ? IF.uploadFile(file) : Promise.reject(new Error('SDK未就绪')))
+      .then(function(result){
+        var url = (result && result.url) || '';
+        if(!url) throw new Error('上传未返回URL');
+        return IF.updateMyProfile(currentUser.id, { avatar_url: url }).then(function(){ return { url:url }; });
+      })
+      .then(function(res){
+        currentUser.avatar_url = res.url;
+        var navA = chipEl('nav-avatar');
+        if(navA && currentUser.avatar_url){
+          navA.innerHTML = '<img src="'+currentUser.avatar_url+'" alt="" style="width:100%;height:100%;border-radius:50%;object-fit:cover;" onerror="this.parentNode.textContent=\''+init+'\'">';
+        }
+        showToast('头像更新成功 ✅');
+        chipPopulate();
+        renderSettingsAccount();
+      })
+      .catch(function(err){
+        console.error('[chip avatar] 上传失败', err);
+        showToast('头像上传失败：'+((err&&err.message)||'未知错误'),'error');
+      })
+      .finally(function(){ renderSettingsAccount(); });
+    this.value = '';
   }
 })();
