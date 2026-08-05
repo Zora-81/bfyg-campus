@@ -5697,7 +5697,6 @@
     +             '<div class="chip-ep-field"><label>CVV 安全码</label><input type="text" id="chip-ep-cvv" maxlength="4" placeholder="019"></div></div>'
     +           '<div class="chip-ep-field"><label>签名</label><input type="text" id="chip-ep-signature" maxlength="20" placeholder="手写签名"></div>'
     +           '<div class="chip-ep-field"><label>卡面皮肤</label><div class="chip-ep-skin" id="chip-ep-skin-row"></div></div>'
-    +           '<div class="chip-ep-btns"><button class="chip-ep-save" id="chip-ep-save-btn">保存更改</button><button class="chip-ep-cancel" id="chip-ep-cancel-btn">取消</button></div>'
     +           '<div class="chip-ep-msg" id="chip-ep-msg"></div>'
     +         '</div>'
     +         '<div class="chip-actions">'
@@ -5766,9 +5765,9 @@
 
     chipEl('chip-avatar').addEventListener('click', function(e){ e.stopPropagation(); if(chipAvatarInput) chipAvatarInput.click(); });
     chipAvatarInput.addEventListener('change', chipOnAvatarChange);
-    chipEl('chip-ep-exit-btn').addEventListener('click', function(e){ e.stopPropagation(); chipCloseEdit(); });
-    chipEl('chip-ep-save-btn').addEventListener('click', function(e){ e.stopPropagation(); chipSaveEdit(); });
-    chipEl('chip-ep-cancel-btn').addEventListener('click', function(e){ e.stopPropagation(); chipCloseEdit(); });
+    chipEl('chip-ep-exit-btn').addEventListener('click', function(e){ e.stopPropagation(); chipSaveEdit(); });
+    (function(){ var b=chipEl('chip-ep-save-btn'); if(b) b.addEventListener('click', function(e){ e.stopPropagation(); chipSaveEdit(); }); })();
+    (function(){ var b=chipEl('chip-ep-cancel-btn'); if(b) b.addEventListener('click', function(e){ e.stopPropagation(); chipCloseEdit(); }); })();
     chipOverlay.addEventListener('click', function(e){ if(e.target===chipOverlay) chipCloseCard(); });
     chipStage.addEventListener('click', chipStageClick);
 
