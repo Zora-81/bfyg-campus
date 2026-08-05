@@ -5689,11 +5689,11 @@
     +         '<div class="chip-hint" id="chip-back-hint"></div>'
     +         '<div class="chip-edit-panel" id="chip-edit-panel">'
     +           '<div class="chip-ep-header"><div class="chip-ep-title">编辑身份信息<small>EDIT IDENTITY</small></div>'
-    +             '<button class="chip-exit-btn" id="chip-ep-exit-btn" title="退出编辑"><span class="text">退出</span><div class="sign"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg></div></button>'
+    +             '<button class="chip-exit-btn" id="chip-ep-exit-btn" title="退出编辑"><span class="text">退出</span><div class="sign"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg></div></button>'
     +           '</div>'
     +           '<div class="chip-ep-row"><div class="chip-ep-field"><label>昵称</label><input type="text" id="chip-ep-nickname" maxlength="16" placeholder="你的昵称"></div>'
     +             '<div class="chip-ep-field"><label>称号</label><input type="text" id="chip-ep-title" maxlength="12" placeholder="如：学习委员"></div></div>'
-    +           '<div class="chip-ep-row"><div class="chip-ep-field"><label>@handle</label><input type="text" id="chip-ep-handle" maxlength="20" placeholder="@用户名"></div>'
+    +           '<div class="chip-ep-row"><div class="chip-ep-field"><label>身份</label><input type="text" id="chip-ep-handle" maxlength="20" placeholder="角色身份" readonly></div>'
     +             '<div class="chip-ep-field"><label>CVV 安全码</label><input type="text" id="chip-ep-cvv" maxlength="4" inputmode="numeric" pattern="[0-9]*" placeholder="019"></div></div>'
     +           '<div class="chip-ep-field"><label>签名</label><input type="text" id="chip-ep-signature" maxlength="20" placeholder="手写签名"></div>'
     +           '<div class="chip-ep-field"><label>卡面皮肤</label><div class="chip-ep-skin" id="chip-ep-skin-row"></div></div>'
@@ -5922,7 +5922,7 @@
     var sig = (function(){ try{ return localStorage.getItem('chip-signature'); }catch(e){ return null; } })() || (u.nickname||u.username||'');
     chipEl('chip-ep-nickname').value = u.nickname || u.username || '';
     chipEl('chip-ep-title').value = u.title || '';
-    chipEl('chip-ep-handle').value = handle;
+    chipEl('chip-ep-handle').value = roleMeta ? roleMeta.label : (u.role || '—');
     chipEl('chip-ep-cvv').value = cvv;
     chipEl('chip-ep-signature').value = sig;
     chipEl('chip-edit-panel').classList.add('show');
@@ -5949,11 +5949,11 @@
     var u = currentUser; if(!u){ chipCloseEdit(); return; }
     var nn = (chipEl('chip-ep-nickname').value||'').trim();
     var ttl = (chipEl('ep-title') ? (chipEl('chip-ep-title').value||'').trim() : '');
-    var handle = (chipEl('chip-ep-handle').value||'').trim();
+    /* 身份(角色)只读，不保存 */
     var cvv = (chipEl('chip-ep-cvv').value||'').trim() || '019';
     var sig = (chipEl('chip-ep-signature').value||'').trim() || nn;
     /* ① 同步存 localStorage（瞬间完成） */
-    try{ localStorage.setItem('chip-handle', handle); localStorage.setItem('chip-cvv', cvv); localStorage.setItem('chip-signature', sig); }catch(e){}
+    try{ localStorage.setItem('chip-cvv', cvv); localStorage.setItem('chip-signature', sig); }catch(e){}
     /* ② 立即关闭编辑面板（丝滑） */
     chipCloseEdit();
     /* ③ 更新内存中的昵称/称号（即时生效，不等 API） */
@@ -5973,10 +5973,10 @@
     var nn = (chipEl('chip-ep-nickname').value||'').trim();
     if(!nn){ chipShowMsg('昵称不能为空','err'); chipEl('chip-ep-nickname').focus(); return; }
     var ttl = (chipEl('chip-ep-title').value||'').trim();
-    var handle = (chipEl('chip-ep-handle').value||'').trim();
+    /* 身份(角色)只读，不保存 */
     var cvv = (chipEl('chip-ep-cvv').value||'').trim() || '019';
     var sig = (chipEl('chip-ep-signature').value||'').trim() || nn;
-    try{ localStorage.setItem('chip-handle', handle); localStorage.setItem('chip-cvv', cvv); localStorage.setItem('chip-signature', sig); }catch(e){}
+    try{ localStorage.setItem('chip-cvv', cvv); localStorage.setItem('chip-signature', sig); }catch(e){}
     var btn = chipEl('chip-ep-save-btn');
     Promise.resolve(IF && IF.updateMyProfile ? IF.updateMyProfile(u.id, { nickname: nn, title: ttl }) : Promise.reject(new Error('后端未就绪')))
       .then(function(){

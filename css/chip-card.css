@@ -308,33 +308,32 @@
   text-shadow:0 1px 2px rgba(0,0,0,.4);
 }
 .chip-edit-panel .chip-ep-title small{display:block; font-weight:400; font-size:7px; color:var(--sub); letter-spacing:2px; margin-top:1px}
-/* 退出按钮（展开式 X · 向左展开避免被卡片边缘裁切） */
+/* 退出按钮（Uiverse.io 原始展开式 + 按钮） */
 .chip-exit-btn{
-  display:flex; align-items:center; justify-content:flex-end;
-  width:38px; height:38px; border:none; border-radius:50%;
+  display:flex; align-items:center; justify-content:flex-start;
+  width:45px; height:45px; border:none; border-radius:50%;
   cursor:pointer; position:relative; overflow:hidden;
-  transition-duration:.3s; flex-shrink:0;
+  transition-duration:.3s;
   box-shadow:2px 2px 10px rgba(0,0,0,.199);
-  background-color:#fff; padding:0;
-  border:1px solid rgba(0,0,0,.10);
+  background-color:#fff; padding:0; flex-shrink:0;
 }
 .chip-exit-btn .sign{
-  width:38px; height:38px; flex:none;
+  width:100%; transition-duration:.3s;
   display:flex; align-items:center; justify-content:center;
 }
-.chip-exit-btn .sign svg{width:15px}
-.chip-exit-btn .sign svg path{fill:black; transition:fill .3s}
+.chip-exit-btn .sign svg{ width:17px; }
+.chip-exit-btn .sign svg path{ fill:black; }
 .chip-exit-btn .text{
-  white-space:nowrap; color:#fff; font-size:11px; font-weight:600;
-  width:0; opacity:0; overflow:hidden;
-  display:flex; align-items:center;
-  transition-duration:.3s; pointer-events:none;
+  position:absolute; right:0%; width:0%;
+  opacity:0; color:#fff; font-size:1.2em; font-weight:600;
+  transition-duration:.3s;
 }
 .chip-exit-btn:hover{
-  background-color:#000; width:104px; border-radius:40px; transition-duration:.3s;
+  background-color:#000; width:125px; border-radius:40px; transition-duration:.3s;
 }
+.chip-exit-btn:hover .sign{ width:30%; transition-duration:.3s; padding-left:20px; }
 .chip-exit-btn:hover .sign svg path{ fill:#fff; }
-.chip-exit-btn:hover .text{ opacity:1; width:auto; padding-left:12px; padding-right:10px; transition-duration:.3s; }
+.chip-exit-btn:hover .text{ opacity:1; width:70%; transition-duration:.3s; padding-right:10px; }
 .chip-exit-btn:active{ transform:translate(2px,2px); }
 .chip-edit-panel .chip-ep-field{ display:flex; flex-direction:column; gap:1px; }
 .chip-edit-panel .chip-ep-field label{
@@ -399,9 +398,8 @@
   .chip-edit-panel .chip-skin-sw span{ font-size:6px; }
   .chip-edit-panel .chip-ep-msg{ font-size:9px; min-height:12px; }
   /* 退出按钮缩小 */
-  .chip-exit-btn{ width:32px; height:32px; }
-  .chip-exit-btn .sign{ width:32px; height:32px; }
-  .chip-exit-btn .sign svg{ width:13px; }
-  .chip-exit-btn:hover{ width:90px; }
-  .chip-exit-btn:hover .text{ font-size:10px; }
+  .chip-exit-btn{ width:36px; height:36px; }
+  .chip-exit-btn .sign svg{ width:14px; }
+  .chip-exit-btn:hover{ width:100px; }
+  .chip-exit-btn:hover .text{ font-size:11px; }
 }
