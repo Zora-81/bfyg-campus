@@ -321,10 +321,20 @@
     // 减少动效：仅画一帧静态星空 / 光点
     drawStaticOnce();
   } else {
-    (function loop() {
-      if (mode === 'starry') drawStars();
-      else drawDots();
-      requestAnimationFrame(loop);
-    })();
+    // 性能优化：限 30fps + 后台标签页暂停（主频道内照常动，零视觉损失）
+    var bgRunning = true, bgRaf = null, bgLast = 0, BG_FRAME = 1000 / 30;
+    function bgLoop(ts) {
+      if (!bgRunning) { bgRaf = null; return; }
+      if (ts - bgLast >= BG_FRAME) {
+        bgLast = ts;
+        if (mode === 'starry') drawStars(); else drawDots();
+      }
+      bgRaf = requestAnimationFrame(bgLoop);
+    }
+    bgRaf = requestAnimationFrame(bgLoop);
+    document.addEventListener('visibilitychange', function () {
+      bgRunning = !document.hidden;
+      if (bgRunning && !bgRaf) { bgLast = 0; bgRaf = requestAnimationFrame(bgLoop); }
+    });
   }
 })();
