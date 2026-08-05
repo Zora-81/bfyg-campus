@@ -5694,7 +5694,7 @@
     +           '<div class="chip-ep-row"><div class="chip-ep-field"><label>昵称</label><input type="text" id="chip-ep-nickname" maxlength="16" placeholder="你的昵称"></div>'
     +             '<div class="chip-ep-field"><label>称号</label><input type="text" id="chip-ep-title" maxlength="12" placeholder="如：学习委员"></div></div>'
     +           '<div class="chip-ep-row"><div class="chip-ep-field"><label>@handle</label><input type="text" id="chip-ep-handle" maxlength="20" placeholder="@用户名"></div>'
-    +             '<div class="chip-ep-field"><label>CVV 安全码</label><input type="text" id="chip-ep-cvv" maxlength="4" placeholder="019"></div></div>'
+    +             '<div class="chip-ep-field"><label>CVV 安全码</label><input type="text" id="chip-ep-cvv" maxlength="4" inputmode="numeric" pattern="[0-9]*" placeholder="019"></div></div>'
     +           '<div class="chip-ep-field"><label>签名</label><input type="text" id="chip-ep-signature" maxlength="20" placeholder="手写签名"></div>'
     +           '<div class="chip-ep-field"><label>卡面皮肤</label><div class="chip-ep-skin" id="chip-ep-skin-row"></div></div>'
     +           '<div class="chip-ep-msg" id="chip-ep-msg"></div>'
@@ -5927,6 +5927,9 @@
     chipEl('chip-ep-signature').value = sig;
     chipEl('chip-edit-panel').classList.add('show');
     gsap.to('.chip-face.back .chip-actions, .chip-face.back .chip-hint', { autoAlpha:0, duration:.2 });
+    /* CVV 只允许数字 */
+    var cvvInput = chipEl('chip-ep-cvv');
+    if(cvvInput) cvvInput.addEventListener('input', function(){ this.value = this.value.replace(/[^0-9]/g,'').slice(0,4); });
   }
 
   function chipCloseEdit(){
