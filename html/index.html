@@ -19,7 +19,7 @@
 
     (function(){
 
-      var v = '1.4.48';
+      var v = '1.4.50';
 
       try {
 
@@ -66,10 +66,22 @@
 
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap" rel="stylesheet" />
 
-  <link rel="stylesheet" href="../css/style.css?v=1.4.48" />
+  <link rel="stylesheet" href="../css/style.css?v=1.4.50" />
 
   <!-- Chip 信用卡资料卡样式 -->
-  <link rel="stylesheet" href="../css/chip-card.css?v=1.4.48" />
+  <link rel="stylesheet" href="../css/chip-card.css?v=1.4.50" />
+
+  <!-- 关键内联 CSS：确保欢迎/登录界面在任何缓存条件下都能正常显示 -->
+  <style>
+    html,body{margin:0;padding:0;height:100%;background:#0a0c1a;color:#fff;font-family:"Noto Sans SC",system-ui,sans-serif}
+    .welcome-screen{position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;opacity:1;pointer-events:auto;visibility:visible}
+    .welcome-inner{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;text-align:center;padding:0 20px}
+    .welcome-campus-badge{position:relative;margin-bottom:28px}
+    .welcome-campus-img{width:96px;height:96px;border-radius:50%;object-fit:cover;border:3px solid rgba(255,255,255,.9);background:#fff}
+    .welcome-title-wrap{position:relative;margin-bottom:48px;padding:6px 14px}
+    .welcome-title{position:relative;margin:0;font-size:clamp(2.4rem,7vw,4.8rem);font-weight:900;letter-spacing:.1em;background:linear-gradient(90deg,#67e8f9,#60a5fa,#c084fc,#fde047);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent}
+    .welcome-enter{padding:16px 52px;border-radius:2rem;background:rgba(255,255,255,.1);border:2px solid rgba(255,255,255,.35);color:#fff;font-size:1.15rem;font-weight:800;letter-spacing:.2em;cursor:pointer}
+  </style>
 
 </head>
 
@@ -1036,20 +1048,20 @@
 
 
 
-  <script src="../js/lib/gsap.min.js?v=1.4.48" defer></script>
+  <script src="../js/lib/gsap.min.js?v=1.4.50" defer></script>
 
-  <script src="../js/shooting-stars.js?v=1.4.48"></script>
+  <script src="../js/shooting-stars.js?v=1.4.50"></script>
 
-  <script src="../js/main-bg.js?v=1.4.48"></script>
+  <script src="../js/main-bg.js?v=1.4.50"></script>
 
   <!-- InsForge SDK 客户端（ESM，CDN 引入），注入 window.IF 并派发 IF_READY -->
 
-  <script type="module" src="../js/if-client.js?v=1.4.48"></script>
+  <script type="module" src="../js/if-client.js?v=1.4.50"></script>
 
   <!-- 消息线程纯函数：parent_id 子消息与主 feed 分流 -->
-  <script src="../js/message-thread.js?v=1.4.48" defer></script>
+  <script src="../js/message-thread.js?v=1.4.50" defer></script>
 
-  <script src="../js/app.js?v=1.4.48" defer></script>
+  <script src="../js/app.js?v=1.4.50" defer></script>
 
   <!-- ════════════════════════════════════════════
        学校介绍弹窗：点击侧栏校徽/校园频道 触发
