@@ -5763,7 +5763,7 @@
 
     chipEl('chip-avatar').addEventListener('click', function(e){ e.stopPropagation(); if(chipAvatarInput) chipAvatarInput.click(); });
     chipAvatarInput.addEventListener('change', chipOnAvatarChange);
-    chipEl('chip-ep-exit-btn').addEventListener('click', function(e){ e.stopPropagation(); chipSaveEdit(); });
+    chipEl('chip-ep-exit-btn').addEventListener('click', function(e){ e.stopPropagation(); chipSaveAndClose(); });
     (function(){ var b=chipEl('chip-ep-save-btn'); if(b) b.addEventListener('click', function(e){ e.stopPropagation(); chipSaveEdit(); }); })();
     (function(){ var b=chipEl('chip-ep-cancel-btn'); if(b) b.addEventListener('click', function(e){ e.stopPropagation(); chipCloseEdit(); }); })();
     chipOverlay.addEventListener('click', function(e){ if(e.target===chipOverlay) chipCloseCard(); });
@@ -5939,6 +5939,30 @@
     m.textContent = text; m.className = 'chip-ep-msg ' + (type||'ok'); m.style.opacity = '1';
     clearTimeout(chipShowMsg._t);
     chipShowMsg._t = setTimeout(function(){ m.style.opacity='0'; }, 2200);
+  }
+
+  /* 先关后存：退出按钮专用 — 立即关面板+存本地，API 后台静默跑 */
+  function chipSaveAndClose(){
+    var u = currentUser; if(!u){ chipCloseEdit(); return; }
+    var nn = (chipEl('chip-ep-nickname').value||'').trim();
+    var ttl = (chipEl('ep-title') ? (chipEl('chip-ep-title').value||'').trim() : '');
+    var handle = (chipEl('chip-ep-handle').value||'').trim();
+    var cvv = (chipEl('chip-ep-cvv').value||'').trim() || '019';
+    var sig = (chipEl('chip-ep-signature').value||'').trim() || nn;
+    /* ① 同步存 localStorage（瞬间完成） */
+    try{ localStorage.setItem('chip-handle', handle); localStorage.setItem('chip-cvv', cvv); localStorage.setItem('chip-signature', sig); }catch(e){}
+    /* ② 立即关闭编辑面板（丝滑） */
+    chipCloseEdit();
+    /* ③ 更新内存中的昵称/称号（即时生效，不等 API） */
+    if(nn){ u.nickname = nn; var navName = chipEl('user-name'); if(navName) navName.textContent = nn; }
+    if(ttl !== undefined) u.title = ttl;
+    chipPopulate();
+    /* ④ API 后台静默保存（不阻塞 UI） */
+    if(IF && IF.updateMyProfile && nn){
+      IF.updateMyProfile(u.id, { nickname: nn, title: ttl || '' })
+        .then(function(){ renderSettingsAccount(); })
+        .catch(function(){ /* 静默失败，下次再试 */ });
+    }
   }
 
   function chipSaveEdit(){
