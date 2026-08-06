@@ -5920,9 +5920,10 @@
     var handle = (function(){ try{ return localStorage.getItem('chip-handle'); }catch(e){ return null; } })() || (u.username ? u.username.split('@')[0] : '');
     var cvv = (function(){ try{ return localStorage.getItem('chip-cvv'); }catch(e){ return null; } })() || '019';
     var sig = (function(){ try{ return localStorage.getItem('chip-signature'); }catch(e){ return null; } })() || (u.nickname||u.username||'');
+    var rMeta = ROLE_META[u.role] || ROLE_META.student;
     chipEl('chip-ep-nickname').value = u.nickname || u.username || '';
     chipEl('chip-ep-title').value = u.title || '';
-    chipEl('chip-ep-handle').value = roleMeta ? roleMeta.label : (u.role || '—');
+    chipEl('chip-ep-handle').value = rMeta ? rMeta.label : (u.role || '—');
     chipEl('chip-ep-cvv').value = cvv;
     chipEl('chip-ep-signature').value = sig;
     chipEl('chip-edit-panel').classList.add('show');
