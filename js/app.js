@@ -604,8 +604,13 @@
 
     if(userNameEl) userNameEl.textContent = currentUser.nickname || currentUser.username;
     if(userAvatarEl){
-      userAvatarEl.textContent = getInitial(currentUser.nickname || currentUser.username);
-      userAvatarEl.style.background = getAvatarColor(currentUser.username);
+      if(currentUser.avatar_url){
+        userAvatarEl.innerHTML = '<img src="'+escapeHtml(currentUser.avatar_url)+'" alt="" onerror="this.parentNode.textContent=\''+getInitial(currentUser.nickname || currentUser.username)+'\'">';
+        userAvatarEl.style.background = 'transparent';
+      } else {
+        userAvatarEl.textContent = getInitial(currentUser.nickname || currentUser.username);
+        userAvatarEl.style.background = getAvatarColor(currentUser.username);
+      }
       userAvatarEl.style.cursor = 'pointer';
       userAvatarEl.title = '点击查看个人主页';
       userAvatarEl.onclick = function(){ openChipCard(); };
@@ -655,8 +660,13 @@
     // 3. 渲染用户信息
     if(userNameEl) userNameEl.textContent = currentUser.nickname || currentUser.username;
     if(userAvatarEl){
-      userAvatarEl.textContent = getInitial(currentUser.nickname || currentUser.username);
-      userAvatarEl.style.background = getAvatarColor(currentUser.username);
+      if(currentUser.avatar_url){
+        userAvatarEl.innerHTML = '<img src="'+escapeHtml(currentUser.avatar_url)+'" alt="" onerror="this.parentNode.textContent=\''+getInitial(currentUser.nickname || currentUser.username)+'\'">';
+        userAvatarEl.style.background = 'transparent';
+      } else {
+        userAvatarEl.textContent = getInitial(currentUser.nickname || currentUser.username);
+        userAvatarEl.style.background = getAvatarColor(currentUser.username);
+      }
       userAvatarEl.style.cursor = 'pointer';
       userAvatarEl.title = '点击查看个人主页';
       userAvatarEl.onclick = function(){ openChipCard(); };
@@ -1723,7 +1733,7 @@
     // 贴吧风格模板：头像+昵称横排 → 内容 → 底部互动
     group.innerHTML =
       '<div class="msg-feed-left">'+
-        '<div class="msg-feed-avatar" style="background:'+avatarBg+'" title="查看资料" onclick="window.openUserProfile(\''+escapeHtml(author.id)+'\');event.stopPropagation();">'+avatarInner+'</div>'+
+        '<div class="msg-feed-avatar" style="background:'+avatarBg+'" title="查看资料" onclick="window.openChipCard(\''+escapeHtml(author.id)+'\');event.stopPropagation();">'+avatarInner+'</div>'+
         '<div class="msg-feed-meta">'+
           '<span class="msg-feed-name">'+escapeHtml(author.nickname||author.username||'未知')+'</span>'+
           '<span class="msg-feed-role"><span class="role-badge '+roleCls+'">'+roleLabel+'</span></span>'+
@@ -5711,6 +5721,7 @@
 
   var chipOverlay, chipStage, chipEntrance, chipFlip, chipBuilt = false;
   var chipFlipped = false, chipBackAxis = 'Y', chipOpen = false, chipShimmer;
+  var chipReadOnly = false;
   var chipAvatarInput;
 
   function chipEl(id){ return document.getElementById(id); }
@@ -5761,7 +5772,7 @@
     chipBuildSkinPicker(chipEl('chip-ep-skin-row'));
     chipApplySkin((function(){ try{ return localStorage.getItem('chip-skin'); }catch(e){ return null; } })() || 'blue');
 
-    chipEl('chip-avatar').addEventListener('click', function(e){ e.stopPropagation(); if(chipAvatarInput) chipAvatarInput.click(); });
+    chipEl('chip-avatar').addEventListener('click', function(e){ e.stopPropagation(); if(chipReadOnly) return; if(chipAvatarInput) chipAvatarInput.click(); });
     chipAvatarInput.addEventListener('change', chipOnAvatarChange);
     chipEl('chip-ep-exit-btn').addEventListener('click', function(e){ e.stopPropagation(); chipSaveAndClose(); });
     (function(){ var b=chipEl('chip-ep-save-btn'); if(b) b.addEventListener('click', function(e){ e.stopPropagation(); chipSaveEdit(); }); })();
@@ -5819,8 +5830,8 @@
     return s;
   }
 
-  function chipPopulate(){
-    var u = currentUser; if(!u) return;
+  function chipPopulate(u, isReadOnly){
+    if(!u) return;
     var roleMeta = ROLE_META[u.role] || ROLE_META.student;
     var init = getInitial(u.nickname || u.username);
     var av = chipEl('chip-avatar');
@@ -5832,7 +5843,9 @@
     }
     chipEl('chip-cardnum').textContent = chipFmtCardnum(u.username || '');
     chipEl('chip-holder').textContent = u.nickname || u.username || '';
-    var handle = (function(){ try{ return localStorage.getItem('chip-handle'); }catch(e){ return null; } })() || (u.username ? u.username.split('@')[0] : (u.nickname||''));
+    var handle = isReadOnly
+      ? (u.username ? u.username.split('@')[0] : (u.nickname||''))
+      : ((function(){ try{ return localStorage.getItem('chip-handle'); }catch(e){ return null; } })() || (u.username ? u.username.split('@')[0] : (u.nickname||'')));
     chipEl('chip-handle').textContent = '@' + handle;
     var title = u.title || '';
     var tierEl = chipEl('chip-tier');
@@ -5842,13 +5855,17 @@
     var ca = u.created_at || (IF && IF.resolveAuthor ? (IF.resolveAuthor(u.id)||{}).created_at : null);
     chipEl('chip-valid').textContent = ca ? chipFmtDate(ca) : '—';
     chipEl('chip-back-num').textContent = chipFmtCardnum(u.username || '');
-    var sig = (function(){ try{ return localStorage.getItem('chip-signature'); }catch(e){ return null; } })() || (u.nickname||u.username||'');
+    var sig = isReadOnly
+      ? (u.nickname||u.username||'')
+      : ((function(){ try{ return localStorage.getItem('chip-signature'); }catch(e){ return null; } })() || (u.nickname||u.username||''));
     chipEl('chip-back-sig').textContent = sig;
-    var cvv = (function(){ try{ return localStorage.getItem('chip-cvv'); }catch(e){ return null; } })() || '019';
+    var cvv = isReadOnly ? '***' : ((function(){ try{ return localStorage.getItem('chip-cvv'); }catch(e){ return null; } })() || '019');
     chipEl('chip-back-cvv').textContent = cvv;
-    chipEl('chip-back-hint').textContent = '欢迎回来，'+(u.nickname||'用户')+' · 点击卡片翻回正面';
+    chipEl('chip-back-hint').textContent = isReadOnly
+      ? ('查看 '+(u.nickname||'用户')+' 的资料卡')
+      : ('欢迎回来，'+(u.nickname||'用户')+' · 点击卡片翻回正面');
     var adminBtn = chipEl('chip-btn-admin');
-    if(adminBtn) adminBtn.style.display = (u.role==='admin') ? '' : 'none';
+    if(adminBtn) adminBtn.style.display = (!isReadOnly && u.role==='admin') ? '' : 'none';
   }
 
   function chipStartShimmer(){
@@ -5857,12 +5874,47 @@
     chipShimmer = gsap.to(holos, { xPercent:60, duration:3.6, ease:'sine.inOut', repeat:-1, yoyo:true, stagger:{each:0.4, from:'random'} });
   }
 
-  function openChipCard(){
+  function openChipCard(userId){
     if(!isLoggedIn()){ showLogin(); return; }
     if(!chipBuilt) chipBuildCard();
-    chipPopulate();
+    var isSelf = !userId || (currentUser && userId === currentUser.id);
+    if(isSelf){
+      chipShowCard(currentUser, false);
+      return;
+    }
+    /* 查看他人资料卡：只读模式（无编辑/退出/换头像） */
+    var api = window.IF || IF;
+    var cached = (api && api.resolveAuthor) ? api.resolveAuthor(userId) : null;
+    var fallback = { id: userId, username: userId, nickname: '用户' };
+    function renderRead(u){
+      chipShowCard((u && u.id) ? u : fallback, true);
+    }
+    if(cached && cached.id && cached.username){
+      renderRead(cached);
+    } else if(api && api.insforge){
+      api.insforge.database.from('profiles')
+        .select('id,username,nickname,avatar_url,role,title,status,created_at')
+        .eq('id', userId).single()
+        .then(function(r){ renderRead(r && !r.error ? r : null); })
+        .catch(function(){ renderRead(null); });
+    } else {
+      renderRead(null);
+    }
+  }
+  window.openChipCard = openChipCard;
+
+  function chipShowCard(u, isReadOnly){
+    if(!u) return;
+    chipReadOnly = !!isReadOnly;
+    chipPopulate(u, isReadOnly);
     chipEl('chip-edit-panel').classList.remove('show');
-    gsap.set('.chip-face.back .chip-actions, .chip-face.back .chip-hint', { autoAlpha:1 });
+    /* 只读模式：屏蔽换头像 + 隐藏编辑/管理/退出按钮与提示 */
+    if(isReadOnly){
+      gsap.set('.chip-face.back .chip-actions, .chip-face.back .chip-hint', { autoAlpha:0 });
+      var av = chipEl('chip-avatar'); if(av){ av.style.cursor = 'default'; av.title = ''; }
+    } else {
+      gsap.set('.chip-face.back .chip-actions, .chip-face.back .chip-hint', { autoAlpha:1 });
+    }
     chipOpen = true;
     chipOverlay.classList.add('show');
     gsap.set(chipEntrance, { rotationY:-175, scale:0.28, x:-window.innerWidth*0.32, y:window.innerHeight*0.34, autoAlpha:0, transformOrigin:'50% 50%' });
@@ -6020,6 +6072,11 @@
         var navA = chipEl('nav-avatar');
         if(navA && currentUser.avatar_url){
           navA.innerHTML = '<img src="'+currentUser.avatar_url+'" alt="" style="width:100%;height:100%;border-radius:50%;object-fit:cover;" onerror="this.parentNode.textContent=\''+init+'\'">';
+        }
+        var sideA = chipEl('user-avatar');
+        if(sideA && currentUser.avatar_url){
+          sideA.innerHTML = '<img src="'+currentUser.avatar_url+'" alt="" onerror="this.parentNode.textContent=\''+init+'\'">';
+          sideA.style.background = 'transparent';
         }
         showToast('头像更新成功 ✅');
         chipPopulate();
