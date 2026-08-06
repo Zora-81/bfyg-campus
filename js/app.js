@@ -5920,9 +5920,10 @@
     var handle = (function(){ try{ return localStorage.getItem('chip-handle'); }catch(e){ return null; } })() || (u.username ? u.username.split('@')[0] : '');
     var cvv = (function(){ try{ return localStorage.getItem('chip-cvv'); }catch(e){ return null; } })() || '019';
     var sig = (function(){ try{ return localStorage.getItem('chip-signature'); }catch(e){ return null; } })() || (u.nickname||u.username||'');
+    var savedTitle = (function(){ try{ return localStorage.getItem('chip-title'); }catch(e){ return null; } })();
     var rMeta = ROLE_META[u.role] || ROLE_META.student;
     chipEl('chip-ep-nickname').value = u.nickname || u.username || '';
-    chipEl('chip-ep-title').value = u.title || '';
+    chipEl('chip-ep-title').value = savedTitle || u.title || '';
     chipEl('chip-ep-handle').value = rMeta ? rMeta.label : (u.role || '—');
     chipEl('chip-ep-cvv').value = cvv;
     chipEl('chip-ep-signature').value = sig;
@@ -5949,12 +5950,12 @@
   function chipSaveAndClose(){
     var u = currentUser; if(!u){ chipCloseEdit(); return; }
     var nn = (chipEl('chip-ep-nickname').value||'').trim();
-    var ttl = (chipEl('ep-title') ? (chipEl('chip-ep-title').value||'').trim() : '');
+    var ttl = (chipEl('chip-ep-title') ? (chipEl('chip-ep-title').value||'').trim() : '');
     /* 身份(角色)只读，不保存 */
     var cvv = (chipEl('chip-ep-cvv').value||'').trim() || '019';
     var sig = (chipEl('chip-ep-signature').value||'').trim() || nn;
     /* ① 同步存 localStorage（瞬间完成） */
-    try{ localStorage.setItem('chip-cvv', cvv); localStorage.setItem('chip-signature', sig); }catch(e){}
+    try{ localStorage.setItem('chip-title', ttl); localStorage.setItem('chip-cvv', cvv); localStorage.setItem('chip-signature', sig); }catch(e){}
     /* ② 立即关闭编辑面板（丝滑） */
     chipCloseEdit();
     /* ③ 更新内存中的昵称/称号（即时生效，不等 API） */
@@ -5977,7 +5978,7 @@
     /* 身份(角色)只读，不保存 */
     var cvv = (chipEl('chip-ep-cvv').value||'').trim() || '019';
     var sig = (chipEl('chip-ep-signature').value||'').trim() || nn;
-    try{ localStorage.setItem('chip-cvv', cvv); localStorage.setItem('chip-signature', sig); }catch(e){}
+    try{ localStorage.setItem('chip-title', ttl); localStorage.setItem('chip-cvv', cvv); localStorage.setItem('chip-signature', sig); }catch(e){}
     var btn = chipEl('chip-ep-save-btn');
     Promise.resolve(IF && IF.updateMyProfile ? IF.updateMyProfile(u.id, { nickname: nn, title: ttl }) : Promise.reject(new Error('后端未就绪')))
       .then(function(){
