@@ -5689,7 +5689,7 @@
     +         '<div class="chip-hint" id="chip-back-hint"></div>'
     +         '<div class="chip-edit-panel" id="chip-edit-panel">'
     +           '<div class="chip-ep-header"><div class="chip-ep-title">编辑身份信息<small>EDIT IDENTITY</small></div>'
-    +             '<button class="chip-exit-btn" id="chip-ep-exit-btn" title="退出编辑"><span class="text">退出</span><div class="sign"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg></div></button>'
+    +             '<button class="chip-exit-btn" id="chip-ep-exit-btn" title="退出编辑"><span class="text">退出</span><div class="sign"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></div></button>'
     +           '</div>'
     +           '<div class="chip-ep-row"><div class="chip-ep-field"><label>昵称</label><input type="text" id="chip-ep-nickname" maxlength="16" placeholder="你的昵称"></div>'
     +             '<div class="chip-ep-field"><label>称号</label><input type="text" id="chip-ep-title" maxlength="12" placeholder="如：学习委员"></div></div>'
