@@ -143,6 +143,22 @@ async function signUp(email, password, username, nickname) {
     stashPending()
     return { requireEmailVerification: true, email }
   }
+  // 409 已存在：区分「已验证（应去登录）」与「注册一半（未验证，需补验证）」
+  // 用重发验证码做探测：未验证 → 成功（码已发出）；已验证 → 报错 already confirmed。
+  // 这样已验证的邮箱不会误进验证面板，未验证的也不会卡死。
+  async function classifyAlreadyExists() {
+    try {
+      await insforge.auth.resendVerificationEmail({ email })
+      return { requireEmailVerification: true, alreadyExisted: true, halfRegistered: true, codeSent: true, email }
+    } catch (re) {
+      const rem = ((re && (re.message || re.error_description)) || '').toLowerCase()
+      if (/already confirmed|already verified|email already/i.test(rem)) {
+        return { alreadyRegisteredVerified: true, email }
+      }
+      // 探测失败兜底：仍当作未验证，交由前端再发一次，避免卡死
+      return { requireEmailVerification: true, alreadyExisted: true, halfRegistered: true, codeSent: false, email }
+    }
+  }
   let body = null, ok = false
   try {
     const resp = await fetch(`${INS_FORGE_URL}/api/auth/users`, {
@@ -161,22 +177,36 @@ async function signUp(email, password, username, nickname) {
     const { data, error } = await insforge.auth.signUp({
       email, password, name: nickname || username
     })
-    if (error) throw error
+    if (error) {
+      const em = ((error.message || '') + ' ' + (error.statusCode || '')).toLowerCase()
+      // 已存在 → 探测是「已验证」还是「注册一半」，再决定提示语
+      if (/already|exists|registered|已注册|已存在|占用|in use/i.test(em)) {
+        stashPending()
+        return await classifyAlreadyExists()
+      }
+      throw error
+    }
     return await afterMaybeSession()
   }
   if (!ok) {
     const msg = (body && (body.message || body.error || body.error_description || JSON.stringify(body))) || '注册失败'
     const m = (msg + '').toLowerCase()
-    // 已存在 / 需验证 → 都视为「账号已建、待验证」，弹验证面板
-    if (/already|exists|registered|已注册|已存在|占用|in use|verif|confirm|not confirmed|email/i.test(m)) {
+    // 已存在（409 AUTH_EMAIL_EXISTS）→ 探测「已验证 / 注册一半」
+    const isExists = /already|exists|registered|已注册|已存在|占用|in use/i.test(m)
+    if (isExists) {
       stashPending()
-      return { requireEmailVerification: true, email }
+      return await classifyAlreadyExists()
+    }
+    // 其余含 verif/confirm/email 的提示 → 视为新账号待验证
+    if (/verif|confirm|not confirmed|email/i.test(m)) {
+      stashPending()
+      return { requireEmailVerification: true, alreadyExisted: false, email }
     }
     throw new Error(msg)
   }
   if (body && body.accessToken) return await afterMaybeSession()
   stashPending()
-  return { requireEmailVerification: true, email }
+  return { requireEmailVerification: true, alreadyExisted: false, email }
 }
 
 // 邮箱验证后首次登录时，补全之前暂存的 profile

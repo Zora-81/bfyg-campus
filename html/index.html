@@ -19,7 +19,7 @@
 
     (function(){
 
-      var v = '1.4.82';
+      var v = '1.4.83';
 
       // 暴露版本号全局：__APP_VERSION 供设置面板；window.v 供 app.js 记忆树版本读取（根治兜底串漏 bump）
       window.__APP_VERSION = v;
@@ -952,8 +952,25 @@
           <p id="auth-overlay-sub" style="color:#555; font-size:14px; margin:0 0 18px;"></p>
           <input id="verify-code-input" type="text" inputmode="numeric" maxlength="6" placeholder="6 位验证码" style="width:100%; height:44px; padding:5px 15px; box-sizing:border-box; font-family:inherit; font-size:15px; font-weight:600; color:#323232; background:#fff; border:2px solid #323232; border-radius:8px 24px 8px 24px / 24px 8px 24px 8px; box-shadow:3px 3px 0 #323232; outline:none;" />
           <button id="verify-submit-btn" type="button" style="margin:18px 0 0; width:150px; height:46px; font-family:inherit; font-size:17px; font-weight:900; letter-spacing:1px; color:#323232; background:#ff6b6b; border:2px solid #323232; border-radius:16px 5px 16px 5px / 5px 16px 5px 16px; box-shadow:4px 4px 0 #323232; cursor:pointer; transform:rotate(-1deg);">验证并登录</button>
+          <button id="resend-code-btn" type="button" style="margin:12px 0 0; width:180px; height:36px; font-family:inherit; font-size:13px; font-weight:700; letter-spacing:0.5px; color:#323232; background:#ffe066; border:2px solid #323232; border-radius:12px 4px 12px 4px / 4px 12px 4px 12px; box-shadow:3px 3px 0 #323232; cursor:pointer;">重新发送验证码</button>
           <p id="auth-overlay-error" style="color:#d33; font-size:13px; min-height:18px; margin:12px 0 0;"></p>
           <button id="auth-overlay-back" type="button" style="margin-top:10px; background:none; border:none; color:#323232; text-decoration:underline; cursor:pointer; font-size:13px;">返回</button>
+        </div>
+      </div>
+
+      <!-- 找回密码浮层：发码 → 验码+设新密码 -->
+      <div id="forgot-overlay" style="display:none; position:absolute; inset:0; z-index:91; background:rgba(255,255,255,0.97); flex-direction:column; align-items:center; justify-content:center; padding:24px; box-sizing:border-box; text-align:center;">
+        <div style="max-width:320px; width:100%;">
+          <h2 id="forgot-overlay-title" style="font-family:'Comic Sans MS','Chalkboard SE',cursive; color:#323232; margin:0 0 12px; font-size:26px;">找回密码</h2>
+          <p id="forgot-overlay-sub" style="color:#555; font-size:14px; margin:0 0 18px;"></p>
+          <input id="forgot-email" type="email" placeholder="请输入注册邮箱" style="width:100%; height:44px; padding:5px 15px; box-sizing:border-box; font-family:inherit; font-size:15px; font-weight:600; color:#323232; background:#fff; border:2px solid #323232; border-radius:8px 24px 8px 24px / 24px 8px 24px 8px; box-shadow:3px 3px 0 #323232; outline:none; margin-bottom:10px;" />
+          <input id="forgot-code" type="text" inputmode="numeric" maxlength="6" placeholder="6 位验证码" style="width:100%; height:44px; padding:5px 15px; box-sizing:border-box; font-family:inherit; font-size:15px; font-weight:600; color:#323232; background:#fff; border:2px solid #323232; border-radius:8px 24px 8px 24px / 24px 8px 24px 8px; box-shadow:3px 3px 0 #323232; outline:none; margin-bottom:10px;" />
+          <input id="forgot-newpw" type="password" placeholder="新密码（至少8位，含字母和数字）" style="width:100%; height:44px; padding:5px 15px; box-sizing:border-box; font-family:inherit; font-size:15px; font-weight:600; color:#323232; background:#fff; border:2px solid #323232; border-radius:8px 24px 8px 24px / 24px 8px 24px 8px; box-shadow:3px 3px 0 #323232; outline:none; margin-bottom:10px;" />
+          <button id="forgot-send-btn" type="button" style="margin:6px 0; width:180px; height:40px; font-family:inherit; font-size:14px; font-weight:700; color:#323232; background:#ffe066; border:2px solid #323232; border-radius:12px 4px 12px 4px / 4px 12px 4px 12px; box-shadow:3px 3px 0 #323232; cursor:pointer;">发送验证码</button>
+          <button id="forgot-submit-btn" type="button" style="margin:6px 0; width:180px; height:44px; font-family:inherit; font-size:16px; font-weight:900; color:#323232; background:#ff6b6b; border:2px solid #323232; border-radius:16px 5px 16px 5px / 5px 16px 5px 16px; box-shadow:4px 4px 0 #323232; cursor:pointer; transform:rotate(-1deg);">重置密码</button>
+          <button id="forgot-resend-btn" type="button" style="margin:6px 0; width:180px; height:36px; font-family:inherit; font-size:13px; font-weight:700; color:#323232; background:#ffe066; border:2px solid #323232; border-radius:12px 4px 12px 4px / 4px 12px 4px 12px; box-shadow:3px 3px 0 #323232; cursor:pointer;">重新发送验证码</button>
+          <p id="forgot-overlay-error" style="color:#d33; font-size:13px; min-height:18px; margin:12px 0 0;"></p>
+          <button id="forgot-back-btn" type="button" style="margin-top:10px; background:none; border:none; color:#323232; text-decoration:underline; cursor:pointer; font-size:13px;">返回登录</button>
         </div>
       </div>
 
@@ -1536,7 +1553,7 @@
 
             <span class="settings-info-label">版本</span>
 
-            <span class="settings-info-value" id="appVersionLabel">v1.4.82</span>
+            <span class="settings-info-value" id="appVersionLabel">v1.4.83</span>
 
           </div>
 
@@ -2031,9 +2048,25 @@
     var ovErr     = document.getElementById('auth-overlay-error');
     var codeInput = document.getElementById('verify-code-input');
     var verifyBtn = document.getElementById('verify-submit-btn');
+    var resendBtn = document.getElementById('resend-code-btn');
     var backBtn   = document.getElementById('auth-overlay-back');
     var statusEl  = document.getElementById('doodle-status');
     var pending = { email: null, password: null };
+    var countdownTimer = null;
+
+    // 找回密码浮层相关 DOM
+    var forgotOverlay = document.getElementById('forgot-overlay');
+    var forgotEmail   = document.getElementById('forgot-email');
+    var forgotCode    = document.getElementById('forgot-code');
+    var forgotNewPw   = document.getElementById('forgot-newpw');
+    var forgotSendBtn = document.getElementById('forgot-send-btn');
+    var forgotSubmitBtn = document.getElementById('forgot-submit-btn');
+    var forgotResendBtn = document.getElementById('forgot-resend-btn');
+    var forgotBackBtn  = document.getElementById('forgot-back-btn');
+    var forgotSub    = document.getElementById('forgot-overlay-sub');
+    var forgotErr    = document.getElementById('forgot-overlay-error');
+    var forgotLink   = document.getElementById('forgot-link');
+    var forgotCountdownTimer = null;
 
     // 状态条：醒目显示每步结果（info=黄底 / ok=绿底 / err=红底），便于定位"进不去"原因
     function setStatus(msg, kind) {
@@ -2088,13 +2121,38 @@
       }
     }
 
+    function startCountdown(seconds) {
+      if (!resendBtn) return;
+      clearInterval(countdownTimer);
+      var left = seconds;
+      resendBtn.disabled = true;
+      resendBtn.textContent = '重新发送验证码 (' + left + ')';
+      countdownTimer = setInterval(function () {
+        left--;
+        if (left <= 0) {
+          clearInterval(countdownTimer);
+          resendBtn.disabled = false;
+          resendBtn.textContent = '重新发送验证码';
+        } else {
+          resendBtn.textContent = '重新发送验证码 (' + left + ')';
+        }
+      }, 1000);
+    }
+    function stopCountdown() {
+      clearInterval(countdownTimer);
+      if (resendBtn) {
+        resendBtn.disabled = false;
+        resendBtn.textContent = '重新发送验证码';
+      }
+    }
     function openOverlay(title, sub) {
       ovTitle.textContent = title; ovSub.textContent = sub || '';
       ovErr.textContent = ''; codeInput.value = '';
       overlay.style.display = 'flex';
+      startCountdown(30);
       setTimeout(function () { try { codeInput.focus(); } catch (e) {} }, 100);
     }
-    function closeOverlay() { overlay.style.display = 'none'; }
+    function closeOverlay() { stopCountdown(); overlay.style.display = 'none'; }
 
     if (!frontForm || !backForm) {
       setStatus('⚠️ 表单未加载，请硬刷新(Ctrl+Shift+R)重试', 'err');
@@ -2140,9 +2198,31 @@
         IF.signUp(email, pw, name, name).then(function (res) {
           if (btn) { btn.disabled = false; btn.textContent = 'Sign up'; }
           pending.email = email; pending.password = pw;
+          if (res && res.alreadyRegisteredVerified) {
+            // 邮箱已注册且已验证 → 不重复注册，引导去登录
+            showErr(backForm, '该邮箱已注册，请直接登录');
+            return;
+          }
           if (res && res.requireEmailVerification) {
-            setStatus('📧 注册成功，请查收邮箱验证码', 'ok');
-            openOverlay('验证邮箱', '我们已向 ' + email + ' 发送 6 位验证码');
+            if (res.alreadyExisted) {
+              // 注册一半（未验证）：探测已重发（codeSent=true）；失败兜底则再发一次
+              if (res.codeSent) {
+                setStatus('📧 验证码已重新发送，请查收', 'ok');
+                openOverlay('验证邮箱', '该邮箱已注册但未验证，验证码已重新发送');
+              } else {
+                setStatus('⏳ 正在重新发送验证码...', 'info');
+                IF.resendVerification(email).then(function () {
+                  setStatus('📧 验证码已重新发送，请查收', 'ok');
+                  openOverlay('验证邮箱', '该邮箱已注册但未验证，验证码已重新发送');
+                }).catch(function (rerr) {
+                  setStatus('❌ ' + ((rerr && rerr.message) || '重发失败'), 'err');
+                  openOverlay('验证邮箱', '该邮箱已注册但未验证，请稍后重试');
+                });
+              }
+            } else {
+              setStatus('📧 注册成功，请查收邮箱验证码', 'ok');
+              openOverlay('验证邮箱', '我们已向 ' + email + ' 发送 6 位验证码');
+            }
           } else if (res && res.user) {
             enterMain(res.user);
           } else {
@@ -2173,6 +2253,131 @@
           });
         });
       }
+      if (resendBtn) {
+        resendBtn.addEventListener('click', function () {
+          var IF = window.IF;
+          if (!IF) { setStatus('⚠️ 后端(IF)未就绪，请稍候再试', 'err'); return; }
+          if (!pending.email) { ovErr.textContent = '邮箱信息丢失，请返回重新注册'; return; }
+          resendBtn.disabled = true;
+          setStatus('⏳ 正在重新发送验证码...', 'info');
+          IF.resendVerification(pending.email).then(function () {
+            setStatus('📧 验证码已重新发送', 'ok');
+            startCountdown(30);
+          }).catch(function (err) {
+            setStatus('❌ ' + ((err && err.message) || '重发失败'), 'err');
+            stopCountdown();
+          });
+        });
+      }
+      // ===== 找回密码闭环 =====
+      function openForgot() {
+        if (forgotSub) forgotSub.textContent = '输入注册邮箱，我们将发送验证码';
+        if (forgotErr) forgotErr.textContent = '';
+        if (forgotEmail) forgotEmail.value = '';
+        if (forgotCode) forgotCode.value = '';
+        if (forgotNewPw) forgotNewPw.value = '';
+        if (forgotOverlay) forgotOverlay.style.display = 'flex';
+        stopForgotCountdown();
+        if (forgotEmail) setTimeout(function () { try { forgotEmail.focus(); } catch (e) {} }, 100);
+      }
+      function closeForgot() { stopForgotCountdown(); if (forgotOverlay) forgotOverlay.style.display = 'none'; }
+      function startForgotCountdown(seconds) {
+        if (!forgotResendBtn) return;
+        clearInterval(forgotCountdownTimer);
+        var left = seconds;
+        forgotResendBtn.disabled = true;
+        forgotResendBtn.textContent = '重新发送验证码 (' + left + ')';
+        forgotCountdownTimer = setInterval(function () {
+          left--;
+          if (left <= 0) {
+            clearInterval(forgotCountdownTimer);
+            forgotResendBtn.disabled = false;
+            forgotResendBtn.textContent = '重新发送验证码';
+          } else {
+            forgotResendBtn.textContent = '重新发送验证码 (' + left + ')';
+          }
+        }, 1000);
+      }
+      function stopForgotCountdown() {
+        clearInterval(forgotCountdownTimer);
+        if (forgotResendBtn) {
+          forgotResendBtn.disabled = false;
+          forgotResendBtn.textContent = '重新发送验证码';
+        }
+      }
+      function forgotSend(email) {
+        var IF = window.IF;
+        if (!IF) { setStatus('⚠️ 后端(IF)未就绪，请稍候再试', 'err'); return; }
+        if (forgotSendBtn) forgotSendBtn.disabled = true;
+        if (forgotErr) forgotErr.textContent = '';
+        setStatus('⏳ 正在发送验证码...', 'info');
+        IF.sendResetPasswordEmail(email).then(function () {
+          if (forgotSendBtn) forgotSendBtn.disabled = false;
+          if (forgotSub) forgotSub.textContent = '验证码已发送至 ' + email + '，请查收';
+          setStatus('📧 验证码已发送', 'ok');
+          startForgotCountdown(30);
+        }).catch(function (err) {
+          if (forgotSendBtn) forgotSendBtn.disabled = false;
+          if (forgotErr) forgotErr.textContent = (err && err.message) || '发送失败';
+          setStatus('❌ ' + ((err && err.message) || '发送失败'), 'err');
+        });
+      }
+      if (forgotLink) {
+        forgotLink.addEventListener('click', function (e) {
+          e.preventDefault();
+          openForgot();
+        });
+      }
+      if (forgotSendBtn) {
+        forgotSendBtn.addEventListener('click', function () {
+          var email = (forgotEmail && forgotEmail.value || '').trim();
+          if (!email) { if (forgotErr) forgotErr.textContent = '请输入邮箱'; return; }
+          forgotSend(email);
+        });
+      }
+      if (forgotResendBtn) {
+        forgotResendBtn.addEventListener('click', function () {
+          var email = (forgotEmail && forgotEmail.value || '').trim();
+          if (!email) { if (forgotErr) forgotErr.textContent = '请输入邮箱'; return; }
+          forgotResendBtn.disabled = true;
+          setStatus('⏳ 正在重新发送验证码...', 'info');
+          var IF = window.IF;
+          if (!IF) { setStatus('⚠️ 后端(IF)未就绪，请稍候再试', 'err'); return; }
+          IF.sendResetPasswordEmail(email).then(function () {
+            setStatus('📧 验证码已重新发送', 'ok');
+            startForgotCountdown(30);
+          }).catch(function (err) {
+            setStatus('❌ ' + ((err && err.message) || '重发失败'), 'err');
+            stopForgotCountdown();
+          });
+        });
+      }
+      if (forgotSubmitBtn) {
+        forgotSubmitBtn.addEventListener('click', function () {
+          var IF = window.IF;
+          if (!IF) { setStatus('⚠️ 后端(IF)未就绪，请稍候再试', 'err'); return; }
+          var email = (forgotEmail && forgotEmail.value || '').trim();
+          var code = (forgotCode && forgotCode.value || '').trim();
+          var newPw = (forgotNewPw && forgotNewPw.value || '');
+          if (!email || !code || !newPw) { if (forgotErr) forgotErr.textContent = '请填齐邮箱、验证码和新密码'; return; }
+          if (!/^(?=.*[A-Za-z])(?=.*\d).{8,}$/.test(newPw)) { if (forgotErr) forgotErr.textContent = '新密码至少8位，需含字母和数字'; return; }
+          forgotSubmitBtn.disabled = true;
+          setStatus('⏳ 正在重置密码...', 'info');
+          IF.exchangeResetPasswordToken(email, code).then(function (tok) {
+            var token = (tok && tok.token) ? tok.token : tok;
+            return IF.resetPassword(newPw, token);
+          }).then(function () {
+            forgotSubmitBtn.disabled = false;
+            setStatus('✅ 密码已重置，请用新密码登录', 'ok');
+            closeForgot();
+          }).catch(function (err) {
+            forgotSubmitBtn.disabled = false;
+            if (forgotErr) forgotErr.textContent = (err && err.message) || '重置失败';
+            setStatus('❌ ' + ((err && err.message) || '重置失败'), 'err');
+          });
+        });
+      }
+      if (forgotBackBtn) forgotBackBtn.addEventListener('click', closeForgot);
       if (backBtn) backBtn.addEventListener('click', closeOverlay);
     }
 
