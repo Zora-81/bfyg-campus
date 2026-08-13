@@ -2312,7 +2312,12 @@ body.main-active #monster-login { display:none !important; }
   display:flex; align-items:center; justify-content:center;
   font-weight:700; color:#fff; flex-shrink:0;
   background:linear-gradient(135deg,var(--accent),var(--pink));
+  cursor:pointer; transition:transform var(--t);
+  overflow:hidden;
 }
+.msg-comment-avatar img { width:100%; height:100%; object-fit:cover; border-radius:50%; }
+.msg-comment-avatar:hover { transform:scale(1.05); }
+.msg-comment-avatar:active { transform:scale(0.92); }
 .msg-comment-body { flex:1; min-width:0; padding-top:2px; }
 .comment-name-row {
   display:flex; align-items:center; flex-wrap:wrap; gap:5px;

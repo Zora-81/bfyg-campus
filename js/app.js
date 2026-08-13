@@ -2483,6 +2483,9 @@
     var name = a.nickname || a.username || '未知';
     var color = getAvatarColor(a.username || '?');
     var init = getInitial(name);
+    var avatarInner = a.avatar_url
+      ? '<img src="'+escapeHtml(a.avatar_url)+'" alt="'+escapeHtml(name)+'" onerror="this.style.display=\'none\'">'
+      : init;
     var la = agg[comment.id] || { total: 0, mine: false };
     // 一致性兜底：自己点过赞至少算 1
     if (la.mine && la.total <= 0) la.total = 1;
@@ -2503,7 +2506,7 @@
     }
 
     return '<div class="msg-comment-item" data-comment-id="'+comment.id+'" data-depth="'+depth+'">'+
-      '<div class="msg-comment-avatar" style="background:'+color+'">'+init+'</div>'+
+      '<div class="msg-comment-avatar" style="background:'+color+'" title="查看资料" onclick="window.openChipCard(\''+escapeHtml(a.id)+'\');event.stopPropagation();">'+avatarInner+'</div>'+
       '<div class="msg-comment-body">'+
         '<div class="comment-name-row">'+nameHtml+'</div>'+
         '<div class="msg-comment-text">'+escapeHtml(text)+'</div>'+
