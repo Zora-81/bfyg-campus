@@ -69,11 +69,9 @@
   var loginFooterSwitch = document.getElementById('login-footer-switch');
   var loginSubmitLoader = document.getElementById('login-submit-loader');
   var loginLogoStar     = document.getElementById('login-logo-star');
-  // 欢迎屏 / 加载 / 小怪兽
+  // 欢迎屏 / 小怪兽
   var welcomeScreen     = document.getElementById('welcome-screen');
   var welcomeEnter      = document.getElementById('welcome-enter');
-  var loadingStage      = document.getElementById('loading-stage');
-  var loadingStar       = document.getElementById('loading-star');
   var _fromWelcome      = false; // 标记当前是否从欢迎屏进入，关闭弹窗时回到欢迎屏
   var loginMode = 'signin';
   var sidebar         = document.getElementById('sidebar');
@@ -366,6 +364,7 @@
     if(newLink) newLink.addEventListener('click', function(e){ e.preventDefault(); openLoginModal(loginMode==='signin'?'signup':'signin'); });
     if(loginForm) loginForm.reset();
     clearLoginError();
+    if(typeof hideStatus === 'function') hideStatus();   /* 清除上次的登录提示 */
     resetMonsterState();
     if(monsterLogin) monsterLogin.classList.add('active');
     startMonsterEyes();
@@ -383,77 +382,174 @@
     if(!welcomeScreen){ openLoginModal('signin'); return; }
     _fromWelcome = true;
     if(welcomeEnter) welcomeEnter.disabled = true;
-    if(REDUCED_MOTION || typeof gsap === 'undefined'){
-      welcomeScreen.classList.remove('active');
+    var doEntrance = function(){
       openLoginModal('signin');
-      return;
-    }
-    if(loadingStage){
-      loadingStage.classList.add('active','phase-rotating');
-      // rotating(0-1.2s) → merging(1.2-1.6s) → star(1.6-2.0s) → flying(2.0-2.85s)
-      _loadingTimers.push(setTimeout(function(){ loadingStage.classList.remove('phase-rotating'); loadingStage.classList.add('phase-merging'); }, 1200));
-      _loadingTimers.push(setTimeout(function(){ loadingStage.classList.remove('phase-merging'); loadingStage.classList.add('phase-star'); }, 1600));
-      _loadingTimers.push(setTimeout(function(){
-        loadingStage.classList.remove('phase-star'); loadingStage.classList.add('phase-flying');
-        flyStarToCard();
-      }, 2000));
-      _loadingTimers.push(setTimeout(function(){
-        clearLoadingTimers();
-        loadingStage.classList.remove('active','phase-flying');
-        if(welcomeScreen) welcomeScreen.classList.remove('active');
-        openLoginModal('signin');
-      }, 2850));
+      // 小人入场动画 — 对照用户7帧参考逐帧还原
+      if(monsterLogin && typeof gsap !== 'undefined' && !REDUCED_MOTION){
+        var $purple = document.getElementById('purple');
+        var $black  = document.getElementById('black');
+        var $orange = document.getElementById('orange');
+        var $yellow = document.getElementById('yellow');
+        if($purple && $black && $orange && $yellow){
+          // 锁定 render() 的 transform 写入，让 GSAP 完全控制
+          window.__monsterEntrancePlaying = true;
+          // 禁掉 CSS transition，避免跟 GSAP 打架
+          var chars = [$purple, $black, $orange, $yellow];
+          var savedTransitions = chars.map(function(c){ return c.style.transition; });
+          chars.forEach(function(c){ c.style.transition = 'none'; });
+
+          // 先用 gsap.set 强制设初始态（不依赖 from 的首帧，防止 render 抢先）
+          // 黑色：从最顶端、近乎倒立(170°≈头尾颠倒)的状态掉下来翻正
+          gsap.set($black,  {y:-350, opacity:0, rotation:170});
+          gsap.set($yellow, {y:90, scale:0.30, opacity:0});
+          gsap.set($purple, {rotation:50, scale:0.55, opacity:0});
+          gsap.set($orange, {scale:0.06, opacity:0});
+
+          var tl = gsap.timeline({
+            onComplete: function(){
+              // 动画结束后恢复 CSS transition + 解锁 render() + 重启 render 循环
+              chars.forEach(function(c, i){ c.style.transition = savedTransitions[i]; });
+              window.__monsterEntrancePlaying = false;
+              if (typeof render === 'function') requestAnimationFrame(render);
+            }
+          });
+          // ① 黑色从最顶部"倒着"掉落翻正 —— 对应参考帧2（最标志性！）
+          tl.to($black, {
+            y: 0, opacity: 1, rotation: 0,
+            duration: 0.70, ease: 'power2.in'
+          }, 0);
+          // ② 黄色从底部滑入（嘴是斜线）—— 对应参考帧2起
+          tl.to($yellow, {
+            y: 0, scale: 1, opacity: 1,
+            duration: 0.65, ease: 'power2.out'
+          }, 0);
+          // ③ 紫色从菱形(50°)旋转成正方形（最标志性的动作！）—— 对应参考帧3-5
+          tl.to($purple, {
+            rotation: 0, scale: 1, opacity: 1,
+            duration: 0.75, ease: 'power2.out'
+          }, 0.15);
+          // ④ 橙色从小半圆长大（留一部分给后面的急剧膨胀）—— 对应参考帧3起
+          tl.to($orange, {
+            scale: 0.68, opacity: 1,
+            duration: 0.55, ease: 'power2.out'
+          }, 0.35);
+          // ⑤ 黑色掉落完成后弧形弯曲变形（参考帧5的标志性弯曲顶部）
+          tl.to($black, {
+            skewX: 12, scaleY: 1.30,
+            duration: 0.28, ease: 'sine.inOut',
+            yoyo: true, repeat: 1
+          }, 0.65);
+          // ⑥ 橙色急剧膨胀成大笑脸（从 0.68 直接冲到 1.05，不再跳回）—— 对应参考帧6
+          tl.fromTo($orange, {
+            scale: 0.68
+          }, {
+            scale: 1.05,
+            duration: 0.42, ease: 'power2.out'
+          }, 0.95);
+          // ⑦ 全体归位 settling —— 对应参考帧7最终态
+          tl.to([$purple, $black], {
+            rotation: 0, y: 0, skewX: 0, scaleY: 1,
+            duration: 0.45, ease: 'power2.out'
+          }, 1.35);
+          tl.to([$orange, $yellow], {
+            scale: 1, y: 0,
+            duration: 0.40, ease: 'power2.out'
+          }, 1.40);
+        }
+      }
+    };
+    if(welcomeScreen && typeof gsap !== 'undefined' && !REDUCED_MOTION){
+      gsap.to(welcomeScreen, { opacity:0, duration:0.3, ease:'power1.in', onComplete:function(){
+        welcomeScreen.classList.remove('active');
+        welcomeScreen.style.opacity = '';
+        doEntrance();
+      }});
     } else {
       welcomeScreen.classList.remove('active');
-      openLoginModal('signin');
+      doEntrance();
     }
   }
 
-  // 飞星：从 loading star 飞向登录卡片顶部星标
-  function flyStarToCard(){
-    if(!loginLogoStar) return;
-    var cardRect = loginLogoStar.getBoundingClientRect();
-    var tx = cardRect.left + cardRect.width/2;
-    var ty = cardRect.top + cardRect.height/2;
-    var fly = document.createElement('div');
-    fly.className = 'loading-fly-star';
-    fly.innerHTML = '<svg viewBox="0 0 100 100"><path d="M50 0 Q50 50 100 50 Q50 50 50 100 Q50 50 0 50 Q50 50 50 0 Z" /></svg>';
-    document.body.appendChild(fly);
-    fly.style.left = (window.innerWidth/2) + 'px';
-    fly.style.top  = (window.innerHeight/2) + 'px';
-    fly.style.opacity = '1';
-    fly.style.transition = 'none';
-    void fly.offsetWidth; // 强制回流
-    fly.style.transition = 'left .85s cubic-bezier(.45,.05,.35,1), top .85s cubic-bezier(.45,.05,.35,1), opacity .85s ease';
-    fly.style.left = tx + 'px';
-    fly.style.top  = ty + 'px';
-    setTimeout(function(){
-      fly.style.opacity = '0';
-      if(loginLogoStar){
-        loginLogoStar.style.animation = 'none';
-        void loginLogoStar.offsetWidth;
-        loginLogoStar.style.animation = 'modalStarPop .5s ease';
-      }
-      setTimeout(function(){ if(fly.parentNode) fly.parentNode.removeChild(fly); }, 400);
-    }, 850);
-  }
+  // 加载过渡阶段已移除，欢迎屏点击后直接进入小怪兽登录界面
 
-  // ── 登录提交加载动画：恒星轨道校徽（GSAP 行星环绕）──
+
+  // ── 登录提交加载动画：精密环系（GSAP，无校徽）──
   var _loaderWatchdog = null;
   var _orbitTweens = [];
+  var _loaderBuilt = false;
+  var _loaderTypeTimer = null;
+  var LL_SVGNS = "http://www.w3.org/2000/svg";
+  function _buildLoginLoaderDOM(){
+    if(_loaderBuilt) return; _loaderBuilt = true;
+    var pc = document.getElementById('ll-particles');
+    if(!pc) return;
+    var N = 14, R = 128, palette = ["#9b8cff","#4aa3ff","#5dcaa5","#ffc24b"];
+    for (var i=0;i<N;i++){
+      var a=(i/N)*Math.PI*2, x=170+Math.cos(a)*R, y=170+Math.sin(a)*R;
+      var c=document.createElementNS(LL_SVGNS,"circle");
+      c.setAttribute("cx",x.toFixed(1)); c.setAttribute("cy",y.toFixed(1));
+      c.setAttribute("r",(i%3===0?4.2:2.8).toFixed(1));
+      c.setAttribute("fill",palette[i%palette.length]);
+      c.setAttribute("class","ll-particle");
+      pc.appendChild(c);
+    }
+  }
+  function _startTypewriter(){
+    var el=document.getElementById('ll-text');
+    if(!el) return;
+    var msgs=["正在进入校园频道","正在加载新鲜事","正在叫醒 AI 档案员"];
+    var li=0,ci=0,del=false;
+    function tick(){
+      var cur=msgs[li];
+      if(!del){ ci++; el.textContent=cur.slice(0,ci);
+        if(ci>=cur.length){ del=true; _loaderTypeTimer=setTimeout(tick,1400); return; } }
+      else { ci--; el.textContent=cur.slice(0,ci);
+        if(ci<=0){ del=false; li=(li+1)%msgs.length; } }
+      _loaderTypeTimer=setTimeout(tick,del?55:110);
+    }
+    tick();
+  }
   function _startOrbitAnimation(){
-    if(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if(reduced){ var s=document.getElementById('ll-text'); if(s) s.textContent='正在进入校园频道'; return; }
     _stopOrbitAnimation();
-    var o1 = document.querySelector('.orbit-1');
-    var o2 = document.querySelector('.orbit-2');
-    var o3 = document.querySelector('.orbit-3');
-    if(o1 && typeof gsap !== 'undefined') _orbitTweens.push(gsap.to(o1, { rotation:'+=360', duration:6, repeat:-1, ease:'linear' }));
-    if(o2 && typeof gsap !== 'undefined') _orbitTweens.push(gsap.to(o2, { rotation:'-=360', duration:9, repeat:-1, ease:'linear' }));
-    if(o3 && typeof gsap !== 'undefined') _orbitTweens.push(gsap.to(o3, { rotation:'+=360', duration:12, repeat:-1, ease:'linear' }));
+    _buildLoginLoaderDOM();
+    if(typeof gsap === 'undefined'){ var s2=document.getElementById('ll-text'); if(s2) s2.textContent='正在进入校园频道'; return; }
+    // 三层环：不同速度/方向
+    var rings=document.querySelectorAll('.ll-ring');
+    rings.forEach(function(r){
+      var dur = r.getAttribute('data-r')==='128'?10 : (r.getAttribute('data-r')==='96'?7:5);
+      var dir = r.getAttribute('data-r')==='96'? '-=360':'+=360';
+      _orbitTweens.push(gsap.to(r,{ rotation:dir, duration:dur, repeat:-1, ease:'none', svgOrigin:'170 170' }));
+    });
+    // 粒子公转
+    var pg=document.getElementById('ll-particles');
+    if(pg) _orbitTweens.push(gsap.to(pg,{ rotation:'+=360', duration:14, repeat:-1, ease:'none', svgOrigin:'170 170' }));
+    // 粒子脉冲
+    var parts=document.querySelectorAll('.ll-particle');
+    _orbitTweens.push(gsap.to(parts,{ scale:2, duration:1.4, ease:'sine.inOut', stagger:{ each:0.09, repeat:-1, yoyo:true } }));
+    // 六边形旋转 + 核心呼吸 + 外扩脉冲 + 中心点
+    var hex=document.getElementById('ll-hex');
+    if(hex) _orbitTweens.push(gsap.to(hex,{ rotation:'+=360', duration:8, repeat:-1, ease:'none', svgOrigin:'170 170' }));
+    var core=document.querySelector('.ll-core');
+    if(core) _orbitTweens.push(gsap.to(core,{ scale:1.12, duration:1.6, repeat:-1, yoyo:true, ease:'sine.inOut' }));
+    var dot=document.getElementById('ll-core-dot');
+    if(dot) _orbitTweens.push(gsap.to(dot,{ scale:1.6, autoAlpha:0.5, duration:1.6, repeat:-1, yoyo:true, ease:'sine.inOut' }));
+    var pulse=document.querySelector('.ll-core-pulse');
+    if(pulse) _orbitTweens.push(gsap.to(pulse,{ scale:2.8, autoAlpha:0, duration:2.4, repeat:-1, ease:'power2.out' }));
+    // 整体浮动 + 微缩放
+    var stage=document.getElementById('loader-stage');
+    if(stage){
+      _orbitTweens.push(gsap.to(stage,{ y:-7, duration:2.6, repeat:-1, yoyo:true, ease:'sine.inOut' }));
+      _orbitTweens.push(gsap.to(stage,{ scale:1.03, duration:2.2, repeat:-1, yoyo:true, ease:'sine.inOut' }));
+    }
+    _startTypewriter();
   }
   function _stopOrbitAnimation(){
     _orbitTweens.forEach(function(t){ if(t && t.kill) t.kill(); });
     _orbitTweens = [];
+    if(_loaderTypeTimer){ clearTimeout(_loaderTypeTimer); _loaderTypeTimer=null; }
+    var s=document.getElementById('ll-text'); if(s) s.textContent='';
   }
   function showLoginLoader(){
     if(!loginSubmitLoader) return;
@@ -587,7 +683,6 @@
   // 彻底关闭登录页所有浮层，防止它们泄漏到主界面/个人主页之上
   function hideLoginOverlays(){
     if(welcomeScreen){ welcomeScreen.classList.remove('active'); welcomeScreen.setAttribute('aria-hidden','true'); }
-    if(loadingStage){ loadingStage.classList.remove('active','phase-rotating','phase-merging','phase-star','phase-flying'); loadingStage.setAttribute('aria-hidden','true'); }
     if(loginSubmitLoader){ loginSubmitLoader.classList.remove('active'); loginSubmitLoader.setAttribute('aria-hidden','true'); loginSubmitLoader.style.opacity = ''; }
     if(monsterLogin){ monsterLogin.classList.remove('active'); stopMonsterEyes && stopMonsterEyes(); }
   }
@@ -718,7 +813,6 @@
     document.body.classList.remove('main-active');
     // ── 重置登录子视图到初始状态（退出登录/返回时必须）──
     if(welcomeScreen){ welcomeScreen.classList.add('active'); welcomeScreen.setAttribute('aria-hidden','false'); }
-    if(loadingStage){ loadingStage.classList.remove('active','phase-rotating','phase-merging','phase-star','phase-flying'); loadingStage.setAttribute('aria-hidden','true'); }
     clearLoadingTimers();
     if(monsterLogin){ monsterLogin.classList.remove('active'); stopMonsterEyes(); }
     if(welcomeEnter) welcomeEnter.disabled = false;
@@ -1290,6 +1384,36 @@
     playSkeletonAnimation(type, messagesArea);
   }
 
+  // 频道消息加载失败：渲染明确错误态 + 重试按钮，替代原本静默 renderMessages 出的空白欢迎卡。
+  // 出现条件：loadChannelSnapshot 三次重试后仍失败（跨国链路极端抖动）。
+  function showChannelLoadError(ch) {
+    if (!messagesArea) return;
+    if (_skeletonTL) { _skeletonTL.kill(); _skeletonTL = null; }
+    messagesArea.innerHTML = '';
+    var welcome = document.createElement('div'); welcome.className = 'welcome-card';
+    var wcKey = chHeroMap[ch ? ch.name : ''] || 'chat';
+    welcome.setAttribute('data-ch', wcKey);
+    welcome.innerHTML = '<span class="welcome-hero">'+(chHeroIcon[wcKey]||chHeroIcon.chat)+'</span>'+
+      '<div class="welcome-text"><h3>'+escapeHtml(ch ? ch.name : '')+'</h3><p>'+(ch ? (ch.description||'') : '')+'</p></div>';
+    messagesArea.appendChild(welcome);
+    var err = document.createElement('div');
+    err.className = 'channel-load-error';
+    err.innerHTML = '<div class="cle-icon">⚠️</div>'+
+      '<div class="cle-title">消息加载失败</div>'+
+      '<div class="cle-desc">网络抖动或后台暂时无响应，点下方按钮重试</div>'+
+      '<button class="cle-retry" type="button">点击重试</button>';
+    messagesArea.appendChild(err);
+    var btn = err.querySelector('.cle-retry');
+    if (btn) {
+      btn.addEventListener('click', function() {
+        // 清缓存 + 解除"已在目标频道"判定，确保重试时重新走网络拉取而非命中空缓存
+        delete channelMessages[ch.id];
+        currentChannel = null;
+        switchChannel(ch);
+      });
+    }
+  }
+
   // ── 右侧边栏渲染（贴吧风格：热点话题 + 频道推荐）──
   function renderRightSidebar() {
     var hotEl = document.getElementById('hot-topics');
@@ -1515,7 +1639,7 @@
           }).catch(function(){ likeAgg={}; afterAgg(); });
         } else { likeAgg={}; afterAgg(); }
       }).catch(function(){
-        renderMessages({ animate: true });
+        showChannelLoadError(ch);
         if (typeof onAfterRender === 'function') { try { onAfterRender(); } catch(e){} }
       });
     } else if (channelMessages[ch.id] && channelMessages[ch.id].length) {
@@ -1557,7 +1681,7 @@
           afterAgg();
         }
       }).catch(function() {
-        renderMessages({ animate: true });
+        showChannelLoadError(ch);
         if (typeof onAfterRender === 'function') { try { onAfterRender(); } catch (e) {} }
       });
     }
@@ -4566,6 +4690,8 @@
       go(user);
     }
   }
+  // 暴露给 doodle 登录卡复用：登录/注册/验证成功后直接进主页（与原 #login-form 同一套，经过验证可用）
+  window.__onLoginSuccess = onLoginSuccess;
 
   // 显示邮箱验证面板（注册返回 requireEmailVerification 时）
   function showVerifyPanel(email, password){
@@ -5062,7 +5188,7 @@
     var overlay = null, iframe = null;
     function openMemoryTree() {
       if (overlay && overlay.style.display === 'block') return; // 防重入
-      var ver = (window.v && String(window.v)) || '1.4.42';
+      var ver = (window.v && String(window.v)) || '1.4.57';
       if (!overlay) {
         overlay = document.createElement('div');
         overlay.className = 'mt-overlay';
@@ -5687,6 +5813,7 @@
     +         '<div class="chip-cardnum" id="chip-cardnum"></div>'
     +         '<div class="chip-holder"><div class="lbl">CARDHOLDER</div><div class="val" id="chip-holder"></div><div class="handle" id="chip-handle"></div></div>'
     +         '<div class="chip-valid"><div class="lbl">VALID</div><div class="val" id="chip-valid"></div><span class="chip-role-badge" id="chip-role"></span></div>'
+    +         '<div class="chip-tilt-gloss"></div>'
     +       '</div>'
     // 背面
     +       '<div class="chip-face back">'
@@ -5694,8 +5821,8 @@
     +         '<div class="chip-holo" id="chip-holo2"></div>'
     +         '<div class="chip-mag"></div>'
     +         '<div class="chip-num-print" id="chip-back-num"></div>'
-    +         '<div class="chip-sig" id="chip-back-sig"></div>'
-    +         '<div class="chip-cvv"><small>CVV</small><span id="chip-back-cvv">019</span></div>'
+    +         '<div class="chip-sig"><small>个签</small><span id="chip-back-sig-text"></span></div>'
+    +         '<div class="chip-cvv"><small>CVV</small><span id="chip-back-cvv">--</span></div>'
     +         '<div class="chip-hint" id="chip-back-hint"></div>'
     +         '<div class="chip-edit-panel" id="chip-edit-panel">'
     +           '<div class="chip-ep-header"><div class="chip-ep-title">编辑身份信息<small>EDIT IDENTITY</small></div>'
@@ -5704,8 +5831,8 @@
     +           '<div class="chip-ep-row"><div class="chip-ep-field"><label>昵称</label><input type="text" id="chip-ep-nickname" maxlength="16" placeholder="你的昵称"></div>'
     +             '<div class="chip-ep-field"><label>称号</label><input type="text" id="chip-ep-title" maxlength="12" placeholder="如：学习委员"></div></div>'
     +           '<div class="chip-ep-row"><div class="chip-ep-field"><label>身份</label><input type="text" id="chip-ep-handle" maxlength="20" placeholder="角色身份" readonly></div>'
-    +             '<div class="chip-ep-field"><label>CVV 安全码</label><input type="text" id="chip-ep-cvv" maxlength="4" inputmode="numeric" pattern="[0-9]*" placeholder="019"></div></div>'
-    +           '<div class="chip-ep-field"><label>签名</label><input type="text" id="chip-ep-signature" maxlength="20" placeholder="手写签名"></div>'
+    +             '<div class="chip-ep-field"><label>CVV 安全码</label><input type="text" id="chip-ep-cvv" maxlength="4" inputmode="numeric" pattern="[0-9]*" placeholder="你的幸运数字 / 专属密码（4位）"><small class="chip-ep-hint">可填你的幸运数字，全员可见</small></div></div>'
+    +           '<div class="chip-ep-field"><label>个签</label><input type="text" id="chip-ep-signature" maxlength="20" placeholder="编辑个签 · 展现你的独特态度（最多20字）"><small class="chip-ep-hint">一句话展示你的态度，全员可见</small></div>'
     +           '<div class="chip-ep-field"><label>卡面皮肤</label><div class="chip-ep-skin" id="chip-ep-skin-row"></div></div>'
     +           '<div class="chip-ep-msg" id="chip-ep-msg"></div>'
     +         '</div>'
@@ -5714,8 +5841,8 @@
     +           '<button class="btn-17 btn-admin" data-act="admin" id="chip-btn-admin"><span class="text-container"><span class="text">⚙ 管理</span></span></button>'
     +           '<button class="btn-17 btn-logout" data-act="logout"><span class="text-container"><span class="text">⏻ 退出</span></span></button>'
     +         '</div>'
+    +         '<div class="chip-tilt-gloss"></div>'
     +       '</div>'
-    +     '</div>'
     +   '</div>'
     + '<input type="file" id="chip-avatar-input" accept="image/*" style="display:none;">';
 
@@ -5734,12 +5861,12 @@
       var b = document.createElement('button');
       b.className = 'chip-skin-sw'; b.setAttribute('data-skin', key); b.style.background = s.surface;
       b.innerHTML = '<span>'+s.name+'</span>';
-      b.addEventListener('click', function(e){ e.stopPropagation(); chipApplySkin(key); });
+      b.addEventListener('click', function(e){ e.stopPropagation(); chipApplySkin(key, true); chipPersistSkin(key); });
       container.appendChild(b);
     });
   }
 
-  function chipApplySkin(key){
+  function chipApplySkin(key, persist){
     var s = CHIP_SKINS[key]; if(!s || !chipStage) return;
     chipStage.style.setProperty('--surface-bg', s.surface);
     chipStage.style.setProperty('--edit-bg', s.edit);
@@ -5752,9 +5879,21 @@
     chipStage.style.setProperty('--role-col', s.roleCol);
     chipStage.style.setProperty('--speck-o', s.speck);
     chipStage.setAttribute('data-skin', key);
-    try{ localStorage.setItem('chip-skin', key); }catch(e){}
+    if(persist !== false){
+      try{ localStorage.setItem('chip-skin', key); }catch(e){}
+    }
     var sws = document.querySelectorAll('.chip-skin-sw');
     for(var i=0;i<sws.length;i++){ sws[i].classList.toggle('active', sws[i].getAttribute('data-skin')===key); }
+  }
+
+  // 把自己选的皮肤写回数据库（profiles.card_skin），让他人看到的是你自己的选择
+  function chipPersistSkin(key){
+    if(!currentUser || !CHIP_SKINS[key]) return;
+    currentUser.card_skin = key;
+    var api = window.IF || IF;
+    if(api && api.updateMyProfile){
+      api.updateMyProfile(currentUser.id, { card_skin: key }).catch(function(){ /* 静默失败，下次再同步 */ });
+    }
   }
 
   function chipBuildCard(){
@@ -5774,6 +5913,34 @@
 
     chipEl('chip-avatar').addEventListener('click', function(e){ e.stopPropagation(); if(chipReadOnly) return; if(chipAvatarInput) chipAvatarInput.click(); });
     chipAvatarInput.addEventListener('change', chipOnAvatarChange);
+    (function bindTilt(){
+      if(!chipStage) return;
+      var maxRotate = 10;
+      function chipTiltOff(){ if(chipEntrance) chipEntrance.style.transform=''; if(chipStage) chipStage.classList.remove('tilt-active'); }
+      chipStage.addEventListener('mouseenter', function(){ if(!chipStage.classList.contains('editing')) chipStage.classList.add('tilt-active'); });
+      chipStage.addEventListener('mousemove', function(e){
+        if(chipStage.classList.contains('editing') || !chipEntrance) return;
+        var rect = chipStage.getBoundingClientRect();
+        var x = rect.width ? (e.clientX - rect.left)/rect.width : .5;
+        var y = rect.height ? (e.clientY - rect.top)/rect.height : .5;
+        var rx = -(y-.5)*maxRotate;
+        var ry = (x-.5)*maxRotate;
+        chipEntrance.style.transform = 'rotateX('+rx.toFixed(2)+'deg) rotateY('+ry.toFixed(2)+'deg) scale(1.02)';
+        chipStage.style.setProperty('--mx', (x*100).toFixed(1)+'%');
+        chipStage.style.setProperty('--my', (y*100).toFixed(1)+'%');
+        // 背面光圈：Y 轴翻转时背面坐标系与正面一致，直接复用鼠标坐标；
+        // X 轴（竖向）翻转时背面被水平+垂直镜像，需反向补偿，否则光斑落在鼠标对侧。
+        if(chipFlipped && chipBackAxis==='X'){
+          chipStage.style.setProperty('--back-mx', (100-x*100).toFixed(1)+'%');
+          chipStage.style.setProperty('--back-my', (100-y*100).toFixed(1)+'%');
+        } else {
+          chipStage.style.setProperty('--back-mx', (x*100).toFixed(1)+'%');
+          chipStage.style.setProperty('--back-my', (y*100).toFixed(1)+'%');
+        }
+      });
+      chipStage.addEventListener('mouseleave', chipTiltOff);
+      window._chipTiltOff = chipTiltOff;
+    })();
     chipEl('chip-ep-exit-btn').addEventListener('click', function(e){ e.stopPropagation(); chipSaveAndClose(); });
     (function(){ var b=chipEl('chip-ep-save-btn'); if(b) b.addEventListener('click', function(e){ e.stopPropagation(); chipSaveEdit(); }); })();
     (function(){ var b=chipEl('chip-ep-cancel-btn'); if(b) b.addEventListener('click', function(e){ e.stopPropagation(); chipCloseEdit(); }); })();
@@ -5855,11 +6022,22 @@
     var ca = u.created_at || (IF && IF.resolveAuthor ? (IF.resolveAuthor(u.id)||{}).created_at : null);
     chipEl('chip-valid').textContent = ca ? chipFmtDate(ca) : '—';
     chipEl('chip-back-num').textContent = chipFmtCardnum(u.username || '');
-    var sig = isReadOnly
-      ? (u.nickname||u.username||'')
-      : ((function(){ try{ return localStorage.getItem('chip-signature'); }catch(e){ return null; } })() || (u.nickname||u.username||''));
-    chipEl('chip-back-sig').textContent = sig;
-    var cvv = isReadOnly ? '***' : ((function(){ try{ return localStorage.getItem('chip-cvv'); }catch(e){ return null; } })() || '019');
+    // 个签：优先读 profile（全员可见）；空则显示提示，不再默认成昵称
+    var profSig = (u && typeof u.signature === 'string') ? u.signature : '';
+    var localSig = (function(){ try{ return localStorage.getItem('chip-signature'); }catch(e){ return null; } })();
+    var sig = isReadOnly ? profSig : (profSig || localSig || '');
+    var sigEl = chipEl('chip-back-sig-text');
+    if(sig){
+      sigEl.textContent = sig;
+      sigEl.classList.remove('chip-sig-empty');
+    } else {
+      sigEl.textContent = isReadOnly ? '这位同学还没留下个签' : '编辑个签 · 展现你的独特态度';
+      sigEl.classList.add('chip-sig-empty');
+    }
+    // CVV：优先读 profile；空则显示 "--" 占位，提示用户填写
+    var profCvv = (u && typeof u.cvv === 'string') ? u.cvv : '';
+    var localCvv = (function(){ try{ return localStorage.getItem('chip-cvv'); }catch(e){ return null; } })();
+    var cvv = isReadOnly ? (profCvv || '--') : (profCvv || localCvv || '--');
     chipEl('chip-back-cvv').textContent = cvv;
     chipEl('chip-back-hint').textContent = isReadOnly
       ? ('查看 '+(u.nickname||'用户')+' 的资料卡')
@@ -5890,14 +6068,33 @@
       chipShowCard((u && u.id) ? u : fallback, true);
     }
     if(cached && cached.id && cached.username){
-      renderRead(cached);
-    } else if(api && api.insforge){
+      renderRead(cached); // 先用缓存占位（card_skin 可能是登录时的陈旧值）
+    }
+    if(api && api.insforge){
+      // 异步取对方的 card_skin / signature / cvv；成功后仅局部更新对应字段，
+      // 不动整张卡片，避免返回结构异常时把资料卡重新渲染成 fallback（蓝+UUID+"用户"）
+      // 注意：InsForge(Supabase 系) .single() 返回 { data, error } 包装，必须读 r.data，
+      // 直接读 r.signature 永远是 undefined，导致此异步刷新此前完全失效（他人数据只靠陈旧缓存）。
       api.insforge.database.from('profiles')
-        .select('id,username,nickname,avatar_url,role,title,status,created_at')
+        .select('card_skin, signature, cvv')
         .eq('id', userId).single()
-        .then(function(r){ renderRead(r && !r.error ? r : null); })
-        .catch(function(){ renderRead(null); });
-    } else {
+        .then(function(r){
+          var row = (r && r.data) ? r.data : r;   // 兼容 {data,error} 与直接返回行两种形态
+          if(row && !row.error){
+            if(row.card_skin && CHIP_SKINS[row.card_skin] && chipStage) chipApplySkin(row.card_skin, false);
+            // 个签
+            var sigEl = chipEl('chip-back-sig-text');
+            var sig = (typeof row.signature === 'string') ? row.signature : '';
+            if(sigEl){
+              if(sig){ sigEl.textContent = sig; sigEl.classList.remove('chip-sig-empty'); }
+              else { sigEl.textContent = '这位同学还没留下个签'; sigEl.classList.add('chip-sig-empty'); }
+            }
+            // CVV
+            chipEl('chip-back-cvv').textContent = (typeof row.cvv === 'string' && row.cvv) ? row.cvv : '--';
+          }
+        })
+        .catch(function(e){ console.warn('[chip] load card extras failed', e); });
+    } else if(!(cached && cached.id && cached.username)){
       renderRead(null);
     }
   }
@@ -5906,6 +6103,17 @@
   function chipShowCard(u, isReadOnly){
     if(!u) return;
     chipReadOnly = !!isReadOnly;
+    /* 决定卡面皮肤：自己优先读自己的 card_skin（回退本地/默认，并持久化）；
+       他人只读对方 card_skin，且不写本地存储，避免"我看别人的卡也变成我的颜色" */
+    var skinKey;
+    if(isReadOnly){
+      skinKey = (u && CHIP_SKINS[u.card_skin]) ? u.card_skin : 'blue';
+      if(chipStage) chipApplySkin(skinKey, false);
+    } else {
+      skinKey = (u && CHIP_SKINS[u.card_skin]) ? u.card_skin
+              : (function(){ try{ return localStorage.getItem('chip-skin'); }catch(e){ return null; } })() || 'blue';
+      if(chipStage) chipApplySkin(skinKey, true);
+    }
     chipPopulate(u, isReadOnly);
     chipEl('chip-edit-panel').classList.remove('show');
     /* 只读模式：屏蔽换头像 + 隐藏编辑/管理/退出按钮与提示 */
@@ -5932,6 +6140,7 @@
 
   function chipCloseCard(){
     if(!chipOpen) return;
+    if(window._chipTiltOff) window._chipTiltOff();
     var tl = gsap.timeline({ onComplete:function(){ chipOverlay.classList.remove('show'); chipOpen=false; } });
     tl.to(chipEntrance, { rotationY:160, scale:0.3, x:-window.innerWidth*0.32, y:window.innerHeight*0.34, autoAlpha:0, duration:.7, ease:'back.in(1.2)' }, 0);
   }
@@ -5969,9 +6178,15 @@
 
   function chipOpenEdit(){
     var u = currentUser; if(!u) return;
+    if(chipStage) chipStage.classList.add('editing');
+    if(window._chipTiltOff) window._chipTiltOff();
     var handle = (function(){ try{ return localStorage.getItem('chip-handle'); }catch(e){ return null; } })() || (u.username ? u.username.split('@')[0] : '');
-    var cvv = (function(){ try{ return localStorage.getItem('chip-cvv'); }catch(e){ return null; } })() || '019';
-    var sig = (function(){ try{ return localStorage.getItem('chip-signature'); }catch(e){ return null; } })() || (u.nickname||u.username||'');
+    var profCvv = (u && typeof u.cvv === 'string') ? u.cvv : '';
+    var profSig = (u && typeof u.signature === 'string') ? u.signature : '';
+    var localCvv = (function(){ try{ return localStorage.getItem('chip-cvv'); }catch(e){ return null; } })();
+    var localSig = (function(){ try{ return localStorage.getItem('chip-signature'); }catch(e){ return null; } })();
+    var cvv = profCvv || localCvv || '';
+    var sig = profSig || localSig || '';
     var savedTitle = (function(){ try{ return localStorage.getItem('chip-title'); }catch(e){ return null; } })();
     var rMeta = ROLE_META[u.role] || ROLE_META.student;
     chipEl('chip-ep-nickname').value = u.nickname || u.username || '';
@@ -5987,6 +6202,7 @@
   }
 
   function chipCloseEdit(){
+    if(chipStage) chipStage.classList.remove('editing');
     chipEl('chip-edit-panel').classList.remove('show');
     gsap.to('.chip-face.back .chip-actions, .chip-face.back .chip-hint', { autoAlpha:1, duration:.25, delay:.1 });
   }
@@ -6004,19 +6220,20 @@
     var nn = (chipEl('chip-ep-nickname').value||'').trim();
     var ttl = (chipEl('chip-ep-title') ? (chipEl('chip-ep-title').value||'').trim() : '');
     /* 身份(角色)只读，不保存 */
-    var cvv = (chipEl('chip-ep-cvv').value||'').trim() || '019';
-    var sig = (chipEl('chip-ep-signature').value||'').trim() || nn;
+    var cvv = (chipEl('chip-ep-cvv').value||'').trim().replace(/[^0-9]/g,'');
+    var sig = (chipEl('chip-ep-signature').value||'').trim();
     /* ① 同步存 localStorage（瞬间完成） */
     try{ localStorage.setItem('chip-title', ttl); localStorage.setItem('chip-cvv', cvv); localStorage.setItem('chip-signature', sig); }catch(e){}
     /* ② 立即关闭编辑面板（丝滑） */
     chipCloseEdit();
-    /* ③ 更新内存中的昵称/称号（即时生效，不等 API） */
+    /* ③ 更新内存中的昵称/称号/个签/CVV（即时生效，不等 API） */
     if(nn){ u.nickname = nn; var navName = chipEl('user-name'); if(navName) navName.textContent = nn; }
     if(ttl !== undefined) u.title = ttl;
-    chipPopulate();
+    u.signature = sig; u.cvv = cvv;
+    chipPopulate(u, false);
     /* ④ API 后台静默保存（不阻塞 UI） */
-    if(IF && IF.updateMyProfile && nn){
-      IF.updateMyProfile(u.id, { nickname: nn, title: ttl || '' })
+    if(IF && IF.updateMyProfile){
+      IF.updateMyProfile(u.id, { nickname: nn, title: ttl || '', signature: sig, cvv: cvv })
         .then(function(){ renderSettingsAccount(); })
         .catch(function(){ /* 静默失败，下次再试 */ });
     }
@@ -6028,16 +6245,16 @@
     if(!nn){ chipShowMsg('昵称不能为空','err'); chipEl('chip-ep-nickname').focus(); return; }
     var ttl = (chipEl('chip-ep-title').value||'').trim();
     /* 身份(角色)只读，不保存 */
-    var cvv = (chipEl('chip-ep-cvv').value||'').trim() || '019';
-    var sig = (chipEl('chip-ep-signature').value||'').trim() || nn;
+    var cvv = (chipEl('chip-ep-cvv').value||'').trim().replace(/[^0-9]/g,'');
+    var sig = (chipEl('chip-ep-signature').value||'').trim();
     try{ localStorage.setItem('chip-title', ttl); localStorage.setItem('chip-cvv', cvv); localStorage.setItem('chip-signature', sig); }catch(e){}
     var btn = chipEl('chip-ep-save-btn');
-    Promise.resolve(IF && IF.updateMyProfile ? IF.updateMyProfile(u.id, { nickname: nn, title: ttl }) : Promise.reject(new Error('后端未就绪')))
+    Promise.resolve(IF && IF.updateMyProfile ? IF.updateMyProfile(u.id, { nickname: nn, title: ttl, signature: sig, cvv: cvv }) : Promise.reject(new Error('后端未就绪')))
       .then(function(){
-        u.nickname = nn; u.title = ttl;
+        u.nickname = nn; u.title = ttl; u.signature = sig; u.cvv = cvv;
         var navName = chipEl('user-name'); if(navName) navName.textContent = nn;
         showToast('资料已保存 ✅');
-        chipPopulate();
+        chipPopulate(u, false);
         renderSettingsAccount();
         chipShowMsg('✓ 已保存，卡片已更新','ok');
         setTimeout(chipCloseEdit, 900);

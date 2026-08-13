@@ -786,7 +786,7 @@ function bindUI() {
       return;
     }
     // 兜底：直接打开记忆树（无父页面，如书签/新标签）时，带版本号跳回主频道
-    let v = '1.4.42';
+    let v = '1.4.57';
     try {
       v = localStorage.getItem('mt_v') || v;
       if (!v) {

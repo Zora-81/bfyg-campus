@@ -28,7 +28,16 @@
   --role-bg:linear-gradient(135deg,#bfe9ff,#7fc8ff); --role-col:#0a2240;
   --speck-o:.10;
 }
-.chip-entrance{width:100%; height:100%; transform-style:preserve-3d}
+.chip-entrance{width:100%; height:100%; transform-style:preserve-3d; transition:transform .15s ease-out, box-shadow .15s ease-out; will-change:transform}
+.chip-stage.tilt-active .chip-entrance{box-shadow:0 50px 80px -20px rgba(0,0,0,.65), 0 20px 40px rgba(0,0,0,.35)}
+.chip-face .chip-tilt-gloss{position:absolute; inset:0; border-radius:20px; pointer-events:none; z-index:25; opacity:0; transition:opacity .15s; mix-blend-mode:screen; background:radial-gradient(circle at var(--mx,50%) var(--my,50%), rgba(255,255,255,.24) 0%, transparent 55%)}
+.chip-stage.tilt-active .chip-face .chip-tilt-gloss{opacity:1}
+.chip-stage.editing .chip-entrance{transform:none !important}
+.chip-stage.editing .chip-tilt-gloss{opacity:0}
+/* 背面 face 自身 rotateY(180deg) 会被翻转层 .chip-flip 的 rotateY(180deg) 抵消成 360°=正向，
+ * 因此 Y 轴翻转展开后背面坐标系与正面一致，不镜像；但若沿 X 轴翻转（竖向翻），
+ * 背面会同时被水平+垂直镜像。这里用专属变量 --back-mx/--back-my，由 JS 按翻转轴实时校正。 */
+.chip-face.back .chip-tilt-gloss{background:radial-gradient(circle at var(--back-mx,var(--mx,50%)) var(--back-my,var(--my,50%)), rgba(255,255,255,.24) 0%, transparent 55%)}
 .chip-flip{
   position:relative; width:100%; height:100%;
   transform-style:preserve-3d;
@@ -223,6 +232,9 @@
     inset 0 2px 4px rgba(0,0,0,.06), 0 1px 0 rgba(255,255,255,.8);
   text-shadow:inset 0 1px 2px rgba(0,0,0,.20), 0 .5px 0 rgba(255,255,255,.6);
 }
+.chip-face.back .chip-sig small{position:absolute; top:-14px; left:2px; font-size:7px; letter-spacing:1px; color:var(--sub); text-shadow:0 -.5px 0 rgba(0,0,0,.25), 0 .5px 0 rgba(255,255,255,.04);}
+/* 个签空态提示：弱化、非手写体 */
+.chip-face.back .chip-sig .chip-sig-empty{font-family:inherit; font-style:normal; font-size:12px; color:rgba(27,35,54,.45); letter-spacing:.5px;}
 .chip-face.back .chip-cvv small{position:absolute; top:-14px; right:2px; font-size:7px; letter-spacing:1px; color:var(--sub);
   text-shadow:0 -.5px 0 rgba(0,0,0,.25), 0 .5px 0 rgba(255,255,255,.04);
 }
@@ -348,6 +360,7 @@
   border-color:rgba(124,131,255,.6); box-shadow:0 0 0 3px rgba(124,131,255,.15);
 }
 .chip-edit-panel .chip-ep-field input::placeholder{ color:var(--sub); opacity:.7 }
+.chip-edit-panel .chip-ep-hint{ font-size:9px; color:var(--sub); opacity:.7; margin-top:1px; letter-spacing:.2px; }
 .chip-edit-panel .chip-ep-row{ display:flex; gap:8px; }
 .chip-edit-panel .chip-ep-row .chip-ep-field{ flex:1; }
 /* 编辑内：卡面选择 */

@@ -31,6 +31,15 @@ let newRecallHandler = null        // 当前频道的 realtime 撤回监听器�
 async function loadProfiles() {
   try {
     const { data, error } = await insforge.database
+      .from('profiles').select('id, username, nickname, avatar_url, role, title, status, created_at, card_skin, signature, cvv')
+    if (!error && data) {
+      data.forEach(p => { profileCache[p.id] = p })
+      return profileCache
+    }
+  } catch (e) { /* 忽略 */ }
+  // 降级：如果 card_skin 列还未迁移（select 失败），则不带该列再查一次，确保聊天资料卡不崩溃
+  try {
+    const { data, error } = await insforge.database
       .from('profiles').select('id, username, nickname, avatar_url, role, title, status, created_at')
     if (!error && data) data.forEach(p => { profileCache[p.id] = p })
   } catch (e) { /* 忽略 */ }
@@ -54,6 +63,9 @@ function adaptUser(user) {
     role: p.role || 'student',
     avatar_url: p.avatar_url || '',
     title: p.title || '',
+    card_skin: p.card_skin || 'blue',
+    signature: p.signature || '',
+    cvv: p.cvv || '019',
     status: p.status || 'active'
   }
 }
@@ -65,9 +77,12 @@ async function updateMyProfile(userId, fields) {
   if (typeof fields.nickname === 'string') patch.nickname = fields.nickname.trim()
   if (typeof fields.title === 'string')    patch.title = fields.title.trim().slice(0, 12)
   if (typeof fields.avatar_url === 'string') patch.avatar_url = fields.avatar_url
+  if (typeof fields.card_skin === 'string') patch.card_skin = fields.card_skin
+  if (typeof fields.signature === 'string') patch.signature = fields.signature.slice(0, 20)
+  if (typeof fields.cvv === 'string') patch.cvv = fields.cvv.replace(/[^0-9]/g, '').slice(0, 4) || '019'
   if (Object.keys(patch).length === 0) return profileCache[userId]
   const { error } = await insforge.database
-    .from('profiles').update(patch).eq('id', userId).select()
+    .from('profiles').update(patch).eq('id', userId)
   if (error) throw error
   profileCache[userId] = Object.assign({}, profileCache[userId], patch)
   return profileCache[userId]
@@ -83,11 +98,11 @@ async function ensureProfile(user, desiredUsername, desiredNickname) {
   const { error } = await withTimeout(
     insforge.database.from('profiles').insert([{
       id: user.id, username, nickname, email: user.email || null, role: 'student', status: 'active'
-    }]).select(),
+    }]),
     6000
   )
   if (!error) {
-    profileCache[user.id] = { id: user.id, username, nickname, email: user.email || null, avatar_url: '', role: 'student', title: '', status: 'active' }
+    profileCache[user.id] = { id: user.id, username, nickname, email: user.email || null, avatar_url: '', role: 'student', title: '', card_skin: 'blue', signature: '', cvv: '019', status: 'active' }
   }
   return adaptUser(user)
 }
@@ -255,32 +270,76 @@ async function listChannels() {
   return data
 }
 
+// 跨国链路（Cloudflare→新加坡 InsForge）偶发抖动：查询也加重试 + 超时兜底，与 sendMessage 对齐，
+// 避免单次 SELECT 失败后整屏静默空白（原 switchChannel.catch 直接 renderMessages 出空白欢迎卡）。
 async function getMessages(channelId, opts) {
   opts = opts || {}
   const offset = opts.offset || 0
   const limit = opts.limit || 15
-  const { data, error } = await insforge.database
-    .from('messages').select('*')
-    .eq('channel_id', channelId)
-    .is('parent_id', null) // 顶层消息单独分页，回复由 getReplyMessages 补齐
-    .order('created_at', { ascending: false })
-    .range(offset, offset + limit - 1)
-  if (error) throw error
-  return data || []
+  let lastErr = null
+  const MAX = 3
+  for (let attempt = 0; attempt < MAX; attempt++) {
+    const t0 = Date.now()
+    try {
+      const withTimeout = (p, ms) => Promise.race([
+        p,
+        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))
+      ])
+      const { data, error } = await withTimeout(
+        insforge.database
+          .from('messages').select('*')
+          .eq('channel_id', channelId)
+          .is('parent_id', null) // 顶层消息单独分页，回复由 getReplyMessages 补齐
+          .order('created_at', { ascending: false })
+          .range(offset, offset + limit - 1),
+        12000
+      )
+      if (error) throw error
+      if (attempt > 0) console.warn(`[getMessages] 第${attempt + 1}次成功，耗时${Date.now() - t0}ms`)
+      return data || []
+    } catch (e) {
+      lastErr = e
+      console.warn(`[getMessages] 第${attempt + 1}次失败(${Date.now() - t0}ms):`, e && (e.message || e.name || e))
+      // 最后一次不重试
+      if (attempt < MAX - 1) await new Promise(r => setTimeout(r, 600 * (attempt + 1))) // 600/1200ms 退避
+    }
+  }
+  throw lastErr
 }
 
 // 回复/评论单独拉取，避免顶层消息分页被子消息挤占，同时恢复评论区与评论计数。
+// 评论/回复查询同样走跨国链路，加超时 + 重试（外层 loadChannelSnapshot 已有 .catch 兜底为空数组，这里降低触发概率）
 async function getReplyMessages(channelId, opts) {
   opts = opts || {}
   const limit = opts.limit || 1000
-  const { data, error } = await insforge.database
-    .from('messages').select('*')
-    .eq('channel_id', channelId)
-    .not('parent_id', 'is', null)
-    .order('created_at', { ascending: true })
-    .limit(limit)
-  if (error) throw error
-  return data || []
+  let lastErr = null
+  const MAX = 3
+  for (let attempt = 0; attempt < MAX; attempt++) {
+    const t0 = Date.now()
+    try {
+      const withTimeout = (p, ms) => Promise.race([
+        p,
+        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))
+      ])
+      const { data, error } = await withTimeout(
+        insforge.database
+          .from('messages').select('*')
+          .eq('channel_id', channelId)
+          .not('parent_id', 'is', null)
+          .order('created_at', { ascending: true })
+          .limit(limit),
+        12000
+      )
+      if (error) throw error
+      if (attempt > 0) console.warn(`[getReplyMessages] 第${attempt + 1}次成功，耗时${Date.now() - t0}ms`)
+      return data || []
+    } catch (e) {
+      lastErr = e
+      console.warn(`[getReplyMessages] 第${attempt + 1}次失败(${Date.now() - t0}ms):`, e && (e.message || e.name || e))
+      if (attempt < MAX - 1) await new Promise(r => setTimeout(r, 600 * (attempt + 1)))
+    }
+  }
+  throw lastErr
 }
 
 async function sendMessage(channelId, content, authorId, parentId) {

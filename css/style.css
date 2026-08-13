@@ -155,7 +155,6 @@ body.main-active #stars-canvas,
 body.main-active .vignette-overlay,
 body.main-active .grain-overlay,
 body.main-active #welcome-screen,
-body.main-active #loading-stage,
 body.main-active #login-submit-loader,
 body.main-active #monster-login { display:none !important; }
 
@@ -476,52 +475,6 @@ body.main-active #monster-login { display:none !important; }
 }
 .welcome-enter:active { transform:translateY(-1px) scale(.98); }
 
-/* ── 第二阶段：加载过渡 ── */
-.loading-stage {
-  position:fixed; inset:0; z-index:90;
-  display:flex; align-items:center; justify-content:center;
-  background:#4c28d9;
-  opacity:0; pointer-events:none; visibility:hidden;
-  transition:opacity .5s ease, background-color .6s ease;
-}
-.loading-stage.active { opacity:1; pointer-events:auto; visibility:visible; }
-.loading-goo-defs { position:absolute; width:0; height:0; pointer-events:none; }
-
-.loading-dots {
-  position:relative; width:60px; height:60px;
-  display:flex; align-items:center; justify-content:center;
-  filter:url(#goo);
-}
-.loading-stage.phase-rotating .loading-dots,
-.loading-stage.phase-merging  .loading-dots { animation:dotSpin 1.6s ease-in; }
-@keyframes dotSpin { from{transform:rotate(0)} to{transform:rotate(720deg)} }
-.loading-dot {
-  position:absolute; width:24px; height:24px; border-radius:50%; background:#fff;
-  transition:transform .4s ease-in-out;
-}
-.loading-stage.phase-rotating .loading-dot:first-child { transform:translateY(-25px); }
-.loading-stage.phase-rotating .loading-dot:last-child  { transform:translateY(25px); }
-.loading-stage.phase-merging  .loading-dot { transform:translateY(0) scale(1.5) !important; }
-
-.loading-star {
-  position:absolute; width:84px; height:84px; opacity:0;
-  transform:scale(.2) rotate(-45deg);
-  transition:all .4s cubic-bezier(.34,1.56,.64,1);
-}
-.loading-star svg { width:100%; height:100%; display:block; fill:#fff; }
-.loading-stage.phase-star   .loading-star,
-.loading-stage.phase-flying .loading-star { opacity:1; transform:scale(1) rotate(0); }
-.loading-stage.phase-rotating .loading-star,
-.loading-stage.phase-merging  .loading-star { display:none; }
-
-/* 飞行星（JS 克隆到 body 层） */
-.loading-fly-star {
-  position:fixed; z-index:95; width:84px; height:84px; opacity:0; pointer-events:none;
-  transform:translate(-50%,-50%) scale(.4) rotate(-45deg);
-  transition:transform .85s cubic-bezier(.34,1.56,.64,1), opacity .5s ease;
-}
-.loading-fly-star svg { width:100%; height:100%; fill:#0f172a; display:block; }
-
 /* ── 第三阶段：小怪兽登录界面 ── */
 .monster-login {
   position:fixed; inset:0; z-index:80;
@@ -607,12 +560,7 @@ body.main-active #monster-login { display:none !important; }
 .monster-login.state-pwfocus .monster-orange .mouth { width:18px; }
 /* 状态：邮箱聚焦 → 紫色怪兽歪头看向输入框 */
 .monster-login.state-email .monster-purple { --by:-12px; --br:5deg; }
-/* 状态：错误 → 眼睛朝下、紫怪低头、嘴变倒弧 */
-.monster-login.state-error .pupil { transform:translateY(4px) !important; }
-.monster-login.state-error .monster-purple { --bx:-20px; --br:-8deg; }
-.monster-login.state-error .monster-purple-face { --fx:-60px; --fy:40px; --fr:-30deg; }
-.monster-login.state-error .monster-orange .mouth { transform:scaleY(-1); }
-.monster-login.state-error .monster-yellow .mouth { transform:rotate(15deg); width:30px; }
+/* 错误态视觉统一由 html/index.html 的 #monster-login.state-error 处理（瞪眼 + 黄嘴变 O），此处不再重复 */
 
 /* 入场掉落（仿 BobZhang spring drop：紫先落、橙弹入、黑/黄随后）
    用独立 translate 属性，避免与眼睛跟随的 transform(CSS 变量) 冲突 */
@@ -758,38 +706,21 @@ body.main-active #monster-login { display:none !important; }
 }
 .login-submit-loader.active { opacity:1; pointer-events:auto; visibility:visible; }
 
-.orbit-loader {
+.loader-stage {
   position:relative; width:240px; height:240px; margin-bottom:22px;
   display:flex; align-items:center; justify-content:center;
 }
-.orbit-svg {
-  position:absolute; inset:0; width:100%; height:100%;
-  overflow:visible; pointer-events:none;
-  transform-origin:50% 50%;
+.loader-stage svg { width:100%; height:100%; overflow:visible; pointer-events:none; }
+.ll-ring, .ll-hex, .ll-core, .ll-core-pulse, .ll-core-dot, .ll-particle {
+  transform-box:fill-box; transform-origin:center;
 }
-.orbit-svg ellipse {
-  fill:none; stroke-width:1.5; stroke-linecap:round; stroke-dasharray:340; stroke-dashoffset:40;
-  filter:drop-shadow(0 0 6px currentColor);
+.ll-cursor {
+  display:inline-block; width:2px; height:15px; background:#9b8cff; margin-left:3px;
+  vertical-align:-2px; animation:llBlink 1s steps(1) infinite;
 }
-.orbit-1 { color:#6366f1; transform:rotate(0deg); }
-.orbit-1 ellipse { stroke:#6366f1; opacity:.85; }
-.orbit-2 { color:#22d3ee; transform:rotate(60deg); }
-.orbit-2 ellipse { stroke:#22d3ee; opacity:.65; }
-.orbit-3 { color:#a855f7; transform:rotate(120deg); }
-.orbit-3 ellipse { stroke:#a855f7; opacity:.55; }
-
-.orbit-badge {
-  position:absolute; width:84px; height:84px; border-radius:50%; object-fit:cover;
-  border:3px solid rgba(255,255,255,0.95);
-  box-shadow:0 0 0 4px rgba(99,102,241,.25), 0 0 28px 8px rgba(99,102,241,.45), 0 0 60px 16px rgba(99,102,241,.2);
-  left:50%; top:50%; transform:translate(-50%,-50%);
-  display:block; margin:0; padding:0;
-  z-index:2;
-}
+@keyframes llBlink { 50% { opacity:0; } }
 
 .submit-loader-text { font-size:1rem; color:#e2e8f0; font-weight:600; letter-spacing:1px; text-shadow:0 1px 8px rgba(0,0,0,.6); }
-.submit-loader-dots::after { content:''; animation:loaderDots 1.5s steps(4,end) infinite; }
-@keyframes loaderDots { 0%{content:''} 25%{content:'.'} 50%{content:'..'} 75%{content:'...'} 100%{content:''} }
 
 /*/* ══════════════════════════════════════════════════
    3D CAROUSEL (Login)
@@ -3422,3 +3353,33 @@ body.dm-mode .nav-hash { display:none !important; }
     radial-gradient(ellipse 58% 58% at 82% 82%, rgba(58,96,190,.28), transparent 62%),
     radial-gradient(ellipse 52% 52% at 60% 52%, rgba(128,82,200,.12), transparent 72%);
 }
+
+/* ===== 频道消息加载失败错误态（涂鸦便签风，对齐登录页 doodle-login.html 设计语言） ===== */
+.channel-load-error{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  text-align:center;gap:12px;padding:34px 28px;margin:14px auto 0;max-width:340px;
+  font-family:"Comic Sans MS","Chalkboard SE","Marker Felt","Gochi Hand",sans-serif;
+  background-color:#fff9e6;
+  background-image:repeating-linear-gradient(
+    transparent,transparent 28px,rgba(0,0,0,0.06) 28px,rgba(0,0,0,0.06) 30px);
+  background-position:0 12px;
+  border:2px solid #323232;
+  border-radius:8px 24px 8px 24px / 24px 8px 24px 8px;
+  box-shadow:4px 4px 0 #323232;
+  color:#323232;
+  transform:rotate(-1deg);
+}
+.cle-icon{font-size:42px;line-height:1;filter:drop-shadow(1px 1px 0 rgba(0,0,0,0.12));}
+.cle-title{font-size:1.15rem;font-weight:900;color:#323232;transform:rotate(-2deg);letter-spacing:.5px;}
+.cle-desc{font-size:0.8rem;color:#6b6256;max-width:260px;line-height:1.55;}
+.cle-retry{
+  margin-top:6px;padding:9px 26px;border:2px solid #323232;cursor:pointer;
+  font-family:inherit;font-size:0.95rem;font-weight:900;letter-spacing:1px;color:#323232;
+  background-color:#ff6b6b;
+  border-radius:16px 5px 16px 5px / 5px 16px 5px 16px;
+  box-shadow:4px 4px 0 #323232;
+  transition:transform .15s ease,box-shadow .15s ease,background-color .15s ease;
+  transform:rotate(1deg);
+}
+.cle-retry:hover{transform:translateY(-2px) rotate(2deg);background-color:#ff5252;box-shadow:5px 5px 0 #323232;}
+.cle-retry:active{transform:translate(3px,3px) rotate(0);box-shadow:0 0 0 #323232;}
