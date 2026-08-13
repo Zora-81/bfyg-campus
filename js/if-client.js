@@ -144,19 +144,43 @@ async function signUp(email, password, username, nickname) {
     return { requireEmailVerification: true, email }
   }
   // 409 已存在：区分「已验证（应去登录）」与「注册一半（未验证，需补验证）」
-  // 用重发验证码做探测：未验证 → 成功（码已发出）；已验证 → 报错 already confirmed。
-  // 这样已验证的邮箱不会误进验证面板，未验证的也不会卡死。
-  async function classifyAlreadyExists() {
+  // 探测信号用「用密码登录」而非重发验证码：直接用 REST 试 grant_type=password，
+  // 只读响应、不建会话——成功(含 access_token)=已验证；返回 email not confirmed=未验证。
+  // 旧方案用 resendVerificationEmail 当探测器，但 InsForge 对已验证账号重发往往直接成功
+  // （或报错串不匹配），导致已验证邮箱被误判成「注册一半」弹验证面板、不显示「请直接登录」。
+  async function classifyAlreadyExists(password) {
     try {
-      await insforge.auth.resendVerificationEmail({ email })
-      return { requireEmailVerification: true, alreadyExisted: true, halfRegistered: true, codeSent: true, email }
-    } catch (re) {
-      const rem = ((re && (re.message || re.error_description)) || '').toLowerCase()
-      if (/already confirmed|already verified|email already/i.test(rem)) {
+      const resp = await fetch(`${INS_FORGE_URL}/api/auth/token?grant_type=password`, {
+        method: 'POST',
+        headers: {
+          'apikey': ANON_KEY,
+          'Authorization': `Bearer ${ANON_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ email, password })
+      })
+      let b = null
+      try { b = await resp.json() } catch (e) {}
+      const txt = ((b && (b.message || b.error || b.error_description)) || ('HTTP ' + resp.status)).toLowerCase()
+      if (resp.ok && b && b.access_token) {
+        // 已验证且密码正确 → 引导去登录（不自动登录，按用户要求只提示）
         return { alreadyRegisteredVerified: true, email }
       }
-      // 探测失败兜底：仍当作未验证，交由前端再发一次，避免卡死
-      return { requireEmailVerification: true, alreadyExisted: true, halfRegistered: true, codeSent: false, email }
+      if (/not confirmed|not_confirmed|unconfirmed|email not confirmed/i.test(txt)) {
+        // 邮箱存在但未验证 → 重发验证码并弹面板补验证
+        try {
+          await insforge.auth.resendVerificationEmail({ email })
+          return { requireEmailVerification: true, alreadyExisted: true, halfRegistered: true, codeSent: true, email }
+        } catch (re) {
+          return { requireEmailVerification: true, alreadyExisted: true, halfRegistered: true, codeSent: false, email }
+        }
+      }
+      // 其余失败（含密码错 / 未知错误）→ 邮箱已存在，保守引导去登录
+      return { alreadyRegisteredVerified: true, email }
+    } catch (e) {
+      console.warn('[classifyAlreadyExists] 登录探测异常:', e && e.message)
+      // 网络等异常兜底：保守当已注册，引导登录（避免把已验证账号误塞进验证面板）
+      return { alreadyRegisteredVerified: true, email }
     }
   }
   let body = null, ok = false
@@ -182,7 +206,7 @@ async function signUp(email, password, username, nickname) {
       // 已存在 → 探测是「已验证」还是「注册一半」，再决定提示语
       if (/already|exists|registered|已注册|已存在|占用|in use/i.test(em)) {
         stashPending()
-        return await classifyAlreadyExists()
+        return await classifyAlreadyExists(password)
       }
       throw error
     }
@@ -195,7 +219,7 @@ async function signUp(email, password, username, nickname) {
     const isExists = /already|exists|registered|已注册|已存在|占用|in use/i.test(m)
     if (isExists) {
       stashPending()
-      return await classifyAlreadyExists()
+      return await classifyAlreadyExists(password)
     }
     // 其余含 verif/confirm/email 的提示 → 视为新账号待验证
     if (/verif|confirm|not confirmed|email/i.test(m)) {
