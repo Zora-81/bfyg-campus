@@ -61,7 +61,9 @@ for (const f of htmlFiles) {
 }
 
 // 从 HTML 提取本次版本号（如 1.0.0 语义化版本），用于文件名哈希，避免手机浏览器忽略 query string 缓存
-const v = (htmlSrc['index.html'] || '').match(/[?&]v=([a-zA-Z0-9][a-zA-Z0-9._-]*)/)?.[1] || 'build';
+const v = (htmlSrc['index.html'] || '').match(/[?&]v=([a-zA-Z0-9][a-zA-Z0-9._-]*)/)?.[1]
+  || (htmlSrc['index.html'] || '').match(/var\s+v\s*=\s*['"]([0-9][0-9._-]*)['"]/)?.[1]
+  || 'build';
 
 // 仅重命名「本次从源码拷贝的原始文件名」，跳过历史遗留的已哈希文件，避免重复追加版本号（web_build 清理被钩子拦截时尤其重要）
 const jsSrcNames = fs.existsSync('js') ? fs.readdirSync('js').filter(f => f.endsWith('.js')) : [];
