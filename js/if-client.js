@@ -450,7 +450,7 @@ async function deleteUserAsAdmin(userId, adminId) {
     body: { userId, adminId }
   })
   if (error) throw error
-  if (data && data.error) throw new Error(data.error)
+  if (data && data.error) throw new Error(data.error + (data.detail ? '（' + data.detail + '）' : ''))
   return data
 }
 

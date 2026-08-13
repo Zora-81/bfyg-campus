@@ -36,6 +36,8 @@ copyDir('css', path.join(out, 'css'));
 copyDir('js', path.join(out, 'js'));
 copyDir('images', path.join(out, 'images'));
 if (fs.existsSync('audio')) copyDir('audio', path.join(out, 'audio'));
+// 注意：Cloudflare Pages Functions 由 wrangler 从「项目根 functions/」读取构建，
+// 不能拷进 web_build（否则 .ts 源会被当静态文件上传且可能与真实路由冲突）。
 
 // Cloudflare Pages 缓存头规则
 if (fs.existsSync('_headers')) {

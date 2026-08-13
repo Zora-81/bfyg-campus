@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { createClient } from 'npm:@insforge/sdk';
+import { createClient, createAdminClient } from '@insforge/sdk';
 
 // 管理员删除用户的 Edge Function
 // 调用方（管理员浏览器）通过 IF.functions.invoke 传入：
@@ -15,15 +15,17 @@ const CORS = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
-export default async function (req: Request): Promise<Response> {
+export async function onRequest(context: any): Promise<Response> {
+  const req = context.request;
+  const env = context.env || {};
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
   if (req.method !== 'POST') {
     return new Response(JSON.stringify({ error: 'method not allowed' }), { status: 405, headers: { ...CORS, 'Content-Type': 'application/json' } });
   }
 
-  const base = Deno.env.get('INSFORGE_BASE_URL') || 'https://r683ebwu.ap-southeast.insforge.app';
-  const anon = Deno.env.get('ANON_KEY') || 'anon_a09338fe0bdb3e2a0797c92a73a8431ddae4b38f7b12333fe41ebbeccba6e2ea';
-  const serviceKey = Deno.env.get('SERVICE_KEY') || 'ik_fa7b403d7e7eac279f0c2c681e32f69b';
+  const base = env.INSFORGE_BASE_URL || 'https://r683ebwu.ap-southeast.insforge.app';
+  const anon = env.ANON_KEY || 'anon_a09338fe0bdb3e2a0797c92a73a8431ddae4b38f7b12333fe41ebbeccba6e2ea';
+  const serviceKey = env.SERVICE_KEY || 'ik_fa7b403d7e7eac279f0c2c681e32f69b';
 
   let body: Record<string, unknown>;
   try { body = await req.json(); } catch {
@@ -59,7 +61,7 @@ export default async function (req: Request): Promise<Response> {
 
   // ── 用 service key 删除 auth.users（级联删除依赖数据）──
   try {
-    const admin = createClient({ apiKey: serviceKey });
+    const admin = createAdminClient({ baseUrl: base, apiKey: serviceKey });
     const { error } = await admin.database
       .schema('auth')
       .from('users')

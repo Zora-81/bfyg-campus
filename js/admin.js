@@ -1263,6 +1263,7 @@
           logAdmin('delete_user', '删除用户 ' + label, null, state.userEditingId);
         }).catch(function (err) {
           showToast('删除失败：' + ((err && err.message) || '未知错误'), 'error');
+          console.error('[admin.js] 删除用户失败详情:', err);
         }).finally(function () {
           deleteUserBtn.disabled = false;
           deleteUserBtn.textContent = '删除用户';

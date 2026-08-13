@@ -24,6 +24,7 @@ server/node_modules/
 # Cloudflare Wrangler 本地状态
 .wrangler/
 worker/.wrangler/
+_worker.bundle
 
 # 构建产物（当前 web_build 由 _build.mjs 生成，可重建）
 web_build/

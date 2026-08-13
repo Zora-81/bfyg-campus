@@ -1,6 +1,6 @@
 // @ts-nocheck
-import { createClient, createAdminClient } from 'npm:@insforge/sdk';
-import bcrypt from 'npm:bcryptjs@2.4.3';
+import { createClient, createAdminClient } from '@insforge/sdk';
+import bcrypt from 'bcryptjs';
 
 // 管理员重置用户密码的 Edge Function
 // 调用方（管理员浏览器）通过 IF.functions.invoke 传入：
@@ -15,16 +15,18 @@ const CORS = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
-export default async function (req: Request): Promise<Response> {
+export async function onRequest(context: any): Promise<Response> {
+  const req = context.request;
+  const env = context.env || {};
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
   if (req.method !== 'POST') {
     return new Response(JSON.stringify({ error: 'method not allowed' }), { status: 405, headers: { ...CORS, 'Content-Type': 'application/json' } });
   }
 
-  const base = Deno.env.get('INSFORGE_BASE_URL') || 'https://r683ebwu.ap-southeast.insforge.app';
-  const anon = Deno.env.get('ANON_KEY') || 'anon_a09338fe0bdb3e2a0797c92a73a8431ddae4b38f7b12333fe41ebbeccba6e2ea';
+  const base = env.INSFORGE_BASE_URL || 'https://r683ebwu.ap-southeast.insforge.app';
+  const anon = env.ANON_KEY || 'anon_a09338fe0bdb3e2a0797c92a73a8431ddae4b38f7b12333fe41ebbeccba6e2ea';
   // service key 拥有 auth schema 写入权限（服务端保密，不进浏览器）
-  const serviceKey = Deno.env.get('SERVICE_KEY') || 'ik_fa7b403d7e7eac279f0c2c681e32f69b';
+  const serviceKey = env.SERVICE_KEY || 'ik_fa7b403d7e7eac279f0c2c681e32f69b';
 
   let body: Record<string, unknown>;
   try { body = await req.json(); } catch {
