@@ -1,13 +1,16 @@
 // @ts-nocheck
-import { createClient, createAdminClient } from '@insforge/sdk';
-
 // 管理员删除用户的 Edge Function
-// 调用方（管理员浏览器）通过 IF.functions.invoke 传入：
-//   { userId, adminId }
+// 调用方（管理员浏览器）通过 fetch 直接命中本函数：
+//   POST https://bfgzlt.cc.cd/admin-delete-user  body: { userId, adminId }
 // 服务端校验 adminId 对应的 profiles.role === 'admin'，
-// 再用 service key 删除 auth.users 记录。
-// 由于 public.profiles/messages/channel_members/notifications 等表均对 auth.users(id)
-// 声明了 ON DELETE CASCADE / SET NULL，删除 auth 用户会自动级联清理应用数据。
+// 再用 service key 调 public.delete_user RPC 删除 auth.users（级联清理应用数据）。
+//
+// 为什么走 RPC：InsForge 的 PostgREST 只暴露 public schema，直接用
+// .schema('auth').from('users').delete() 会报
+// "The schema must be one of the following: public"。
+// 故改为在 public.delete_user（SECURITY DEFINER）内 DELETE auth.users，
+// 这跟项目里 apply_moderation / overturn_moderation 是同一套成熟模式。
+// 依赖：需先在 InsForge 执行 migrations/2026-08-13-delete-user-rpc.sql 部署该函数。
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -59,18 +62,37 @@ export async function onRequest(context: any): Promise<Response> {
     return new Response(JSON.stringify({ error: '鉴权失败', detail: String(e) }), { status: 403, headers: { ...CORS, 'Content-Type': 'application/json' } });
   }
 
-  // ── 用 service key 删除 auth.users（级联删除依赖数据）──
+  // ── 用 service key 调 public.delete_user RPC 删除 auth.users（级联清理依赖数据）──
+  // RPC 在 public schema，绕开 "schema must be one of the following: public" 限制。
   try {
-    const admin = createAdminClient({ baseUrl: base, apiKey: serviceKey });
-    const { error } = await admin.database
-      .schema('auth')
-      .from('users')
-      .delete()
-      .eq('id', userId);
+    const delUrl = `${base}/api/database/rpc/delete_user`;
+    const delRes = await fetch(delUrl, {
+      method: 'POST',
+      headers: {
+        'apikey': serviceKey,
+        'Authorization': `Bearer ${serviceKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ p_user_id: userId }),
+    });
+    const delText = await delRes.text();
+    let delJson = null;
+    try { delJson = JSON.parse(delText); } catch { /* 非 JSON 响应 */ }
 
-    if (error) {
-      console.error('[admin-delete-user] 删除失败', error);
-      return new Response(JSON.stringify({ error: '删除失败', detail: error.message || String(error) }), { status: 500, headers: { ...CORS, 'Content-Type': 'application/json' } });
+    if (!delRes.ok) {
+      // 404 / function does not exist = RPC 尚未部署
+      if (delRes.status === 404 || /delete_user.*does not exist/i.test(delText)) {
+        return new Response(JSON.stringify({
+          error: '删除函数未部署',
+          detail: '请在 InsForge 项目执行：insforge db import migrations/2026-08-13-delete-user-rpc.sql',
+        }), { status: 500, headers: { ...CORS, 'Content-Type': 'application/json' } });
+      }
+      return new Response(JSON.stringify({ error: '删除失败', detail: delText || ('HTTP ' + delRes.status) }), { status: 500, headers: { ...CORS, 'Content-Type': 'application/json' } });
+    }
+
+    const ok = !!(delJson && (delJson.ok === true || (delJson.data && delJson.data.ok === true)));
+    if (!ok) {
+      return new Response(JSON.stringify({ error: '删除失败', detail: JSON.stringify(delJson) }), { status: 500, headers: { ...CORS, 'Content-Type': 'application/json' } });
     }
 
     console.log(`[admin-delete-user] 管理员 ${adminId} 删除了用户 ${userId}`);
