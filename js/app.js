@@ -344,18 +344,10 @@
     pendingVerifyEmail = null; pendingVerifyPassword = null;
     var nickGroup = document.getElementById('group-nickname');
     if(mode === 'signin'){
-      loginCardTitle.textContent = '欢迎回来';
-      loginCardSub.textContent = '使用你的账号登录校园频道';
-      btnSubmitText.textContent = '登录';
-      loginFooterSwitch.innerHTML = '还没有账号？<a href="#" id="link-switch-mode">立即注册</a>';
       if(nickGroup) nickGroup.style.display = 'none';
       var pwHint = document.getElementById('pw-hint');
       if(pwHint){ pwHint.style.display='none'; pwHint.className='input-hint'; }
     } else {
-      loginCardTitle.textContent = '加入我们';
-      loginCardSub.textContent = '创建账号，开启你的校园之旅';
-      btnSubmitText.textContent = '注册';
-      loginFooterSwitch.innerHTML = '已有账号？<a href="#" id="link-switch-mode">立即登录</a>';
       if(nickGroup) nickGroup.style.display = '';
       var pwHint2 = document.getElementById('pw-hint');
       if(pwHint2){ pwHint2.style.display=''; pwHint2.className='input-hint'; pwHint2.textContent='密码至少 8 位，需同时包含字母和数字'; }
