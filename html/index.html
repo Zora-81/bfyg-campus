@@ -19,7 +19,7 @@
 
     (function(){
 
-      var v = '1.4.85';
+      var v = '1.4.86';
 
       // 暴露版本号全局：__APP_VERSION 供设置面板；window.v 供 app.js 记忆树版本读取（根治兜底串漏 bump）
       window.__APP_VERSION = v;
@@ -1410,7 +1410,7 @@
 
             <span class="settings-info-label">版本</span>
 
-            <span class="settings-info-value" id="appVersionLabel">v1.4.85</span>
+            <span class="settings-info-value" id="appVersionLabel">v1.4.86</span>
 
           </div>
 
@@ -2162,21 +2162,43 @@
           forgotResendBtn.textContent = '重新发送验证码';
         }
       }
-      function forgotSend(email) {
+      // 后端限流等英文错误 → 中文友好提示
+      function friendlyErr(err) {
+        var m = (err && err.message) || '';
+        if (/too many/i.test(m)) return '发送过于频繁，请 15 分钟后再试';
+        var wait = m.match(/wait\s+(\d+)\s+seconds/i);
+        if (wait) return '操作太频繁，请 ' + wait[1] + ' 秒后再试';
+        return m || '操作失败';
+      }
+      // 发送 / 重发验证码：统一入口
+      // - IF 未就绪时挂起，等 IF_READY 后自动重试（不再报"后端未就绪"）
+      // - 一旦真正发起请求，无论成功失败都进 30s 冷却，避免撞后端限流
+      function requestResetCode(email, isResend) {
         var IF = window.IF;
-        if (!IF) { setStatus('⚠️ 后端(IF)未就绪，请稍候再试', 'err'); return; }
+        if (!IF) {
+          setStatus('⏳ 正在初始化后端，请稍候…', 'info');
+          if (forgotSendBtn) forgotSendBtn.disabled = true;
+          if (forgotResendBtn) forgotResendBtn.disabled = true;
+          window.addEventListener('IF_READY', function once() {
+            window.removeEventListener('IF_READY', once);
+            requestResetCode(email, isResend);
+          });
+          return;
+        }
         if (forgotSendBtn) forgotSendBtn.disabled = true;
+        if (forgotResendBtn) forgotResendBtn.disabled = true;
         if (forgotErr) forgotErr.textContent = '';
-        setStatus('⏳ 正在发送验证码...', 'info');
+        setStatus(isResend ? '⏳ 正在重新发送验证码...' : '⏳ 正在发送验证码...', 'info');
         IF.sendResetPasswordEmail(email).then(function () {
           if (forgotSendBtn) forgotSendBtn.disabled = false;
           if (forgotSub) forgotSub.textContent = '验证码已发送至 ' + email + '，请查收';
-          setStatus('📧 验证码已发送', 'ok');
+          setStatus('📧 验证码已' + (isResend ? '重新' : '') + '发送', 'ok');
           startForgotCountdown(30);
         }).catch(function (err) {
-          if (forgotSendBtn) forgotSendBtn.disabled = false;
-          if (forgotErr) forgotErr.textContent = (err && err.message) || '发送失败';
-          setStatus('❌ ' + ((err && err.message) || '发送失败'), 'err');
+          var msg = friendlyErr(err);
+          if (forgotErr) forgotErr.textContent = msg;
+          setStatus('❌ ' + msg, 'err');
+          startForgotCountdown(30); // 即使失败也冷却，避免重复请求撞后端限流
         });
       }
       if (forgotLink) {
@@ -2189,24 +2211,14 @@
         forgotSendBtn.addEventListener('click', function () {
           var email = (forgotEmail && forgotEmail.value || '').trim();
           if (!email) { if (forgotErr) forgotErr.textContent = '请输入邮箱'; return; }
-          forgotSend(email);
+          requestResetCode(email, false);
         });
       }
       if (forgotResendBtn) {
         forgotResendBtn.addEventListener('click', function () {
           var email = (forgotEmail && forgotEmail.value || '').trim();
           if (!email) { if (forgotErr) forgotErr.textContent = '请输入邮箱'; return; }
-          forgotResendBtn.disabled = true;
-          setStatus('⏳ 正在重新发送验证码...', 'info');
-          var IF = window.IF;
-          if (!IF) { setStatus('⚠️ 后端(IF)未就绪，请稍候再试', 'err'); return; }
-          IF.sendResetPasswordEmail(email).then(function () {
-            setStatus('📧 验证码已重新发送', 'ok');
-            startForgotCountdown(30);
-          }).catch(function (err) {
-            setStatus('❌ ' + ((err && err.message) || '重发失败'), 'err');
-            stopForgotCountdown();
-          });
+          requestResetCode(email, true);
         });
       }
       if (forgotSubmitBtn) {
