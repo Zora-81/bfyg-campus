@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { createClient } from '@insforge/sdk';
+import { createClient } from 'npm:@insforge/sdk';
 
 // ══════════════════════════════════════════════════
 //  人设提示词：仿「寒塘审判」风格的校园小管家
@@ -90,9 +90,7 @@ function matchBlocklist(content: string, words: Array<{ word: string; category: 
   return null;
 }
 
-export async function onRequest(context: any): Promise<Response> {
-  const env = context.env || {};
-  const req = context.request;
+export default async function (req: Request): Promise<Response> {
   const cors = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -100,9 +98,9 @@ export async function onRequest(context: any): Promise<Response> {
   };
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
 
-  const base = env.INSFORGE_BASE_URL || 'https://r683ebwu.ap-southeast.insforge.app';
-  const anon = env.ANON_KEY || 'anon_a09338fe0bdb3e2a0797c92a73a8431ddae4b38f7b12333fe41ebbeccba6e2ea';
-  const model = env.AI_MODEL || 'openai/gpt-4o-mini';
+  const base = Deno.env.get('INSFORGE_BASE_URL') || 'https://r683ebwu.ap-southeast.insforge.app';
+  const anon = Deno.env.get('ANON_KEY') || 'anon_a09338fe0bdb3e2a0797c92a73a8431ddae4b38f7b12333fe41ebbeccba6e2ea';
+  const model = Deno.env.get('AI_MODEL') || 'openai/gpt-4o-mini';
 
   let body: Record<string, unknown>;
   try { body = await req.json(); }

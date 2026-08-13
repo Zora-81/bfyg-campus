@@ -3,7 +3,11 @@
 // 服务端持有 ANON_KEY，前端不暴露。优先尝试 Agnes AI（环境变量），兜底 InsForge AI Gateway。
 // 前端：POST /ai-summary { title, location, year } -> { summary, tags[] }
 
-// 环境变量改在 onRequest 内从 context.env 读取（Workers 运行时无 Deno）
+const AGNES_BASE = Deno.env.get('AGNES_BASE_URL') || '';
+const AGNES_KEY = Deno.env.get('AGNES_API_KEY') || '';
+const BASE = Deno.env.get('INSFORGE_BASE_URL') || 'https://r683ebwu.ap-southeast.insforge.app';
+const ANON = Deno.env.get('ANON_KEY') || 'anon_a09338fe0bdb3e2a0797c92a73a8431ddae4b38f7b12333fe41ebbeccba6e2ea';
+const MODEL = Deno.env.get('AI_MODEL') || 'openai/gpt-4o-mini';
 
 const SYS = `你是宝丰一高校园频道的「记忆档案员」。
 用户会给你一段校园记忆的标题、地点、年份。请你：
@@ -18,14 +22,7 @@ function jsonFrom(text) {
   try { return JSON.parse(m[0]); } catch { return null; }
 }
 
-export async function onRequest(context: any): Promise<Response> {
-  const env = context.env || {};
-  const req = context.request;
-  const AGNES_BASE = env.AGNES_BASE_URL || '';
-  const AGNES_KEY = env.AGNES_API_KEY || '';
-  const BASE = env.INSFORGE_BASE_URL || 'https://r683ebwu.ap-southeast.insforge.app';
-  const ANON = env.ANON_KEY || 'anon_a09338fe0bdb3e2a0797c92a73a8431ddae4b38f7b12333fe41ebbeccba6e2ea';
-  const MODEL = env.AI_MODEL || 'openai/gpt-4o-mini';
+export default async function (req: Request): Promise<Response> {
   const cors = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -50,7 +47,7 @@ export async function onRequest(context: any): Promise<Response> {
         method: 'POST',
         headers: { Authorization: `Bearer ${AGNES_KEY}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: env.AGNES_MODEL || 'agnes-2.0-flash',
+          model: Deno.env.get('AGNES_MODEL') || 'agnes-2.0-flash',
           messages: [{ role: 'system', content: SYS }, { role: 'user', content: user }],
         }),
       });
