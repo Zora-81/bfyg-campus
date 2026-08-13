@@ -443,14 +443,25 @@ async function moderateMessage(msg) {
   }
 }
 
-// 管理员删除用户：通过 Edge Function 用 service key 删除 auth.users（级联清理 profiles/messages 等）
+// 管理员删除用户：直接调用部署在 Cloudflare Pages 上的 Edge Function（/admin-delete-user）。
+// 注意：不能用 insforge.functions.invoke —— 那套走 InsForge 协议（api.bfgzlt.cc.cd/functions/{slug}，
+// 由 InsForge 的 Deno 运行时处理），而本函数已改为 Cloudflare Workers 格式并部署在 bfgzlt.cc.cd 路由下，
+// 两者域名/路径都对不上，invoke 永远调不到。这里用同源 fetch 直接命中 Cloudflare 上的函数。
 async function deleteUserAsAdmin(userId, adminId) {
   if (!userId || !adminId) throw new Error('缺少 userId 或 adminId')
-  const { data, error } = await insforge.functions.invoke('admin-delete-user', {
-    body: { userId, adminId }
+  const res = await fetch('https://bfgzlt.cc.cd/admin-delete-user', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userId, adminId })
   })
-  if (error) throw error
-  if (data && data.error) throw new Error(data.error + (data.detail ? '（' + data.detail + '）' : ''))
+  let data = null
+  try { data = await res.json() } catch (e) { data = null }
+  if (!res.ok || (data && data.error)) {
+    const msg = (data && data.error)
+      ? (data.error + (data.detail ? '（' + data.detail + '）' : ''))
+      : ('HTTP ' + res.status)
+    throw new Error(msg)
+  }
   return data
 }
 
