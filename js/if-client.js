@@ -443,6 +443,17 @@ async function moderateMessage(msg) {
   }
 }
 
+// 管理员删除用户：通过 Edge Function 用 service key 删除 auth.users（级联清理 profiles/messages 等）
+async function deleteUserAsAdmin(userId, adminId) {
+  if (!userId || !adminId) throw new Error('缺少 userId 或 adminId')
+  const { data, error } = await insforge.functions.invoke('admin-delete-user', {
+    body: { userId, adminId }
+  })
+  if (error) throw error
+  if (data && data.error) throw new Error(data.error)
+  return data
+}
+
 async function listNotifications() {
   const { data, error } = await insforge.database
     .from('notifications').select('*').order('created_at', { ascending: false })
@@ -916,7 +927,7 @@ const IF = {
   loadProfiles, resolveAuthor, adaptUser, ensureProfile, completePendingProfile, updateMyProfile,
   signIn, signUp, signOut, getCurrentUser, verifyEmail, resendVerification,
   sendResetPasswordEmail, exchangeResetPasswordToken, resetPassword,
-  listChannels, getMessages, getReplyMessages, sendMessage, moderateMessage,
+  listChannels, getMessages, getReplyMessages, sendMessage, moderateMessage, deleteUserAsAdmin,
   listNotifications, unreadCount, markRead, markAllRead,
   getCurrentUserId, notifyMentions, searchUsers, friendsList, friendRequest, friendRespond, friendRemove,
   findOrCreateDm, notifyDm,

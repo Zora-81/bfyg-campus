@@ -1241,6 +1241,34 @@
     document.getElementById('user-modal-close').addEventListener('click', closeUserModal);
     document.getElementById('user-modal-cancel').addEventListener('click', closeUserModal);
     document.getElementById('user-modal-confirm').addEventListener('click', confirmUserModal);
+    // 删除用户（通过 Edge Function 用 service key 删除 auth.users，级联清理应用数据）
+    var deleteUserBtn = document.getElementById('user-modal-delete');
+    if (deleteUserBtn) {
+      deleteUserBtn.addEventListener('click', function () {
+        if (!state.userEditingId) return;
+        var u = state.usersData.find(function (x) { return x.id === state.userEditingId; });
+        if (!u) return;
+        if (currentUser && state.userEditingId === currentUser.id) {
+          showToast('不能删除当前登录的管理员账号', 'error');
+          return;
+        }
+        var label = u.nickname || u.username || '该用户';
+        if (!confirm('确认删除用户「' + label + '」？\n\n此操作会同时删除该账号在 auth 系统的记录，并级联删除其资料、消息、通知等数据，不可恢复！')) return;
+        deleteUserBtn.disabled = true;
+        deleteUserBtn.textContent = '删除中...';
+        IF.deleteUserAsAdmin(state.userEditingId, currentUser.id).then(function () {
+          showToast('已删除用户「' + label + '」', 'success');
+          closeUserModal();
+          loadUsers();
+          logAdmin('delete_user', '删除用户 ' + label, null, state.userEditingId);
+        }).catch(function (err) {
+          showToast('删除失败：' + ((err && err.message) || '未知错误'), 'error');
+        }).finally(function () {
+          deleteUserBtn.disabled = false;
+          deleteUserBtn.textContent = '删除用户';
+        });
+      });
+    }
     // 代用户发起密码重置（平台不开放管理员直改，走邮件重置流程）
     var sendResetBtn = document.getElementById('btn-send-reset');
     if (sendResetBtn) sendResetBtn.addEventListener('click', function () {
