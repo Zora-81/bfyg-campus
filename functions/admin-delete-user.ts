@@ -84,7 +84,7 @@ export async function onRequest(context: any): Promise<Response> {
       if (delRes.status === 404 || /delete_user.*does not exist/i.test(delText)) {
         return new Response(JSON.stringify({
           error: '删除函数未部署',
-          detail: '请在 InsForge 项目执行：insforge db import migrations/2026-08-13-delete-user-rpc.sql',
+          detail: '请在 InsForge 项目执行：insforge db migrations up（或 db query 应用 migrations/20260813214000_delete-user-rpc.sql）',
         }), { status: 500, headers: { ...CORS, 'Content-Type': 'application/json' } });
       }
       return new Response(JSON.stringify({ error: '删除失败', detail: delText || ('HTTP ' + delRes.status) }), { status: 500, headers: { ...CORS, 'Content-Type': 'application/json' } });

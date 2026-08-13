@@ -15,8 +15,9 @@
 --   Headers: apikey: <serviceKey>, Authorization: Bearer <serviceKey>
 --   Body:   { "p_user_id": "<uuid>" }
 --
--- 部署：insforge db import 本文件（CLI 的 `db query` 会拒 CREATE FUNCTION，
---       但 `db import` 可以；幂等，可重复执行）。
+-- 部署：insforge db migrations up（按 <时间戳>_<名称>.sql 命名，幂等可重复）。
+--       注意 InsForge 角色体系无 service_role/authenticated，service key 以
+--       postgres / project_admin 身份执行，故 GRANT 给这两个角色。
 -- ============================================================================
 
 CREATE OR REPLACE FUNCTION public.delete_user(p_user_id UUID)
@@ -34,5 +35,5 @@ EXCEPTION WHEN OTHERS THEN
 END;
 $$;
 
--- 授权：仅已登录用户（含 service_role）可调用；函数内部仅删目标用户，无越权风险
-GRANT EXECUTE ON FUNCTION public.delete_user(UUID) TO authenticated, service_role;
+-- 授权：service key 以 postgres / project_admin 身份调用；函数内部仅删目标用户，无越权风险
+GRANT EXECUTE ON FUNCTION public.delete_user(UUID) TO postgres, project_admin;
