@@ -46,7 +46,14 @@
         if (newer(v, cur) && newer(v, latest)) {
           location.replace(location.href.split('?')[0] + '?v=' + v);
         } else if (latest && newer(latest, v)) {
-          location.replace(location.href.split('?')[0] + '?v=' + latest);
+          // localStorage 里存过比当前部署更高的版本（通常是本地预览过但没部署的版本）。
+          // 旧逻辑跳向那个不存在的版本 → 无限重定向死循环 → 页面反复刷新、版本号像"掉了"。
+          // 改为：修正 localStorage 以当前部署版本为准，最多重定向一次，绝不死循环。
+          try {
+            localStorage.setItem('site_v', v);
+            localStorage.setItem('site_v_latest', v);
+          } catch (e) {}
+          if (cur !== v) location.replace(location.href.split('?')[0] + '?v=' + v);
         } else {
           localStorage.setItem('site_v', v);
           localStorage.setItem('site_v_latest', v);
