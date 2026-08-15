@@ -5,22 +5,22 @@
   color-scheme: dark;
   font-family: "Noto Sans SC", system-ui, -apple-system, sans-serif;
 
-  /* Background layers */
-  --bg-base:       #1a1b1e;
-  --bg-deeper:     #111214;
-  --bg-surface:    #232428;
-  --bg-elevated:   #2c2d32;
-  --bg-hover:      #3e3f47;
-  --bg-active:     #4a4b55;
-  --bg-input:      #383a40;
-  --bg-overlay:    rgba(0,0,0,0.55);
-  --bg-card:       #2b2d31;
+  /* Background layers — 深空星云基调（带蓝紫色相渗透） */
+  --bg-base:       #161830;
+  --bg-deeper:     #0f1226;
+  --bg-surface:    #1e2140;
+  --bg-elevated:   #282c4a;
+  --bg-hover:      #363b5c;
+  --bg-active:     #434868;
+  --bg-input:      #222642;
+  --bg-overlay:    rgba(8,10,30,0.60);
+  --bg-card:       #222645;
 
   /* Text */
-  --text:          #f2f3f5;
-  --text-sec:      #b5bac1;
-  --text-dim:      #80848e;
-  --text-muted:    #5c5e66;
+  --text:          #eef0f6;
+  --text-sec:      #c0c4d4;
+  --text-dim:      #949ab0;
+  --text-muted:    #686d82;
   --text-link:     #a78bfa;
   --text-mention:  #f0b232;
 
@@ -49,9 +49,9 @@
   --cyan:          #00b4d8;
 
   /* Borders & radii */
-  --border:        rgba(255,255,255,0.06);
-  --border-light:  rgba(255,255,255,0.10);
-  --border-active: rgba(255,255,255,0.18);
+  --border:        rgba(255,255,255,0.10);
+  --border-light:  rgba(255,255,255,0.14);
+  --border-active: rgba(255,255,255,0.22);
   --border-focus:  var(--accent);
   --r-xs:          4px;
   --r:             8px;
@@ -59,11 +59,11 @@
   --r-lg:          16px;
   --r-xl:          24px;
 
-  /* Shadows */
-  --sh-sm:        0 4px 12px rgba(0,0,0,0.28);
-  --sh:           0 8px 24px rgba(0,0,0,0.30);
-  --sh-lg:        0 16px 48px rgba(0,0,0,0.40);
-  --sh-card:      0 4px 12px rgba(0,0,0,0.35);
+  /* Shadows — 带蓝紫色调的投影 */
+  --sh-sm:        0 4px 12px rgba(8,10,30,0.35);
+  --sh:           0 8px 24px rgba(8,10,30,0.38);
+  --sh-lg:        0 16px 48px rgba(8,10,30,0.45);
+  --sh-card:      0 4px 12px rgba(8,10,30,0.40);
 
   /* Transitions (CSS fallback; GSAP handles most animations) */
   --t:            0.18s ease;
@@ -100,7 +100,7 @@
 *,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
 html { scroll-behavior:smooth; }
 body {
-  margin:0; background:#020412; color:var(--text); line-height:1.5;
+  margin:0; background:#0d1027; color:var(--text); line-height:1.5;
   overflow:hidden; height:100vh; height:100dvh;
   -webkit-font-smoothing:antialiased;
 }
@@ -143,7 +143,7 @@ button, a, .ch-item, .quick-action, .member-item, .msg-author,
 }
 .vignette-overlay {
   position:fixed; inset:0; z-index:2; pointer-events:none;
-  background:radial-gradient(ellipse at 50% 50%, transparent 50%, rgba(2,4,14,0.25) 75%, rgba(0,0,0,0.50) 95%);
+  background:radial-gradient(ellipse at 50% 50%, transparent 55%, rgba(13,16,39,0.20) 78%, rgba(8,10,30,0.35) 95%);
 }
 .grain-overlay {
   position:fixed; inset:0; z-index:2; pointer-events:none; opacity:0.02;
@@ -161,15 +161,15 @@ body.main-active #monster-login { display:none !important; }
 /* ── 主题背景（极光为默认 :root） ── */
 :root {
   --main-bg-image:
-    radial-gradient(ellipse 90% 55% at 25% 18%, rgba(124,92,252,0.55) 0%, transparent 55%),
-    radial-gradient(ellipse 80% 50% at 75% 22%, rgba(0,210,255,0.40) 0%, transparent 48%),
-    radial-gradient(ellipse 100% 45% at 55% 88%, rgba(88,101,242,0.45) 0%, transparent 52%),
-    radial-gradient(ellipse 70% 35% at 12% 75%, rgba(236,72,153,0.28) 0%, transparent 50%),
-    radial-gradient(ellipse 60% 40% at 90% 70%, rgba(167,139,250,0.25) 0%, transparent 50%),
-    linear-gradient(180deg, #080b20 0%, #0f1232 25%, #140f35 55%, #0d0f28 100%);
-  --main-bg-overlay: linear-gradient(180deg, rgba(5,8,22,0.15) 0%, rgba(5,8,22,0.42) 100%);
+    radial-gradient(ellipse 90% 55% at 25% 18%, rgba(124,92,252,0.65) 0%, transparent 55%),
+    radial-gradient(ellipse 80% 50% at 75% 22%, rgba(0,210,255,0.50) 0%, transparent 48%),
+    radial-gradient(ellipse 100% 45% at 55% 88%, rgba(88,101,242,0.55) 0%, transparent 52%),
+    radial-gradient(ellipse 70% 35% at 12% 75%, rgba(236,72,153,0.35) 0%, transparent 50%),
+    radial-gradient(ellipse 60% 40% at 90% 70%, rgba(167,139,250,0.32) 0%, transparent 50%),
+    linear-gradient(180deg, #0d1027 0%, #121638 25%, #161842 55%, #0f1235 100%);
+  --main-bg-overlay: linear-gradient(180deg, rgba(8,12,35,0.10) 0%, rgba(8,12,35,0.30) 100%);
   --main-bg-blur: 0px;
-  --main-bg-dim: 0.38;
+  --main-bg-dim: 0.28;
 }
 
 /* ── 白昼极简（全站浅色主题） ── */
@@ -288,20 +288,20 @@ body.main-active #monster-login { display:none !important; }
 /* ═══ 星空 Starfield（默认主题 · 深蓝夜空 + Canvas 星河） ═══ */
 [data-theme="starry"] {
   color-scheme: dark;
-  --bg-base:       #070b1a;
-  --bg-deeper:     #04060f;
-  --bg-surface:    rgba(18,26,52,0.55);
-  --bg-elevated:   rgba(26,36,68,0.66);
-  --bg-hover:      rgba(44,56,96,0.45);
-  --bg-active:     rgba(58,72,120,0.55);
-  --bg-input:      rgba(22,30,58,0.72);
-  --bg-overlay:    rgba(2,4,12,0.42);
-  --bg-card:       rgba(20,28,56,0.60);
+  --bg-base:       #0e1230;
+  --bg-deeper:     #0a0d24;
+  --bg-surface:    rgba(22,30,62,0.60);
+  --bg-elevated:   rgba(30,42,82,0.70);
+  --bg-hover:      rgba(48,60,108,0.50);
+  --bg-active:     rgba(62,78,135,0.60);
+  --bg-input:      rgba(26,36,68,0.76);
+  --bg-overlay:    rgba(8,12,35,0.50);
+  --bg-card:       rgba(24,34,68,0.65);
 
-  --text:          #eaf0ff;
-  --text-sec:      #aab6d8;
-  --text-dim:      #6f7da6;
-  --text-muted:    #4b557a;
+  --text:          #eef0f6;
+  --text-sec:      #b8c4e2;
+  --text-dim:      #7a88b4;
+  --text-muted:    #566090;
   --text-link:     #7fd6ff;
   --text-mention:  #ffd86b;
 

@@ -19,7 +19,7 @@
 
     (function(){
 
-      var v = '1.4.89';
+      var v = '1.5.1';
 
       // 暴露版本号全局：__APP_VERSION 供设置面板；window.v 供 app.js 记忆树版本读取（根治兜底串漏 bump）
       window.__APP_VERSION = v;
@@ -43,18 +43,21 @@
         var m = location.search.match(/[?&]v=([^&]+)/);
         var cur = m ? m[1] : '';
         var latest = localStorage.getItem('site_v_latest') || '';
-        if (newer(v, cur) && newer(v, latest)) {
+        // 规则：只要 URL 上没有版本号、或版本旧于当前 HTML，一律跳转到 ?v=当前版本。
+        // 这样无论 localStorage 状态如何，URL 永远带当前版本号，不会"版本号掉了"。
+        // 死循环防护：跳转目标恒为当前 HTML 的 v，落地后 cur === v → 不再跳（最多一次）。
+        if (newer(v, cur)) {
+          // localStorage 若存了比当前更高的版本（本地预览过未部署），以当前部署版本修正，
+          // 避免下次继续按高版本判断；然后照常跳当前版本。
+          if (latest && newer(latest, v)) {
+            try {
+              localStorage.setItem('site_v', v);
+              localStorage.setItem('site_v_latest', v);
+            } catch (e) {}
+          }
           location.replace(location.href.split('?')[0] + '?v=' + v);
-        } else if (latest && newer(latest, v)) {
-          // localStorage 里存过比当前部署更高的版本（通常是本地预览过但没部署的版本）。
-          // 旧逻辑跳向那个不存在的版本 → 无限重定向死循环 → 页面反复刷新、版本号像"掉了"。
-          // 改为：修正 localStorage 以当前部署版本为准，最多重定向一次，绝不死循环。
-          try {
-            localStorage.setItem('site_v', v);
-            localStorage.setItem('site_v_latest', v);
-          } catch (e) {}
-          if (cur !== v) location.replace(location.href.split('?')[0] + '?v=' + v);
         } else {
+          // URL 版本 == 当前版本（稳定态），记录后不再跳转
           localStorage.setItem('site_v', v);
           localStorage.setItem('site_v_latest', v);
         }
@@ -1417,7 +1420,7 @@
 
             <span class="settings-info-label">版本</span>
 
-            <span class="settings-info-value" id="appVersionLabel">v1.4.89</span>
+            <span class="settings-info-value" id="appVersionLabel">v1.5.1</span>
 
           </div>
 
