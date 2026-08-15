@@ -349,6 +349,8 @@ async function getMessages(channelId, opts) {
         12000
       )
       if (error) throw error
+      // 防御：SDK 偶发返回 { data: null, error: null }（成功但空），勿被 || [] 静默吞成空白欢迎卡
+      if (data == null) throw new Error('messages query returned null data')
       if (attempt > 0) console.warn(`[getMessages] 第${attempt + 1}次成功，耗时${Date.now() - t0}ms`)
       return data || []
     } catch (e) {
@@ -385,6 +387,7 @@ async function getReplyMessages(channelId, opts) {
         12000
       )
       if (error) throw error
+      if (data == null) throw new Error('reply messages query returned null data')
       if (attempt > 0) console.warn(`[getReplyMessages] 第${attempt + 1}次成功，耗时${Date.now() - t0}ms`)
       return data || []
     } catch (e) {

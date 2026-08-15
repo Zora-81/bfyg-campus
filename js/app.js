@@ -1406,6 +1406,50 @@
     }
   }
 
+  // 频道首次/跳转加载后若顶层消息为空：跨国链路偶发"成功但空响应"(data:[] error:null)，
+  // 不会走 .catch 错误态，而是静默渲染空白欢迎卡。这里自愈：自动重试一次；仍空则给手动重试按钮。
+  var _autoRetryEmpty = {};
+  function handleEmptyChannel(ch, opts) {
+    opts = opts || {};
+    if (_autoRetryEmpty[ch.id]) {
+      renderEmptyChannel(ch);
+      return;
+    }
+    _autoRetryEmpty[ch.id] = true;
+    showMessageSkeleton();
+    setTimeout(function () {
+      delete channelMessages[ch.id];
+      currentChannel = null;
+      switchChannel(ch);
+    }, 1000);
+  }
+  function renderEmptyChannel(ch) {
+    if (!messagesArea) return;
+    if (_skeletonTL) { _skeletonTL.kill(); _skeletonTL = null; }
+    messagesArea.innerHTML = '';
+    var welcome = document.createElement('div'); welcome.className = 'welcome-card';
+    var wcKey = chHeroMap[ch ? ch.name : ''] || 'chat';
+    welcome.setAttribute('data-ch', wcKey);
+    welcome.innerHTML = '<span class="welcome-hero">'+(chHeroIcon[wcKey]||chHeroIcon.chat)+'</span>'+
+      '<div class="welcome-text"><h3>'+escapeHtml(ch ? ch.name : '')+'</h3><p>'+(ch ? (ch.description||'') : '')+'</p></div>';
+    messagesArea.appendChild(welcome);
+    var tip = document.createElement('div');
+    tip.className = 'channel-load-error';
+    tip.innerHTML = '<div class="cle-icon">💬</div>'+
+      '<div class="cle-title">该频道暂无消息</div>'+
+      '<div class="cle-desc">可能是网络抖动导致加载不完整，点下方按钮重试</div>'+
+      '<button class="cle-retry" type="button">↻ 重新加载</button>';
+    messagesArea.appendChild(tip);
+    var btn = tip.querySelector('.cle-retry');
+    if (btn) {
+      btn.addEventListener('click', function() {
+        delete channelMessages[ch.id];
+        currentChannel = null;
+        switchChannel(ch);
+      });
+    }
+  }
+
   // ── 右侧边栏渲染（贴吧风格：热点话题 + 频道推荐）──
   function renderRightSidebar() {
     var hotEl = document.getElementById('hot-topics');
@@ -1613,6 +1657,8 @@
       showMessageSkeleton();
       loadChannelSnapshot(ch, { offset: 0, limit: 200 }).then(function(snapshot){
         var list = snapshot.top;
+        _autoRetryEmpty[ch.id] = false;
+        if (list.length === 0) { handleEmptyChannel(ch, { limit: 200 }); return; }
         channelMessages[ch.id] = snapshot.all;
         _olderOffset = 200;
         _noMoreOlder = list.length < 200;
@@ -1644,6 +1690,8 @@
       showMessageSkeleton();
       loadChannelSnapshot(ch, { offset: 0, limit: RENDER_WIN }).then(function(snapshot) {
         var list = snapshot.top;
+        _autoRetryEmpty[ch.id] = false;
+        if (list.length === 0) { handleEmptyChannel(ch, { limit: RENDER_WIN }); return; }
         channelMessages[ch.id] = snapshot.all;
         _olderOffset = RENDER_WIN;
         _noMoreOlder = list.length < RENDER_WIN;
