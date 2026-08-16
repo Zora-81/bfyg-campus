@@ -479,7 +479,7 @@ async function openDetail(item, origin) {
   // 发布人：直接移植频道消息风格——头像+昵称+角色徽章+时间，点击打开用户资料卡
   const authorName = item.location || item.authorName || '匿名同学';
   const timePart = item.year || '—';
-  if (isPost && item.authorId) {
+  if (isPost && item.authorId && !item.anonymous) {
     const author = (window.IF && window.IF.resolveAuthor)
       ? window.IF.resolveAuthor(item.authorId)
       : { id: item.authorId, nickname: authorName, username: authorName, avatar_url: '', role: 'student' };
