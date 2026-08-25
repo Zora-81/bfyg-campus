@@ -19,7 +19,7 @@
 
     (function(){
 
-      var v = '1.5.7';
+      var v = '1.5.25';
 
       // 暴露版本号全局：__APP_VERSION 供设置面板；window.v 供 app.js 记忆树版本读取（根治兜底串漏 bump）
       window.__APP_VERSION = v;
@@ -91,6 +91,12 @@
 
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap" rel="stylesheet" />
 
+  <!-- 新欢迎界面字体（Caveat 手写 + Inter） -->
+  <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- 新欢迎开场/hero 样式（welcome-v2 移植，作用域独立，不影响聊天/资料页） -->
+  <link rel="stylesheet" href="../css/welcome-intro.css" />
+
   <link rel="stylesheet" href="../css/style.css" />
 
   <!-- Chip 信用卡资料卡样式 -->
@@ -126,7 +132,7 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
+  justify-content: center;  /* v1.5.23 fix: 角色组垂直居中对齐登录卡中心（之前 flex-end 把角色钉到左下角） */
   align-items: center;
   padding: 24px 48px 32px;
   background-color: #fff;
@@ -157,7 +163,7 @@
   position: relative;
   z-index: 20;
   display: flex;
-  align-items: flex-end;
+  align-items: flex-end;  /* 角色脚下对齐 wrap 底部（char 本身 bottom:0），wrap 由 .left 居中 */
   justify-content: center;
   flex-shrink: 0;
 }
@@ -701,6 +707,22 @@
 }
 
 }
+/* 手机竖屏（<768px）：v1.5.23 进一步收紧（1024 块对小平板/旧款刚好，对 iPhone 类略宽） */
+@media (max-width: 768px) {
+  #monster-login.active { padding: 10px 8px; }
+  #monster-login .characters-wrap { height: 84px; }
+  #monster-login .characters { transform: scale(0.19); transform-origin: bottom center; }
+  #monster-login .doodle-card-scene { max-width: 252px; --card-height: 256px; }
+  #monster-login .doodle-card-front,
+  #monster-login .doodle-card-back { padding: 10px 12px; }
+  #monster-login .doodle-star { width: 22px; height: 22px; top: -12px; left: -14px; }
+  #monster-login .doodle-sparkle { width: 20px; height: 20px; bottom: -10px; right: -12px; }
+  #monster-login .doodle-swirl { width: 22px; height: 22px; top: 12px; right: -16px; }
+  #monster-login .doodle-title { font-size: 15px !important; margin: 2px 0 5px 0; }
+  #monster-login .doodle-form { gap: 5px; }
+  #monster-login .doodle-input { max-width: 220px !important; height: 30px !important; font-size: 12px !important; padding: 3px 9px !important; }
+  #monster-login .doodle-btn { max-width: 92px !important; height: 30px !important; font-size: 12px !important; }
+}
 
 
 </style>
@@ -744,35 +766,98 @@
 
     <!-- 第一阶段：欢迎引导页（BobZhang 同款流光）-->
 
+    <!-- ===== 新欢迎界面：welcome-v2 intro 开场（独立层，像 demo 一样首屏直接播放） ===== -->
+    <!-- GSAP 官网式遮罩开场（首屏先演，结束后揭幕 hero） -->
+    <div class="intro-overlay" id="intro">
+      <span class="intro-corner tl"></span>
+      <span class="intro-corner tr"></span>
+      <span class="intro-corner bl"></span>
+      <span class="intro-corner br"></span>
+
+      <div class="intro-mark">CAMPUS CHANNEL · MMXXVI</div>
+
+      <div class="intro-inner">
+        <div class="intro-title" id="intro-title">
+          <span class="i-line"><span data-line>WELCOME</span></span>
+          <span class="i-line"><span data-line>CAMPUS</span></span>
+        </div>
+
+        <div class="intro-progress">
+          <div class="intro-progress-line"><i id="intro-bar-fill"></i></div>
+          <div class="intro-progress-meta">
+            <span>LOADING</span>
+            <span class="intro-progress-count"><span id="intro-count">00</span><sup>%</sup></span>
+            <span>READY</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="intro-foot">
+        <span>LOCATION<b>HENAN · CN</b></span>
+        <span>TIME<b class="flip-counter" id="intro-time"></b></span>
+        <span>VIBE<b>校园频道</b></span>
+      </div>
+    </div>
+
+    <!-- 3D 挂载点（Phase 2 接入，当前隐藏） -->
+    <div id="stage3d" aria-hidden="true"></div>
+
+    <!-- 装饰：手绘四角星花 -->
+    <div class="handdrawn-stars" aria-hidden="true">
+      <svg class="star-1" viewBox="0 0 48 48" fill="none">
+        <path d="M24 2L27.09 16.91L42 20L27.09 23.09L24 38L20.91 23.09L6 20L20.91 16.91L24 2Z" fill="#FFE66D" stroke="#1F1B16" stroke-width="2" stroke-linejoin="round" />
+      </svg>
+      <svg class="star-2" viewBox="0 0 40 40" fill="none">
+        <path d="M20 4L22 18L36 20L22 22L20 36L18 22L4 20L18 18Z" fill="#FF6B6B" stroke="#1F1B16" stroke-width="2" stroke-linejoin="round" />
+        <circle cx="20" cy="20" r="3" fill="#fff" />
+      </svg>
+      <svg class="star-3" viewBox="0 0 32 32" fill="none">
+        <path d="M16 4C9.37 4 4 9.37 4 16s5.37 12 12 12c2.76 0 5.33-.88 7.43-2.38" stroke="#1F1B16" stroke-width="2" stroke-linecap="round" />
+        <circle cx="24" cy="22" r="4" fill="#4ECDC4" stroke="#1F1B16" stroke-width="1.5" />
+      </svg>
+      <svg class="star-4" viewBox="0 0 48 48" fill="none">
+        <path d="M24 2L27.09 16.91L42 20L27.09 23.09L24 38L20.91 23.09L6 20L20.91 16.91L24 2Z" fill="#B388FF" stroke="#1F1B16" stroke-width="2" stroke-linejoin="round" />
+      </svg>
+    </div>
+
     <div id="welcome-screen" class="welcome-screen active" aria-hidden="false">
 
-      <div class="welcome-inner">
-
-        <!-- 校园徽章（悬浮在标题上方）-->
-
-        <div class="welcome-campus-badge" aria-hidden="true">
-
-          <img src="../images/school-badge-new.png" alt="" class="welcome-campus-img" />
-
-          <span class="welcome-campus-star">⭐</span>
-
+      <!-- HERO 全屏 -->
+      <section class="section section--hero" id="sec-hero">
+        <div class="hero-scene" id="hero-scene" aria-hidden="true">
+          <!-- 校园场景占位（用户出图后回填 src） -->
         </div>
+        <div class="hero-inner">
+          <div class="logo-wrap" id="logo">
+            <svg class="logo-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 100" aria-label="校园频道 logo" role="img">
+              <g fill="#1F1B16" font-family="'Inter','Noto Sans SC',system-ui,sans-serif">
+                <text x="0" y="46" font-size="40" font-weight="800" letter-spacing="-1">校园</text>
+                <text x="92" y="46" font-size="40" font-weight="800" letter-spacing="-1">频道</text>
+                <text x="2" y="74" font-size="15" font-weight="600" letter-spacing="3" fill="#1F1B16" opacity="0.65">CAMPUS · CHANNEL</text>
+              </g>
+              <g aria-hidden="true" transform="translate(0, -24)">
+                <line x1="252" y1="38" x2="252" y2="68" stroke="#1F1B16" stroke-width="1.5" stroke-linecap="round"/>
+                <circle cx="252" cy="38" r="1.6" fill="#1F1B16"/>
+                <path d="M252,38 L272,44 L252,50 Z" fill="#FF7A45" stroke="#1F1B16" stroke-width="1"/>
+                <path d="M238,72 L258,52 L278,72 Z" fill="rgba(31,27,22,0.18)" stroke="#1F1B16" stroke-width="1.6" stroke-linejoin="round"/>
+                <rect x="241" y="72" width="34" height="20" fill="rgba(31,27,22,0.12)" stroke="#1F1B16" stroke-width="1.6"/>
+                <circle cx="258" cy="64" r="2.6" fill="#FFF9E6" stroke="#1F1B16" stroke-width="0.8"/>
+                <rect x="253" y="82" width="10" height="10" fill="#FF7A45" stroke="#1F1B16" stroke-width="1.2"/>
+                <line x1="234" y1="92" x2="282" y2="92" stroke="#1F1B16" stroke-width="1.4" stroke-linecap="round"/>
+              </g>
+            </svg>
+          </div>
 
+          <h1 class="hero-title">
+            <span class="row-1" id="t-row-1">WELCOME</span>
+            <span class="row-2" id="t-row-2">CAMPUS</span>
+          </h1>
 
-
-        <div class="welcome-title-wrap">
-
-          <div class="welcome-title-glow"></div>
-
-          <h1 class="welcome-title" id="welcome-title">欢迎来到校园频道</h1>
-
+          <p class="hero-sub" id="t-sub">
+            校园频道 · 和你的校园重新呼吸
+          </p>
         </div>
-
-
-
-        <button class="welcome-enter" id="welcome-enter" type="button">确定进入</button>
-
-      </div>
+      </section>
 
     </div>
 
@@ -1547,6 +1632,11 @@
 
 
   <script src="../js/lib/gsap.min.js" defer></script>
+  <script src="../js/lib/canvas-confetti.js" defer></script>
+  <!-- 新欢迎界面动画依赖：ScrollTrigger（与本地 gsap 3.15.0 同版本）+ welcome-v2 的 hero/time-flip -->
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/ScrollTrigger.min.js" defer></script>
+  <script src="../js/hero.js" defer></script>
+  <script src="../js/time-flip.js" defer></script>
 
   <script src="../js/shooting-stars.js"></script>
 
@@ -2139,7 +2229,7 @@
     var resendBtn = document.getElementById('resend-code-btn');
     var backBtn   = document.getElementById('auth-overlay-back');
     var statusEl  = document.getElementById('doodle-status');
-    var pending = { email: null, password: null };
+    var pending = { email: null, password: null, isNewSignup: false };
     var countdownTimer = null;
 
     // 找回密码浮层相关 DOM
@@ -2309,6 +2399,7 @@
                 });
               }
             } else {
+              pending.isNewSignup = true;
               setStatus('📧 注册成功，请查收邮箱验证码', 'ok');
               openOverlay('验证邮箱', '我们已向 ' + email + ' 发送 6 位验证码');
             }
@@ -2334,7 +2425,7 @@
           verifyBtn.disabled = true;
           setStatus('⏳ 正在验证邮箱...', 'info');
           IF.verifyEmail(pending.email, code, pending.password).then(function (user) {
-            verifyBtn.disabled = false; closeOverlay(); enterMain(user);
+            verifyBtn.disabled = false; closeOverlay(); if (pending.isNewSignup) fireConfetti(); enterMain(user);
           }).catch(function (err) {
             verifyBtn.disabled = false; ovErr.textContent = (err && err.message) || '验证失败';
             setStatus('❌ ' + ((err && err.message) || '验证失败'), 'err');
@@ -2485,6 +2576,33 @@
     // 无条件绑定：submit 拦截不依赖 IF 是否就绪（IF 在点击时再读取）
     wire();
   })();
+</script>
+
+<canvas id="confetti-canvas"></canvas>
+<script>
+  // ===== 新用户注册成功礼花(本地化 canvas-confetti, z-index:9999 飘在聊天界面之上)=====
+  (function () {
+    var cc = document.getElementById('confetti-canvas');
+    if (cc) cc.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;z-index:9999;pointer-events:none;';
+  })();
+  var CAMPUS_CONFETTI_COLORS = ['#ffe066', '#7c5cfc', '#ff6b9d', '#4ecdc4', '#ffd93d'];
+  var campusConfetti = null;
+  function fireConfetti() {
+    if (!campusConfetti && typeof confetti !== 'undefined') {
+      campusConfetti = confetti.create(document.getElementById('confetti-canvas'), { resize: true });
+    }
+    if (!campusConfetti) { console.warn('confetti 未加载'); return; }
+    campusConfetti({ particleCount: 140, spread: 75, startVelocity: 45,
+      origin: { x: 0.5, y: 0.65 }, colors: CAMPUS_CONFETTI_COLORS, disableForReducedMotion: true });
+    setTimeout(function () {
+      campusConfetti({ particleCount: 80, angle: 60, spread: 55, startVelocity: 45,
+        origin: { x: 0, y: 0.75 }, colors: CAMPUS_CONFETTI_COLORS });
+    }, 180);
+    setTimeout(function () {
+      campusConfetti({ particleCount: 80, angle: 120, spread: 55, startVelocity: 45,
+        origin: { x: 1, y: 0.75 }, colors: CAMPUS_CONFETTI_COLORS });
+    }, 180);
+  }
 </script>
 
 </body>
