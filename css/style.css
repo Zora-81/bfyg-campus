@@ -304,6 +304,18 @@ body.main-active #monster-login { display:none !important; }
   color: var(--ink-sec) !important;
 }
 
+/* 校园手稿：频道列表文字强制可见 —— 曾被 GSAP 入场动画或旧样式覆盖导致只有图标没有文字 */
+[data-theme="light"] .ch-item,
+[data-theme="light"] .ch-item .ch-name,
+[data-theme="light"] .ch-item.active,
+[data-theme="light"] .ch-item.active .ch-name,
+[data-theme="light"] .ch-item:hover,
+[data-theme="light"] .ch-item:hover .ch-name {
+  opacity: 1 !important;
+  color: var(--ink) !important;
+  visibility: visible !important;
+}
+
 /* 校园手稿：顶部频道标题卡 */
 [data-theme="light"] .nav-channel-info {
   background: #FFFDF7;
@@ -672,9 +684,9 @@ body.main-active #monster-login { display:none !important; }
   visibility: visible !important;
 }
 [data-theme="light"] .drawer-header {
-  background: #DED8C8 !important;
+  background: #F5F0E4 !important;
   border: none;
-  border-bottom: 1.5px dashed rgba(31,27,22,0.22);
+  border-bottom: 1.5px dashed rgba(31,27,22,0.18);
   border-radius: 0;
   padding: 16px;
   margin: 0;
@@ -711,7 +723,7 @@ body.main-active #monster-login { display:none !important; }
   background: rgba(31,27,22,0.12);
 }
 [data-theme="light"] .drawer-user {
-  background: #DED8C8;
+  background: #F5F0E4;
   border-top: 1.5px dashed rgba(31,27,22,0.18);
 }
 [data-theme="light"] .drawer-user-name {

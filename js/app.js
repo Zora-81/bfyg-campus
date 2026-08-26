@@ -1295,9 +1295,10 @@
         if (document.body.dataset.theme === 'light') {
           // 校园手稿：频道项像便利贴 stagger 飘落；opacity 从 0.6 开始，避免闪烁/消失
           gsap.fromTo(allItems,
-            { y: -12, rotation: function(i){ return (i % 2 === 0 ? -1.2 : 1.2); }, opacity: 0.6, transformOrigin: 'top center' },
-            { y: 0, rotation: 0, opacity: 1, duration: 0.42, stagger: 0.06, ease: 'back.out(1.4)', overwrite: true, clearProps: 'opacity,transform',
+            { y: -8, rotation: function(i){ return (i % 2 === 0 ? -0.8 : 0.8); }, opacity: 0.85, transformOrigin: 'top center' },
+            { y: 0, rotation: 0, opacity: 1, duration: 0.35, stagger: 0.05, ease: 'power2.out', overwrite: true, clearProps: 'all',
               onComplete:function(){
+                Array.from(allItems).forEach(function(it){ it.style.opacity = ''; it.style.visibility = ''; it.style.transform = ''; it.style.transformOrigin = ''; });
                 var act = sidebarChannels.querySelector('.ch-item.active');
                 if (act && act.dataset.name) {
                   try { playChannelAnim(act, chAnimMap[act.dataset.name]||'bounce'); } catch(e){}
