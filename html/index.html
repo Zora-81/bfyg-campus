@@ -19,7 +19,7 @@
 
     (function(){
 
-      var v = '1.5.25';
+      var v = '1.5.29';
 
       // 暴露版本号全局：__APP_VERSION 供设置面板；window.v 供 app.js 记忆树版本读取（根治兜底串漏 bump）
       window.__APP_VERSION = v;
@@ -1527,11 +1527,11 @@
 
             </button>
 
-            <button class="bg-theme" data-theme="light" title="白昼极简" aria-label="白昼极简">
+            <button class="bg-theme" data-theme="light" title="校园手稿" aria-label="校园手稿">
 
               <span class="bg-theme-preview light"></span>
 
-              <span class="bg-theme-name">白昼极简</span>
+              <span class="bg-theme-name">校园手稿</span>
 
             </button>
 
@@ -1927,7 +1927,7 @@
     // 注册 Service Worker：缓存同源静态资源与跨域图片，二次打开零网络（兼容失败静默）
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', function () {
-        navigator.serviceWorker.register('/sw.js').catch(function () {});
+        navigator.serviceWorker.register('/sw.js?swv=3').catch(function () {});
       });
     }
   </script>

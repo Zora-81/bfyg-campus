@@ -172,32 +172,45 @@ body.main-active #monster-login { display:none !important; }
   --main-bg-dim: 0.28;
 }
 
-/* ── 白昼极简（全站浅色主题） ── */
+/* ── 校园手稿（手绘纸主题，替换原白昼极简） ── */
 [data-theme="light"] {
   color-scheme: light;
-  --bg-base: #eef0f4;
-  --bg-deeper: #e4e7ec;
-  --bg-surface: #ffffff;
-  --bg-elevated: #ffffff;
-  --bg-hover: #f1f3f6;
-  --bg-active: #e7eaf0;
-  --bg-input: #f4f6f9;
-  --bg-overlay: rgba(255,255,255,0.55);
-  --bg-card: #ffffff;
 
-  --text: #16181d;
-  --text-sec: #474c57;
-  --text-dim: #767b86;
-  --text-muted: #9aa0ab;
-  --text-link: #6d4ed8;
-  --text-mention: #b8860b;
+  /* Paper palette — 与登录页横线格同色系 */
+  --paper:        #FBF7EE;
+  --paper-deeper: #F5F0E4;
+  --paper-card:   #FFFDF7;
+  --ink:          #1F1B16;
+  --ink-sec:      #5C5548;
+  --ink-dim:      #8A8276;
+  --ink-muted:    #B0A99C;
+  --pencil:       rgba(31,27,22,0.55);
+  --line:         rgba(31,27,22,0.07);
+  --line-strong:  rgba(31,27,22,0.12);
 
-  --accent: #7c5cfc;
+  --bg-base:      var(--paper);
+  --bg-deeper:    var(--paper-deeper);
+  --bg-surface:   var(--paper-card);
+  --bg-elevated:  #FFFFFF;
+  --bg-hover:     #F0EBDE;
+  --bg-active:    #E8E2D3;
+  --bg-input:     var(--paper-card);
+  --bg-overlay:   rgba(31,27,22,0.35);
+  --bg-card:      var(--paper-card);
+
+  --text:         var(--ink);
+  --text-sec:     var(--ink-sec);
+  --text-dim:     var(--ink-dim);
+  --text-muted:   var(--ink-muted);
+  --text-link:    #6B4CE6;
+  --text-mention: #B8860B;
+
+  --accent:       #7c5cfc;
   --accent-hover: #6a4ae8;
-  --accent-active: #5939d4;
-  --accent-light: #a78bfa;
-  --accent-g: rgba(124,92,252,0.14);
-  --accent-soft: rgba(124,92,252,0.06);
+  --accent-active:#5939d4;
+  --accent-light: #8B6DFD;
+  --accent-g:     rgba(124,92,252,0.14);
+  --accent-soft:  rgba(124,92,252,0.06);
 
   --red: #e0303a;          --red-bg: rgba(224,48,58,0.10);
   --green: #1a9e52;        --green-bg: rgba(26,158,82,0.12);
@@ -207,24 +220,494 @@ body.main-active #monster-login { display:none !important; }
   --blue: #4a5be8;         --blue-bg: rgba(74,91,232,0.12);
   --cyan: #0098b8;
 
-  --border: rgba(20,24,40,0.08);
-  --border-light: rgba(20,24,40,0.10);
-  --border-active: rgba(20,24,40,0.16);
+  --border:       var(--line);
+  --border-light: var(--line-strong);
+  --border-active:rgba(31,27,22,0.18);
   --border-focus: var(--accent);
 
-  --sh-sm: 0 4px 12px rgba(20,24,40,0.08);
-  --sh: 0 8px 24px rgba(20,24,40,0.10);
-  --sh-lg: 0 16px 48px rgba(20,24,40,0.14);
-  --sh-card: 0 4px 12px rgba(20,24,40,0.08);
+  /* 手绘感偏移阴影，替代发光投影 */
+  --sh-sm: 2px 3px 0 rgba(31,27,22,0.04);
+  --sh:    2px 4px 0 rgba(31,27,22,0.05);
+  --sh-lg: 3px 6px 0 rgba(31,27,22,0.06);
+  --sh-card: 2px 3px 0 rgba(31,27,22,0.04);
 
-  /* 白昼背景 */
+  /* 横线格纸背景：28px 间距，与 doodle 登录页一致 */
   --main-bg-image:
-    radial-gradient(ellipse 80% 55% at 50% 0%, rgba(124,92,252,0.10) 0%, transparent 50%),
-    radial-gradient(ellipse 70% 45% at 100% 100%, rgba(0,180,216,0.07) 0%, transparent 50%),
-    linear-gradient(180deg, #f7f8fb 0%, #eef0f4 100%);
-  --main-bg-overlay: linear-gradient(180deg, rgba(255,255,255,0.25) 0%, rgba(240,242,247,0.5) 100%);
+    repeating-linear-gradient(
+      transparent,
+      transparent 27px,
+      rgba(0,0,0,0.05) 27px,
+      rgba(0,0,0,0.05) 29px
+    ),
+    linear-gradient(180deg, #FBF7EE 0%, #F5F0E4 100%);
+  --main-bg-overlay: linear-gradient(transparent, transparent);
   --main-bg-blur: 0px;
   --main-bg-dim: 0.0;
+}
+
+/* 校园手稿：横线格需要固定 28px 高度，不能被 cover 拉伸 */
+[data-theme="light"] #main-bg {
+  background-size: 100% 29px, cover;
+}
+
+/* 校园手稿：面板/卡片手绘感（不规则圆角 + 虚线 + 纸阴影） */
+[data-theme="light"] .top-nav,
+[data-theme="light"] .right-sidebar,
+[data-theme="light"] .sidebar-card,
+[data-theme="light"] .message-input-wrapper,
+[data-theme="light"] .avatar-popup,
+[data-theme="light"] .notify-dropdown,
+[data-theme="light"] .emoji-panel,
+[data-theme="light"] .modal-box,
+[data-theme="light"] .welcome-card,
+[data-theme="light"] .msg-file-card,
+[data-theme="light"] .msg-img-wrap {
+  background: var(--bg-surface);
+  border: 1.5px dashed var(--border-active);
+  border-radius: 14px 16px 12px 18px;
+  box-shadow: 2px 4px 0 rgba(31,27,22,0.07);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* 左侧抽屉本身透明，让横线格纸背景透出；header 与列表项作为独立卡片 */
+[data-theme="light"] .channel-drawer {
+  background: var(--bg-surface);
+  border-right: 2px dashed var(--border-active);
+  box-shadow: none;
+}
+
+[data-theme="light"] .top-nav {
+  border-radius: 0;
+  border: none;
+  border-bottom: 2px dashed var(--border-active);
+  box-shadow: 0 2px 0 rgba(31,27,22,0.04);
+}
+
+/* 校园手稿：顶部频道标题卡 */
+[data-theme="light"] .nav-channel-info {
+  background: var(--bg-surface);
+  border: 1.5px dashed var(--border-light);
+  border-radius: 14px 16px 12px 18px;
+  box-shadow: 2px 3px 0 rgba(31,27,22,0.05);
+}
+[data-theme="light"] .nav-channel-info::after { display:none; }
+[data-theme="light"] .ch-card-bar {
+  background: var(--accent-light);
+}
+[data-theme="light"] .nav-channel-title {
+  color: var(--ink);
+}
+[data-theme="light"] .nav-channel-desc {
+  color: var(--ink-sec);
+}
+
+/* 频道/好友列表项：像便签条 */
+[data-theme="light"] .ch-item,
+[data-theme="light"] .friend-item {
+  background: var(--bg-surface);
+  border: 1.5px dashed var(--border-light);
+  border-radius: 12px 14px 10px 16px;
+  box-shadow: 2px 3px 0 rgba(31,27,22,0.05);
+  transition: transform 0.25s cubic-bezier(.34,1.56,.64,1),
+              box-shadow 0.25s ease,
+              background 0.18s ease,
+              border-color 0.18s ease;
+}
+[data-theme="light"] .ch-item:hover,
+[data-theme="light"] .friend-item:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-active);
+  box-shadow: 2px 5px 0 rgba(31,27,22,0.07);
+  transform: translateY(-2px) rotate(-0.4deg);
+}
+[data-theme="light"] .ch-item.active,
+[data-theme="light"] .friend-item:active {
+  background: var(--bg-active);
+  transform: translateY(0) rotate(0deg);
+}
+
+/* 消息区：内容像写在纸上 */
+[data-theme="light"] .msg-content {
+  color: var(--ink-sec);
+}
+[data-theme="light"] .msg-content code {
+  background: rgba(31,27,22,0.05);
+  border-radius: 5px 4px 6px 3px;
+}
+[data-theme="light"] .msg-feed-title {
+  background: rgba(124,92,252,0.08);
+  border-radius: 5px 7px 4px 8px;
+  border: 1px dashed rgba(124,92,252,0.18);
+}
+
+/* 头像：手绘不规则圆 */
+[data-theme="light"] .msg-feed-avatar,
+[data-theme="light"] .friend-avatar {
+  border-radius: 50% 48% 52% 50%;
+  border: 2px dashed var(--border-light);
+  box-shadow: var(--sh-sm);
+}
+[data-theme="light"] .msg-feed-avatar:hover {
+  box-shadow: var(--sh);
+}
+
+/* 输入框：横线纸内联输入 */
+[data-theme="light"] .msg-input,
+[data-theme="light"] .message-input-wrapper textarea {
+  background: transparent;
+  border-bottom: 2px solid var(--border-light);
+  border-radius: 0;
+  color: var(--ink);
+}
+[data-theme="light"] .message-input-wrapper:focus-within {
+  box-shadow: var(--sh);
+  border-color: var(--border-active);
+}
+
+/* 按钮：手绘徽章感 */
+[data-theme="light"] .send-btn,
+[data-theme="light"] .attach-btn,
+[data-theme="light"] .emoji-btn,
+[data-theme="light"] .icon-btn {
+  border-radius: 10px 12px 10px 14px;
+  border: 1px dashed var(--border-light);
+  background: var(--bg-elevated);
+}
+[data-theme="light"] .send-btn:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent-light);
+}
+
+/* 校园手稿：右侧边栏热门话题卡片 */
+[data-theme="light"] .hot-card {
+  background: var(--bg-elevated);
+  border: 1.5px dashed var(--border-light);
+  border-radius: 10px 12px 9px 14px;
+  box-shadow: 1px 2px 0 rgba(31,27,22,0.04);
+}
+[data-theme="light"] .hot-card:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-active);
+  transform: translateY(-2px) rotate(-0.3deg);
+}
+[data-theme="light"] .sidebar-list li:not(.sidebar-skeleton):not(.channel-rec-item):not(.hot-card):hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+/* 校园手稿：记忆树 · 星空档案入口按钮 */
+[data-theme="light"] .mt-drawer-entry-btn {
+  color: var(--accent);
+  background: rgba(124,92,252,0.10);
+  border: 2px dashed var(--accent);
+  border-radius: 12px 14px 10px 16px;
+  box-shadow: 2px 3px 0 rgba(124,92,252,0.16);
+  font-weight: 800;
+  font-size: 0.95rem;
+  transition: transform 0.25s cubic-bezier(.34,1.56,.64,1),
+              box-shadow 0.25s ease,
+              background 0.18s ease,
+              border-color 0.18s ease;
+}
+[data-theme="light"] .mt-drawer-entry-btn:hover {
+  background: rgba(124,92,252,0.18);
+  border-color: var(--accent-hover);
+  box-shadow: 2px 5px 0 rgba(124,92,252,0.22);
+  transform: translateY(-2px) rotate(-0.4deg);
+}
+
+/* 校园手稿：底栏头像必须有背景，否则白色 initials 在奶油色底栏上看不见。
+   app.js 会设置内联 background（透明或 getAvatarColor），所以用 !important 强制主题色兜底 */
+[data-theme="light"] .drawer-user-avatar {
+  background: linear-gradient(135deg, var(--accent), var(--accent-light)) !important;
+  color: #fff !important;
+  border: 2px dashed rgba(255,255,255,0.45);
+  box-shadow: 2px 3px 0 rgba(31,27,22,0.08);
+}
+
+/* 校园手稿：设置面板半透明纸感 */
+[data-theme="light"] .settings-panel {
+  background: rgba(251, 247, 238, 0.92);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+}
+[data-theme="light"] .settings-group {
+  background: var(--bg-surface);
+  border: 1.5px dashed var(--border-light);
+  border-radius: 14px 16px 12px 18px;
+  box-shadow: var(--sh-sm);
+}
+[data-theme="light"] .settings-header,
+[data-theme="light"] .settings-section-title {
+  border-color: var(--border-light);
+  color: var(--ink-sec);
+}
+
+/* 校园手稿：欢迎卡片去掉霓虹光晕 */
+[data-theme="light"] .welcome-card {
+  background: var(--bg-surface);
+  border: 1.5px dashed var(--border-light);
+  border-left: 5px solid var(--accent-light);
+  border-radius: 16px 18px 14px 20px;
+  box-shadow: var(--sh-sm);
+}
+[data-theme="light"] .welcome-card::before { display:none; }
+[data-theme="light"] .welcome-hero {
+  background: var(--bg-hover);
+  border-radius: 12px 14px 11px 16px;
+  box-shadow: var(--sh-sm);
+}
+
+/* ── 校园手稿：补漏 —— 真实登录后截图中仍显原版的组件 ── */
+
+/* 顶部频道标题卡（增强优先级，压住 data-ch 变量） */
+[data-theme="light"] .top-nav .nav-channel-info,
+[data-theme="light"] .top-nav .nav-channel-info[data-ch] {
+  background: var(--bg-surface) !important;
+  border: 1.5px dashed var(--border-light) !important;
+  border-radius: 14px 16px 12px 18px !important;
+  box-shadow: 2px 3px 0 rgba(31,27,22,0.05) !important;
+}
+[data-theme="light"] .top-nav .nav-channel-info::after { display:none !important; }
+[data-theme="light"] .top-nav .ch-card-bar {
+  background: var(--accent-light);
+}
+[data-theme="light"] .top-nav .nav-channel-title {
+  color: var(--ink);
+}
+[data-theme="light"] .top-nav .nav-channel-desc {
+  color: var(--ink-sec);
+}
+
+/* 顶部右侧按钮 */
+[data-theme="light"] .nav-icon-btn,
+[data-theme="light"] .nav-avatar-btn {
+  border: 1px dashed var(--border-light);
+  background: var(--bg-elevated);
+  color: var(--ink-sec);
+}
+[data-theme="light"] .nav-icon-btn:hover,
+[data-theme="light"] .nav-avatar-btn:hover {
+  background: var(--bg-hover);
+  color: var(--ink);
+}
+[data-theme="light"] #btn-compose.compose-active {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: var(--accent-light);
+}
+
+/* 消息流：分隔线、悬停、状态 */
+[data-theme="light"] .msg-group {
+  border-bottom-color: var(--line);
+}
+[data-theme="light"] .msg-group:hover {
+  background: rgba(31,27,22,0.015);
+}
+[data-theme="light"] .msg-feed-name {
+  color: var(--ink);
+}
+[data-theme="light"] .msg-feed-name:hover {
+  color: var(--accent-hover);
+}
+[data-theme="light"] .msg-time,
+[data-theme="light"] .msg-status {
+  color: var(--ink-muted);
+}
+[data-theme="light"] .msg-send-time {
+  color: var(--ink-muted);
+}
+
+/* 角色标签 */
+[data-theme="light"] .role-badge.admin {
+  background: var(--red-bg);
+  color: var(--red);
+  border-radius: 4px 5px 3px 6px;
+}
+[data-theme="light"] .role-badge.moderator {
+  background: var(--blue-bg);
+  color: var(--blue);
+  border-radius: 4px 5px 3px 6px;
+}
+[data-theme="light"] .role-badge.member {
+  background: var(--green-bg);
+  color: var(--green);
+  border-radius: 4px 5px 3px 6px;
+}
+
+/* 文件卡片 */
+[data-theme="light"] .msg-file-card {
+  background: var(--bg-elevated);
+  border: 1.5px dashed var(--border-light);
+  border-radius: 12px 14px 10px 16px;
+  box-shadow: 2px 3px 0 rgba(31,27,22,0.04);
+}
+[data-theme="light"] .msg-file-name {
+  color: var(--text-link);
+}
+[data-theme="light"] .msg-file-size {
+  color: var(--ink-muted);
+}
+
+/* 图片包裹 */
+[data-theme="light"] .msg-img-wrap {
+  border: 1.5px dashed var(--border-light);
+  border-radius: 12px 14px 10px 16px;
+  box-shadow: 2px 3px 0 rgba(31,27,22,0.04);
+}
+[data-theme="light"] .msg-img-wrap:hover {
+  box-shadow: 2px 5px 0 rgba(31,27,22,0.06);
+}
+
+/* 消息交互栏 */
+[data-theme="light"] .msg-interactions {
+  border-top-color: var(--line);
+  color: var(--ink-dim);
+}
+[data-theme="light"] .msg-interact-btn {
+  color: var(--ink-dim);
+  border-radius: 8px 9px 7px 10px;
+}
+[data-theme="light"] .msg-interact-btn:hover {
+  background: var(--bg-hover);
+  color: var(--ink);
+}
+[data-theme="light"] .msg-interact-btn.liked {
+  color: var(--red);
+}
+[data-theme="light"] .msg-interact-btn.liked:hover {
+  background: var(--red-bg);
+}
+
+/* 右侧热门话题卡片内部 */
+[data-theme="light"] .hot-card {
+  background: var(--bg-elevated);
+  border: 1.5px dashed var(--border-light);
+  border-radius: 10px 12px 9px 14px;
+  box-shadow: 1px 2px 0 rgba(31,27,22,0.04);
+}
+[data-theme="light"] .hot-card:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-active);
+  box-shadow: 2px 4px 0 rgba(31,27,22,0.06);
+}
+[data-theme="light"] .hot-card-title {
+  color: var(--ink);
+}
+[data-theme="light"] .hot-card-meta {
+  color: var(--accent-hover);
+}
+[data-theme="light"] .hot-card-time {
+  color: var(--ink-muted);
+}
+[data-theme="light"] .hot-heat-track {
+  background: var(--line);
+}
+[data-theme="light"] .hot-card:nth-child(1) .hot-heat-fill { background: var(--red); }
+[data-theme="light"] .hot-card:nth-child(2) .hot-heat-fill { background: var(--orange); }
+[data-theme="light"] .hot-card:nth-child(3) .hot-heat-fill { background: var(--yellow); }
+
+/* 频道推荐 */
+[data-theme="light"] .channel-rec-item {
+  border-bottom-color: var(--line);
+  border-radius: 10px 12px 9px 14px;
+}
+[data-theme="light"] .channel-rec-item:hover {
+  background: var(--bg-hover);
+}
+[data-theme="light"] .channel-rec-avatar {
+  border: 2px dashed var(--border-light);
+  border-radius: 50% 48% 52% 50%;
+}
+[data-theme="light"] .channel-rec-name {
+  color: var(--ink);
+}
+[data-theme="light"] .channel-rec-desc {
+  color: var(--ink-dim);
+}
+
+/* 左侧抽屉头部：恢复原版整面左侧面板结构，只保留底部分隔线 */
+[data-theme="light"] .drawer-header {
+  background: transparent;
+  border: none;
+  border-bottom: 1.5px dashed var(--border-light);
+  border-radius: 0;
+  padding: 16px;
+  margin: 0;
+  box-shadow: none;
+}
+[data-theme="light"] .drawer-server {
+  gap: 14px;
+  margin-bottom: 12px;
+  align-items: center;
+}
+[data-theme="light"] .drawer-server-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px 16px 12px 18px;
+  border: 2.5px dashed var(--accent);
+  padding: 5px;
+  background: var(--bg-active);
+  box-shadow: 2px 3px 0 rgba(31,27,22,0.08);
+  display: block;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+[data-theme="light"] .drawer-server-name {
+  color: var(--ink);
+  font-size: 1.55rem;
+  font-weight: 900;
+  letter-spacing: 0.01em;
+  text-shadow: 0 1px 0 rgba(255,255,255,0.5);
+}
+[data-theme="light"] .drawer-divider {
+  background: var(--line);
+}
+[data-theme="light"] .ch-category-title {
+  color: var(--ink-sec);
+}
+[data-theme="light"] .ch-category-title:hover {
+  color: var(--ink);
+}
+[data-theme="light"] .drawer-user {
+  background: var(--bg-deeper);
+  border-top-color: var(--line);
+}
+[data-theme="light"] .drawer-user-name {
+  color: var(--ink);
+}
+[data-theme="light"] .drawer-user-tag {
+  color: var(--ink-dim);
+}
+[data-theme="light"] .drawer-settings-btn:hover,
+[data-theme="light"] .drawer-logout-btn:hover {
+  background: var(--bg-hover);
+  color: var(--ink);
+}
+
+/* 公告栏 */
+[data-theme="light"] .announcement-banner {
+  background: var(--bg-surface);
+  border: 1.5px dashed var(--border-light);
+  border-radius: 12px 14px 10px 16px;
+  box-shadow: var(--sh-sm);
+}
+[data-theme="light"] .announcement-banner .ann-content {
+  color: var(--ink-sec);
+}
+
+/* 设置面板主题选择器预览 */
+[data-theme="light"] .bg-theme-preview.light {
+  background:
+    repeating-linear-gradient(
+      transparent,
+      transparent 10px,
+      rgba(0,0,0,0.06) 10px,
+      rgba(0,0,0,0.06) 11px
+    ),
+    linear-gradient(180deg, #FBF7EE, #F5F0E4);
+  border: 1px dashed rgba(31,27,22,0.14);
 }
 
 /* ── 自然森绿（清新浅绿全站主题） ── */

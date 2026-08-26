@@ -5,8 +5,8 @@
 //    <img> 请求为 no-cors，响应在 SW 内是 opaque，Cache API 可存（仅大小惩罚，可接受）
 //  - 不缓存 HTML 文档（交给 var v 反缓存机制）与 POST/API 请求
 
-const APP_CACHE = 'campus-app-v1';
-const IMG_CACHE = 'campus-img-v1';
+const APP_CACHE = 'campus-app-v3';
+const IMG_CACHE = 'campus-img-v3';
 const IMG_HOST = 'api.bfgzlt.cc.cd';
 const IMG_RE = /\.(jpg|jpeg|png|webp|gif|avif)(\?|$)/i;
 
@@ -46,6 +46,9 @@ self.addEventListener('fetch', (event) => {
     })());
     return;
   }
+
+  // 不缓存 SW 自身，否则旧 SW 会拦截新版 sw.js 导致永远更新失败（含带 query 的注册 URL）
+  if (url.pathname === '/sw.js') return;
 
   // 同源静态资源：cache-first（排除 HTML 文档，交给 var v 反缓存机制）
   if (url.origin === self.location.origin) {

@@ -663,7 +663,8 @@
   }
 
   // ── 欢迎屏入口 ──
-  if(welcomeEnter) welcomeEnter.addEventListener('click', enterFromWelcome);
+  // 说明：单页滚动模式下已无"进入"按钮（demo 是欢迎+登录同屏滚动）。
+  // welcome-enter 按钮已移除，这里不再挂载 click 切换；登录卡靠滚动进入（hero.js IntersectionObserver）。
   if(welcomeScreen && viewLogin && viewLogin.classList.contains('active')){
     welcomeScreen.classList.add('active');
   }
@@ -715,8 +716,9 @@
     IF.listChannels().then(function(list) {
       channels = filterDmChannels(list);
       renderChannels();
-      if (channels.length > 0) {
-        switchChannel(channels[0]);
+      if (!currentChannel && channels.length > 0) {
+        var initial = getInitialChannel();
+        if (initial) switchChannel(initial);
       }
       fetchUnreadCount();
       subscribeNotifications();
@@ -785,7 +787,10 @@
       channels = filterDmChannels(list);
       renderChannels();
       renderRightSidebar();
-      if (channels.length > 0) { switchChannel(channels[0]); }
+      if (!currentChannel && channels.length > 0) {
+        var initial = getInitialChannel();
+        if (initial) switchChannel(initial);
+      }
       fetchUnreadCount();
       subscribeNotifications();
     }).catch(function(err) {
@@ -861,7 +866,10 @@
         channels = filterDmChannels(list);
         renderChannels();
         renderRightSidebar();
-        if(channels.length > 0) switchChannel(channels[0]);
+        if(!currentChannel && channels.length > 0){
+          var initial = getInitialChannel();
+          if (initial) switchChannel(initial);
+        }
       }).catch(function(){ channels=[]; renderChannels(); renderRightSidebar(); });
     } else {
       renderChannels();
@@ -1223,6 +1231,17 @@
     } catch(e) {}
   }
 
+  function getInitialChannel(){
+    if (!channels || channels.length === 0) return null;
+    var lastId = null;
+    try { lastId = localStorage.getItem(LAST_CHANNEL_KEY); } catch(e){}
+    if (lastId) {
+      var found = channels.find(function(c){ return String(c.id) === String(lastId); });
+      if (found) return found;
+    }
+    return channels[0];
+  }
+
   function renderChannels(){
     if(!sidebarChannels) return;
     sidebarChannels.innerHTML='';
@@ -1273,15 +1292,29 @@
     var allItems = sidebarChannels.querySelectorAll('.ch-item');
     if (allItems.length > 0) {
       try {
-        gsap.fromTo(allItems, {opacity:0,x:-20}, {opacity:1,x:0,duration:0.4,stagger:0.08,ease:'power2.out',overwrite:true,
-          onComplete:function(){
-            // 入场动画结束后，再对当前 active 频道播放强调动画（避免被 overwrite 中断导致 transform 残留）
-            var act = sidebarChannels.querySelector('.ch-item.active');
-            if (act && act.dataset.name) {
-              try { playChannelAnim(act, chAnimMap[act.dataset.name]||'bounce'); } catch(e){}
+        if (document.body.dataset.theme === 'light') {
+          // 校园手稿：频道项像便利贴 stagger 飘落；opacity 从 0.6 开始，避免闪烁/消失
+          gsap.fromTo(allItems,
+            { y: -12, rotation: function(i){ return (i % 2 === 0 ? -1.2 : 1.2); }, opacity: 0.6, transformOrigin: 'top center' },
+            { y: 0, rotation: 0, opacity: 1, duration: 0.42, stagger: 0.06, ease: 'back.out(1.4)', overwrite: true, clearProps: 'opacity,transform',
+              onComplete:function(){
+                var act = sidebarChannels.querySelector('.ch-item.active');
+                if (act && act.dataset.name) {
+                  try { playChannelAnim(act, chAnimMap[act.dataset.name]||'bounce'); } catch(e){}
+                }
+              }
+            });
+        } else {
+          gsap.fromTo(allItems, {opacity:0,x:-20}, {opacity:1,x:0,duration:0.4,stagger:0.08,ease:'power2.out',overwrite:true,
+            onComplete:function(){
+              // 入场动画结束后，再对当前 active 频道播放强调动画（避免被 overwrite 中断导致 transform 残留）
+              var act = sidebarChannels.querySelector('.ch-item.active');
+              if (act && act.dataset.name) {
+                try { playChannelAnim(act, chAnimMap[act.dataset.name]||'bounce'); } catch(e){}
+              }
             }
-          }
-        });
+          });
+        }
       } catch(e){}
     }
   }
@@ -1372,6 +1405,7 @@
   function showMessageSkeleton(){
     if(!messagesArea) return;
     var type = currentChannel ? (chSkeletonMap[currentChannel.name]||'default') : 'default';
+    if (_skeletonTL) { _skeletonTL.kill(); _skeletonTL = null; }
     messagesArea.innerHTML = '<div class="skeleton-wrapper">'+getChannelSkeletonHTML(type)+'</div>';
     playSkeletonAnimation(type, messagesArea);
   }
@@ -1411,6 +1445,8 @@
   var _autoRetryEmpty = {};
   function handleEmptyChannel(ch, opts) {
     opts = opts || {};
+    // 已切到别的频道：放弃本次空频道处理，避免自动重试 setTimeout 把旧频道界面盖回当前频道
+    if (currentChannel && currentChannel.id !== ch.id) return;
     if (_autoRetryEmpty[ch.id]) {
       renderEmptyChannel(ch);
       return;
@@ -1418,6 +1454,8 @@
     _autoRetryEmpty[ch.id] = true;
     showMessageSkeleton();
     setTimeout(function () {
+      // 1 秒后若已切走，不再强行跳回旧频道
+      if (currentChannel && currentChannel.id !== ch.id) return;
       delete channelMessages[ch.id];
       currentChannel = null;
       switchChannel(ch);
@@ -1601,8 +1639,18 @@
 
   // 顶层消息保持独立分页，评论/楼中楼另行补拉后合并到同一内存快照。
   // 这样主 feed 不会被评论挤占，同时刷新后评论区和计数都有完整数据。
+  // 加载超时兜底：后端（InsForge 跨国链路）偶发「请求挂起、既不 resolve 也不 reject」，
+  // 导致骨架屏无限转圈。用 Promise.race 在超时后 reject，落到 showChannelLoadError 重试态。
+  function _loadTimeout(ms, label) {
+    return new Promise(function (_, reject) {
+      setTimeout(function () { reject(new Error(label + ' 超时')); }, ms);
+    });
+  }
   function loadChannelSnapshot(ch, opts) {
-    var topPromise = IF.getMessages(ch.id, opts);
+    var topPromise = Promise.race([
+      IF.getMessages(ch.id, opts),
+      _loadTimeout(10000, 'getMessages')
+    ]);
     var replyPromise = IF.getReplyMessages
       ? IF.getReplyMessages(ch.id, { limit: 1000 }).catch(function () { return []; })
       : Promise.resolve([]);
@@ -1617,6 +1665,9 @@
   }
 
   function switchChannel(ch, onAfterRender){
+    var reqToken = ++_switchToken; // 标记本次切换；异步回调里校验，过期则忽略
+    // 过期守卫：当前已切到别的频道，旧请求结果不再处理（解决「切走还显示旧频道加载界面」）
+    function stale(){ return reqToken !== _switchToken || !currentChannel || currentChannel.id !== ch.id; }
     var prevChannel = currentChannel; // 切换前频道，用于缓存/订阅判断
     hideLoadMoreSpinner(); // 切换频道时清掉可能残留的加载转圈
     renderWinEnd = RENDER_WIN; // 进入频道重置渲染窗口（pendingJumpMsgId 由调用方在 switchChannel 前设置）
@@ -1629,6 +1680,7 @@
     }
 
     currentChannel = ch;
+    try { localStorage.setItem(LAST_CHANNEL_KEY, String(ch.id)); } catch(e){}
     lastReadTimestamps[ch.id] = Date.now();
     unreadCounts[ch.id] = 0;
     updateChannelBadges();
@@ -1656,6 +1708,7 @@
       // 跳转目标可能很旧：强制走网络拉取（更大窗口 200）确保目标在首批，期间显示频道专属骨架屏
       showMessageSkeleton();
       loadChannelSnapshot(ch, { offset: 0, limit: 200 }).then(function(snapshot){
+        if (stale()) return;
         var list = snapshot.top;
         _autoRetryEmpty[ch.id] = false;
         if (list.length === 0) { handleEmptyChannel(ch, { limit: 200 }); return; }
@@ -1670,13 +1723,18 @@
           if (typeof onAfterRender === 'function') { try { onAfterRender(); } catch(e){} }
         };
         if (ids.length && currentUser && IF.getLikeAggregates) {
-          IF.getLikeAggregates(ids, currentUser.id).then(function(agg){
+          Promise.race([
+            IF.getLikeAggregates(ids, currentUser.id),
+            _loadTimeout(10000, 'getLikeAggregates')
+          ]).then(function(agg){
+            if (stale()) return;
             likeAgg = agg || {};
             for (var mid in likeAgg){ if (likeAgg.hasOwnProperty(mid) && likeAgg[mid].mine && likeAgg[mid].total<=0) likeAgg[mid].total=1; }
             afterAgg();
-          }).catch(function(){ likeAgg={}; afterAgg(); });
+          }).catch(function(){ if (stale()) return; likeAgg={}; afterAgg(); });
         } else { likeAgg={}; afterAgg(); }
       }).catch(function(){
+        if (stale()) return;
         showChannelLoadError(ch);
         if (typeof onAfterRender === 'function') { try { onAfterRender(); } catch(e){} }
       });
@@ -1689,6 +1747,7 @@
       // 首次加载：分页拉取（不一次性全拉）→ 真实网络请求，期间显示频道专属骨架屏
       showMessageSkeleton();
       loadChannelSnapshot(ch, { offset: 0, limit: RENDER_WIN }).then(function(snapshot) {
+        if (stale()) return;
         var list = snapshot.top;
         _autoRetryEmpty[ch.id] = false;
         if (list.length === 0) { handleEmptyChannel(ch, { limit: RENDER_WIN }); return; }
@@ -1706,7 +1765,11 @@
         };
         // 聚合本频道所有消息的点赞（一次查询，前端计数；无触发器/无计数列/无 RLS 冲突）
         if (ids.length && currentUser && IF.getLikeAggregates) {
-          IF.getLikeAggregates(ids, currentUser.id).then(function(agg){
+          Promise.race([
+            IF.getLikeAggregates(ids, currentUser.id),
+            _loadTimeout(10000, 'getLikeAggregates')
+          ]).then(function(agg){
+            if (stale()) return;
             likeAgg = agg || {};
             // 一致性兜底：自己点过赞的消息至少 total=1
             for (var mid in likeAgg) {
@@ -1715,12 +1778,13 @@
               }
             }
             afterAgg();
-          }).catch(function(){ likeAgg = {}; afterAgg(); });
+          }).catch(function(){ if (stale()) return; likeAgg = {}; afterAgg(); });
         } else {
           likeAgg = {};
           afterAgg();
         }
       }).catch(function() {
+        if (stale()) return;
         showChannelLoadError(ch);
         if (typeof onAfterRender === 'function') { try { onAfterRender(); } catch (e) {} }
       });
@@ -2185,8 +2249,15 @@
     }
     if (animate && typeof gsap !== 'undefined' && !REDUCED_MOTION) {
       gsap.killTweensOf(node);
-      gsap.fromTo(node, { scale: 0.92, opacity: 0 },
-        { scale: 1, opacity: 1, duration: 0.45, ease: 'elastic.out(1,0.75)', clearProps: 'opacity,transform' });
+      if (document.body.dataset.theme === 'light') {
+        // 校园手稿：新消息像便签纸贴上
+        gsap.fromTo(node,
+          { y: -18, rotation: -1.2, scale: 0.96, opacity: 0, transformOrigin: 'top left' },
+          { y: 0, rotation: 0, scale: 1, opacity: 1, duration: 0.5, ease: 'back.out(1.6)', clearProps: 'opacity,transform' });
+      } else {
+        gsap.fromTo(node, { scale: 0.92, opacity: 0 },
+          { scale: 1, opacity: 1, duration: 0.45, ease: 'elastic.out(1,0.75)', clearProps: 'opacity,transform' });
+      }
     }
     // 发送时间字符逐显动画（无论是否启用入场动画，时间文字都按 GSAP 字符动画处理）
     if (node) animateTimeChars(node);
@@ -2295,11 +2366,20 @@
       var groups = messagesArea.querySelectorAll(restoreScroll ? '.msg-group.msg-new' : '.msg-group');
       if (groups.length) {
         gsap.killTweensOf(groups);
-        gsap.fromTo(groups,
-          { rotationX: -88, opacity: 0, transformPerspective: 800, transformOrigin: 'center top' },
-          { rotationX: 0, opacity: 1, duration: 0.55, ease: 'power3.out',
-            stagger: { each: 0.05, start: 0.04 },
-            clearProps: 'opacity,transform' });  // 动画结束清 inline，回 CSS 默认(可见)
+        if (document.body.dataset.theme === 'light') {
+          // 校园手稿：便签纸 stagger 飘落
+          gsap.fromTo(groups,
+            { y: -24, rotation: function(i){ return (i % 2 === 0 ? -1.2 : 1.2); }, scale: 0.95, opacity: 0, transformOrigin: 'top center' },
+            { y: 0, rotation: 0, scale: 1, opacity: 1, duration: 0.55, ease: 'back.out(1.4)',
+              stagger: { each: 0.05, start: 0.04 },
+              clearProps: 'opacity,transform' });
+        } else {
+          gsap.fromTo(groups,
+            { rotationX: -88, opacity: 0, transformPerspective: 800, transformOrigin: 'center top' },
+            { rotationX: 0, opacity: 1, duration: 0.55, ease: 'power3.out',
+              stagger: { each: 0.05, start: 0.04 },
+              clearProps: 'opacity,transform' });  // 动画结束清 inline，回 CSS 默认(可见)
+        }
       }
       // 欢迎卡片 / 时间字符仅在非「加载更多」时淡入，避免历史批次逐字重闪
       if (!restoreScroll) {
@@ -3783,6 +3863,17 @@
       item.appendChild(actions);
       container.appendChild(item);
     });
+
+    // 校园手稿：好友/请求项 stagger 入场
+    if (document.body.dataset.theme === 'light' && typeof gsap !== 'undefined' && !REDUCED_MOTION) {
+      try {
+        var items = container.querySelectorAll('.friend-item');
+        gsap.killTweensOf(items);
+        gsap.fromTo(items,
+          { y: -12, rotation: function(i){ return (i % 2 === 0 ? -1 : 1); }, opacity: 0, transformOrigin: 'top center' },
+          { y: 0, rotation: 0, opacity: 1, duration: 0.45, stagger: 0.06, ease: 'back.out(1.5)', clearProps: 'opacity,transform' });
+      } catch(e){}
+    }
   }
 
   function renderFriends() {
@@ -4378,7 +4469,11 @@
   // ==================== BACKGROUND SETTINGS ====================
 
   var BG_STORAGE_KEY = 'campus_main_bg_v1';
-  var THEME_NAMES = { starry: '星空', light: '白昼极简', classroom: '自然森绿', custom: '我的壁纸' };
+  var LAST_CHANNEL_KEY = 'campus_last_channel_v1';
+  // 频道切换令牌：每次 switchChannel 自增，过期（已切走）的异步结果一律忽略，
+  // 避免旧频道（如加载缓慢的「二次元世界」）的 Promise/catch/自动重试覆盖当前频道界面。
+  var _switchToken = 0;
+  var THEME_NAMES = { starry: '星空', light: '校园手稿', classroom: '自然森绿', custom: '我的壁纸' };
 
   var currentBg = { theme: 'starry', customUrl: '', blur: 0, dim: 38 };
 
@@ -4443,6 +4538,16 @@
       if (mainDots) {
         gsap.killTweensOf(mainDots);
         gsap.fromTo(mainDots, { opacity: 0, scale: 1.02 }, { opacity: 1, scale: 1, duration: 1.0, ease: 'power2.out' });
+      }
+
+      // 校园手稿主题：面板像纸张从上方 stagger 飘落
+      if (theme === 'light') {
+        var panels = document.querySelectorAll('.top-nav, .channel-drawer, .right-sidebar, .message-input-wrapper');
+        gsap.killTweensOf(panels);
+        gsap.fromTo(panels,
+          { y: -22, opacity: 0, rotation: -1.2, scale: 0.98 },
+          { y: 0, opacity: 1, rotation: 0, scale: 1, duration: 0.6, stagger: 0.08, ease: 'back.out(1.4)', clearProps: 'all' }
+        );
       }
     }
   }
