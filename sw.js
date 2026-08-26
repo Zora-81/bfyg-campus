@@ -5,8 +5,8 @@
 //    <img> 请求为 no-cors，响应在 SW 内是 opaque，Cache API 可存（仅大小惩罚，可接受）
 //  - 不缓存 HTML 文档（交给 var v 反缓存机制）与 POST/API 请求
 
-const APP_CACHE = 'campus-app-v3';
-const IMG_CACHE = 'campus-img-v3';
+const APP_CACHE = 'campus-app-v4';
+const IMG_CACHE = 'campus-img-v4';
 const IMG_HOST = 'api.bfgzlt.cc.cd';
 const IMG_RE = /\.(jpg|jpeg|png|webp|gif|avif)(\?|$)/i;
 
@@ -50,19 +50,19 @@ self.addEventListener('fetch', (event) => {
   // 不缓存 SW 自身，否则旧 SW 会拦截新版 sw.js 导致永远更新失败（含带 query 的注册 URL）
   if (url.pathname === '/sw.js') return;
 
-  // 同源静态资源：cache-first（排除 HTML 文档，交给 var v 反缓存机制）
+  // 同源静态资源：network-first（排除 HTML 文档）。
+  // 每次都先取最新 js/css，网络失败才回退缓存 —— 保证改动能立即生效，同时保留离线兜底。
   if (url.origin === self.location.origin) {
     const accept = req.headers.get('accept') || '';
     if (accept.includes('text/html')) return;
     event.respondWith((async () => {
       const cache = await caches.open(APP_CACHE);
-      const cached = await cache.match(req);
-      if (cached) return cached;
       try {
         const resp = await fetch(req);
         if (resp && resp.ok) { try { await cache.put(req, resp.clone()); } catch (e) {} }
         return resp;
       } catch (e) {
+        const cached = await cache.match(req);
         return cached || Response.error();
       }
     })());
