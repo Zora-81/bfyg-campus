@@ -19,7 +19,7 @@
 
     (function(){
 
-      var v = '1.5.38';
+      var v = '1.5.39';
 
       // 暴露版本号全局：__APP_VERSION 供设置面板；window.v 供 app.js 记忆树版本读取（根治兜底串漏 bump）
       window.__APP_VERSION = v;
@@ -1930,12 +1930,20 @@
         // 清掉所有旧注册（含无 query 的旧 /sw.js 与旧 swv 版本），
         // 避免多个同作用域 SW 互相拦截导致更新永远失败
         navigator.serviceWorker.getRegistrations().then(function (regs) {
-          regs.forEach(function (r) {
-            var s = r.scriptURL || '';
-            if (s.indexOf('swv=4') === -1) r.unregister();
-          });
+          var hasNew = regs.some(function (r) { return (r.scriptURL || '').indexOf('swv=4') !== -1; });
+          if (hasNew) {
+            // 新版已安装，幂等注册确保其处于活跃状态
+            navigator.serviceWorker.register('/sw.js?swv=4').catch(function () {});
+          } else if (regs.length > 0) {
+            // 只有旧版：先全部注销，再刷新一次。否则旧 SW 仍控制当前页面，
+            // 会拦截 /sw.js?swv=4 请求并返回旧 sw.js，导致新版永远装不上。
+            regs.forEach(function (r) { r.unregister(); });
+            location.reload();
+          } else {
+            // 干净环境直接注册
+            navigator.serviceWorker.register('/sw.js?swv=4').catch(function () {});
+          }
         });
-        navigator.serviceWorker.register('/sw.js?swv=4').catch(function () {});
       });
     }
   </script>
