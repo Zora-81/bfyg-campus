@@ -270,11 +270,11 @@ body.main-active #monster-login { display:none !important; }
   -webkit-backdrop-filter: none;
 }
 
-/* 左侧抽屉本身透明，让横线格纸背景透出；header 与列表项作为独立卡片 */
+/* 左侧抽屉：用比主背景更深的羊皮纸色，和横线格纸底区分开 */
 [data-theme="light"] .channel-drawer {
-  background: var(--bg-surface);
-  border-right: 2px dashed var(--border-active);
-  box-shadow: none;
+  background: #E8E2D3;
+  border-right: 2px dashed rgba(31,27,22,0.22);
+  box-shadow: 4px 0 24px rgba(31,27,22,0.06);
 }
 
 [data-theme="light"] .top-nav {
@@ -284,31 +284,53 @@ body.main-active #monster-login { display:none !important; }
   box-shadow: 0 2px 0 rgba(31,27,22,0.04);
 }
 
+/* 校园手稿：兜底 —— 关键文字必须用深墨，禁止被浅色覆盖 */
+[data-theme="light"] .drawer-server-name,
+[data-theme="light"] .drawer-user-name,
+[data-theme="light"] .drawer-user-tag,
+[data-theme="light"] .ch-item,
+[data-theme="light"] .ch-category-title,
+[data-theme="light"] .nav-channel-title,
+[data-theme="light"] .nav-channel-desc,
+[data-theme="light"] .msg-feed-name,
+[data-theme="light"] .msg-feed-title,
+[data-theme="light"] .msg-content {
+  color: var(--ink) !important;
+}
+[data-theme="light"] .ch-category-title,
+[data-theme="light"] .nav-channel-desc,
+[data-theme="light"] .drawer-user-tag,
+[data-theme="light"] .msg-feed-title {
+  color: var(--ink-sec) !important;
+}
+
 /* 校园手稿：顶部频道标题卡 */
 [data-theme="light"] .nav-channel-info {
-  background: var(--bg-surface);
-  border: 1.5px dashed var(--border-light);
+  background: #FFFDF7;
+  border: 1.5px dashed rgba(31,27,22,0.18);
   border-radius: 14px 16px 12px 18px;
-  box-shadow: 2px 3px 0 rgba(31,27,22,0.05);
+  box-shadow: 2px 3px 0 rgba(31,27,22,0.06);
 }
 [data-theme="light"] .nav-channel-info::after { display:none; }
 [data-theme="light"] .ch-card-bar {
-  background: var(--accent-light);
+  background: var(--accent);
 }
 [data-theme="light"] .nav-channel-title {
   color: var(--ink);
+  font-weight: 800;
 }
 [data-theme="light"] .nav-channel-desc {
   color: var(--ink-sec);
 }
 
-/* 频道/好友列表项：像便签条 */
+/* 频道/好友列表项：像便签条（白纸卡片落在羊皮纸上） */
 [data-theme="light"] .ch-item,
 [data-theme="light"] .friend-item {
-  background: var(--bg-surface);
-  border: 1.5px dashed var(--border-light);
+  background: #FFFDF7;
+  border: 1.5px dashed rgba(31,27,22,0.18);
   border-radius: 12px 14px 10px 16px;
-  box-shadow: 2px 3px 0 rgba(31,27,22,0.05);
+  box-shadow: 2px 3px 0 rgba(31,27,22,0.06);
+  color: var(--ink);
   transition: transform 0.25s cubic-bezier(.34,1.56,.64,1),
               box-shadow 0.25s ease,
               background 0.18s ease,
@@ -316,15 +338,24 @@ body.main-active #monster-login { display:none !important; }
 }
 [data-theme="light"] .ch-item:hover,
 [data-theme="light"] .friend-item:hover {
-  background: var(--bg-hover);
-  border-color: var(--border-active);
-  box-shadow: 2px 5px 0 rgba(31,27,22,0.07);
+  background: #F5F0E4;
+  border-color: rgba(31,27,22,0.28);
+  box-shadow: 2px 5px 0 rgba(31,27,22,0.08);
   transform: translateY(-2px) rotate(-0.4deg);
 }
 [data-theme="light"] .ch-item.active,
-[data-theme="light"] .friend-item:active {
-  background: var(--bg-active);
+[data-theme="light"] .friend-item.active {
+  background: #EDE7D6;
+  border-color: var(--accent);
+  box-shadow: inset 2px 2px 0 rgba(31,27,22,0.04);
   transform: translateY(0) rotate(0deg);
+}
+[data-theme="light"] .ch-category-title {
+  color: var(--ink-sec);
+  font-weight: 800;
+}
+[data-theme="light"] .ch-category-title:hover {
+  color: var(--ink);
 }
 
 /* 消息区：内容像写在纸上 */
@@ -396,13 +427,13 @@ body.main-active #monster-login { display:none !important; }
   color: var(--text);
 }
 
-/* 校园手稿：记忆树 · 星空档案入口按钮 */
+/* 校园手稿：记忆树 · 星空档案入口按钮 — 实心紫底白字，必须一眼看见 */
 [data-theme="light"] .mt-drawer-entry-btn {
-  color: var(--accent);
-  background: rgba(124,92,252,0.10);
-  border: 2px dashed var(--accent);
+  color: #fff;
+  background: var(--accent);
+  border: 2px dashed #fff;
   border-radius: 12px 14px 10px 16px;
-  box-shadow: 2px 3px 0 rgba(124,92,252,0.16);
+  box-shadow: 2px 3px 0 rgba(31,27,22,0.12);
   font-weight: 800;
   font-size: 0.95rem;
   transition: transform 0.25s cubic-bezier(.34,1.56,.64,1),
@@ -411,9 +442,9 @@ body.main-active #monster-login { display:none !important; }
               border-color 0.18s ease;
 }
 [data-theme="light"] .mt-drawer-entry-btn:hover {
-  background: rgba(124,92,252,0.18);
-  border-color: var(--accent-hover);
-  box-shadow: 2px 5px 0 rgba(124,92,252,0.22);
+  background: var(--accent-hover);
+  border-color: #fff;
+  box-shadow: 2px 5px 0 rgba(31,27,22,0.14);
   transform: translateY(-2px) rotate(-0.4deg);
 }
 
@@ -631,7 +662,7 @@ body.main-active #monster-login { display:none !important; }
 [data-theme="light"] .drawer-header {
   background: transparent;
   border: none;
-  border-bottom: 1.5px dashed var(--border-light);
+  border-bottom: 1.5px dashed rgba(31,27,22,0.18);
   border-radius: 0;
   padding: 16px;
   margin: 0;
@@ -648,7 +679,7 @@ body.main-active #monster-login { display:none !important; }
   border-radius: 14px 16px 12px 18px;
   border: 2.5px dashed var(--accent);
   padding: 5px;
-  background: var(--bg-active);
+  background: #FFFDF7;
   box-shadow: 2px 3px 0 rgba(31,27,22,0.08);
   display: block;
   object-fit: contain;
@@ -656,33 +687,32 @@ body.main-active #monster-login { display:none !important; }
 }
 [data-theme="light"] .drawer-server-name {
   color: var(--ink);
-  font-size: 1.55rem;
+  font-size: 1.6rem;
   font-weight: 900;
   letter-spacing: 0.01em;
-  text-shadow: 0 1px 0 rgba(255,255,255,0.5);
+  text-shadow: 0 1px 0 rgba(255,255,255,0.35);
 }
 [data-theme="light"] .drawer-divider {
-  background: var(--line);
-}
-[data-theme="light"] .ch-category-title {
-  color: var(--ink-sec);
-}
-[data-theme="light"] .ch-category-title:hover {
-  color: var(--ink);
+  background: rgba(31,27,22,0.12);
 }
 [data-theme="light"] .drawer-user {
-  background: var(--bg-deeper);
-  border-top-color: var(--line);
+  background: #DED8C8;
+  border-top: 1.5px dashed rgba(31,27,22,0.18);
 }
 [data-theme="light"] .drawer-user-name {
   color: var(--ink);
+  font-weight: 700;
 }
 [data-theme="light"] .drawer-user-tag {
-  color: var(--ink-dim);
+  color: var(--ink-sec);
+}
+[data-theme="light"] .drawer-settings-btn,
+[data-theme="light"] .drawer-logout-btn {
+  color: var(--ink-sec);
 }
 [data-theme="light"] .drawer-settings-btn:hover,
 [data-theme="light"] .drawer-logout-btn:hover {
-  background: var(--bg-hover);
+  background: rgba(31,27,22,0.08);
   color: var(--ink);
 }
 
