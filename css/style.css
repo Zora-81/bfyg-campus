@@ -428,22 +428,29 @@ body.main-active #monster-login { display:none !important; }
 }
 
 /* 校园手稿：记忆树 · 星空档案入口按钮 — 实心紫底白字，必须一眼看见 */
-[data-theme="light"] .mt-drawer-entry-btn {
-  color: #fff;
-  background: var(--accent);
-  border: 2px dashed #fff;
+[data-theme="light"] .mt-drawer-entry-btn,
+[data-theme="light"] #mt-entry-btn {
+  color: #fff !important;
+  background: var(--accent) !important;
+  border: 2px dashed #fff !important;
   border-radius: 12px 14px 10px 16px;
   box-shadow: 2px 3px 0 rgba(31,27,22,0.12);
   font-weight: 800;
   font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 10px 12px;
   transition: transform 0.25s cubic-bezier(.34,1.56,.64,1),
               box-shadow 0.25s ease,
               background 0.18s ease,
               border-color 0.18s ease;
 }
-[data-theme="light"] .mt-drawer-entry-btn:hover {
-  background: var(--accent-hover);
-  border-color: #fff;
+[data-theme="light"] .mt-drawer-entry-btn:hover,
+[data-theme="light"] #mt-entry-btn:hover {
+  background: var(--accent-hover) !important;
+  border-color: #fff !important;
   box-shadow: 2px 5px 0 rgba(31,27,22,0.14);
   transform: translateY(-2px) rotate(-0.4deg);
 }
@@ -658,17 +665,25 @@ body.main-active #monster-login { display:none !important; }
   color: var(--ink-dim);
 }
 
-/* 左侧抽屉头部：恢复原版整面左侧面板结构，只保留底部分隔线 */
+/* 左侧抽屉头部：强制可见性兜底 —— 这里曾被旧缓存/旧样式覆盖导致完全空白 */
+[data-theme="light"] .drawer-header,
+[data-theme="light"] .drawer-header * {
+  opacity: 1 !important;
+  visibility: visible !important;
+}
 [data-theme="light"] .drawer-header {
-  background: transparent;
+  background: #DED8C8 !important;
   border: none;
-  border-bottom: 1.5px dashed rgba(31,27,22,0.18);
+  border-bottom: 1.5px dashed rgba(31,27,22,0.22);
   border-radius: 0;
   padding: 16px;
   margin: 0;
   box-shadow: none;
+  position: relative;
+  z-index: 1;
 }
 [data-theme="light"] .drawer-server {
+  display: flex;
   gap: 14px;
   margin-bottom: 12px;
   align-items: center;
@@ -679,18 +694,18 @@ body.main-active #monster-login { display:none !important; }
   border-radius: 14px 16px 12px 18px;
   border: 2.5px dashed var(--accent);
   padding: 5px;
-  background: #FFFDF7;
-  box-shadow: 2px 3px 0 rgba(31,27,22,0.08);
+  background: #FFFDF7 !important;
+  box-shadow: 2px 3px 0 rgba(31,27,22,0.12);
   display: block;
   object-fit: contain;
   flex-shrink: 0;
 }
 [data-theme="light"] .drawer-server-name {
-  color: var(--ink);
+  color: var(--ink) !important;
   font-size: 1.6rem;
   font-weight: 900;
   letter-spacing: 0.01em;
-  text-shadow: 0 1px 0 rgba(255,255,255,0.35);
+  text-shadow: 0 1px 0 rgba(255,255,255,0.5);
 }
 [data-theme="light"] .drawer-divider {
   background: rgba(31,27,22,0.12);
