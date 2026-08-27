@@ -21,7 +21,7 @@ jobs:
         with:
           node-version: 22
 
-      # 1) 保活：ping 项目 API，重置 InsForge 免费档"7 天闲置"计时器
+      # 1) 保活：ping 项目 API，重置 InsForge 免费档"7 天闲置"计时器（无需 key，始终执行）
       - name: Keepalive ping (project API)
         run: |
           curl -s --connect-timeout 10 --max-time 25 -o /dev/null -w "keepalive HTTP %{http_code}\n" \
@@ -29,25 +29,25 @@ jobs:
             -H "apikey: anon_a09338fe0bdb3e2a0797c92a73a8431ddae4b38f7b12333fe41ebbeccba6e2ea" \
             -H "Authorization: Bearer anon_a09338fe0bdb3e2a0797c92a73a8431ddae4b38f7b12333fe41ebbeccba6e2ea"
 
-      # 2) 登录 InsForge CLI（需要 GitHub Secrets: INSFORGE_API_KEY）
+      # 2-5) 自动恢复：仅在配置了 INSFORGE_API_KEY secret 时启用
       - name: Authenticate InsForge CLI
+        if: ${{ secrets.INSFORGE_API_KEY != '' }}
         run: npx -y @insforge/cli login --user-api-key "${{ secrets.INSFORGE_API_KEY }}"
 
-      # 3) 检查项目状态
       - name: Check project status
         id: status
+        if: ${{ secrets.INSFORGE_API_KEY != '' }}
         run: |
           STATUS=$(npx -y @insforge/cli projects get --project ef075aab-34e4-497c-b905-be56789452e0 --json | jq -r '.status')
           echo "status=$STATUS" >> "$GITHUB_OUTPUT"
           echo "Project status: $STATUS"
 
-      # 4) 若项目被暂停，自动恢复（bringing it back online）
       - name: Restore if paused
-        if: steps.status.outputs.status == 'paused'
+        if: ${{ secrets.INSFORGE_API_KEY != '' && steps.status.outputs.status == 'paused' }}
         run: npx -y @insforge/cli projects restore --project ef075aab-34e4-497c-b905-be56789452e0
 
-      # 5) 报告最终状态
       - name: Final status
+        if: ${{ secrets.INSFORGE_API_KEY != '' }}
         run: |
           sleep 10
           STATUS=$(npx -y @insforge/cli projects get --project ef075aab-34e4-497c-b905-be56789452e0 --json | jq -r '.status')
