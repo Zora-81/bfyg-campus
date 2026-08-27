@@ -1,0 +1,54 @@
+name: InsForge Auto-Restore & Keepalive (baofeng-campus)
+
+on:
+  schedule:
+    - cron: '0 */2 * * *'   # 每 2 小时跑一次（UTC 时间，北京时间 +8）
+  workflow_dispatch:        # 支持手动触发
+
+permissions:
+  contents: read
+
+jobs:
+  keepalive-and-restore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # 1) 保活：ping 项目 API，重置 InsForge 免费档"7 天闲置"计时器
+      - name: Keepalive ping (project API)
+        run: |
+          curl -s --connect-timeout 10 --max-time 25 -o /dev/null -w "keepalive HTTP %{http_code}\n" \
+            -X GET "https://api.bfgzlt.cc.cd/api/database/records/profiles?select=id&limit=1" \
+            -H "apikey: anon_a09338fe0bdb3e2a0797c92a73a8431ddae4b38f7b12333fe41ebbeccba6e2ea" \
+            -H "Authorization: Bearer anon_a09338fe0bdb3e2a0797c92a73a8431ddae4b38f7b12333fe41ebbeccba6e2ea"
+
+      # 2) 登录 InsForge CLI（需要 GitHub Secrets: INSFORGE_API_KEY）
+      - name: Authenticate InsForge CLI
+        run: npx -y @insforge/cli login --user-api-key "${{ secrets.INSFORGE_API_KEY }}"
+
+      # 3) 检查项目状态
+      - name: Check project status
+        id: status
+        run: |
+          STATUS=$(npx -y @insforge/cli projects get --project ef075aab-34e4-497c-b905-be56789452e0 --json | jq -r '.status')
+          echo "status=$STATUS" >> "$GITHUB_OUTPUT"
+          echo "Project status: $STATUS"
+
+      # 4) 若项目被暂停，自动恢复（bringing it back online）
+      - name: Restore if paused
+        if: steps.status.outputs.status == 'paused'
+        run: npx -y @insforge/cli projects restore --project ef075aab-34e4-497c-b905-be56789452e0
+
+      # 5) 报告最终状态
+      - name: Final status
+        run: |
+          sleep 10
+          STATUS=$(npx -y @insforge/cli projects get --project ef075aab-34e4-497c-b905-be56789452e0 --json | jq -r '.status')
+          echo "After check: $STATUS"
