@@ -577,15 +577,27 @@
 [data-theme="starry"] .message-input-wrapper,
 [data-theme="custom"] .message-input-wrapper { --nav-card-bg: rgba(255,255,255,0.045); --nav-card-line: rgba(255,255,255,0.14); --nav-card-shadow: rgba(0,0,0,0.2); }
 
+/* v1.5.102：印章造型保留（全站记忆点），颜色改随主题：
+   手稿=橙红邮票章（原样）/ 森绿=绿印 / 星空&custom=频道人格色青印 */
 .send-btn {
+  --stamp-a: #F26B4C; --stamp-b: #C93A1D; --stamp-ring: rgba(201, 58, 29, 0.25);
   width: 44px !important;
   height: 44px !important;
   border-radius: 50% 46% 52% 48% !important;
-  background: radial-gradient(circle at 32% 30%, #F26B4C, #C93A1D 72%) !important;
+  background: radial-gradient(circle at 32% 30%, var(--stamp-a), var(--stamp-b) 72%) !important;
   color: #fff !important;
   border: 2.5px solid rgba(255, 255, 255, 0.55) !important;
-  box-shadow: 0 0 0 2px rgba(201, 58, 29, 0.25), 2px 3px 0 rgba(31, 27, 22, 0.18) !important;
+  box-shadow: 0 0 0 2px var(--stamp-ring), 2px 3px 0 rgba(31, 27, 22, 0.18) !important;
   transition: transform 0.12s ease, box-shadow 0.12s ease !important;
+}
+[data-theme="classroom"] .send-btn {
+  --stamp-a: #34d399; --stamp-b: #059669; --stamp-ring: rgba(5, 150, 105, 0.28);
+}
+[data-theme="starry"] .send-btn,
+[data-theme="custom"] .send-btn {
+  --stamp-a: hsl(var(--channel-hue, 190), 85%, 62%);
+  --stamp-b: hsl(var(--channel-hue, 190), 80%, 42%);
+  --stamp-ring: hsla(var(--channel-hue, 190), 85%, 55%, 0.30);
 }
 .send-btn:hover { transform: rotate(-5deg) scale(1.05); }
 .send-btn:active { transform: scale(0.84) rotate(-14deg); box-shadow: 0 0 0 4px rgba(201, 58, 29, 0.18), 0 1px 0 rgba(31,27,22,0.18) !important; }

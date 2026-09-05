@@ -240,10 +240,13 @@
       onMessage: function (msg) {
         var uid = BoboBot._uid;
         if (uid && msg.author_id === uid) return;
+        // 主频道里 @啵宝（或"啵宝"开头）→ 啵宝以"评论该条消息"的方式回复（进评论串）
+        var text = String(msg.content || '');
+        var isAtBobo = text.indexOf('@啵宝') >= 0 || /^@?啵宝/.test(text.trim());
         fire(msg.channel_id + ':' + (msg.parent_id || ''), {
           messageId: msg.id, channelId: msg.channel_id,
-          authorId: msg.author_id, content: msg.content,
-          parentReply: msg.parent_id || null
+          authorId: msg.author_id, content: text,
+          parentReply: msg.parent_id || (isAtBobo ? msg.id : null)
         });
       }
     };
@@ -1902,6 +1905,10 @@
     var ct = msg.content_type;
     if (ct === 'text') {
       var t = String(msg.content || '');
+      // v1.5.102：无信息量标题兜底——空白或 ≤2 字符的单字帖（如「↔」「1」）上热门榜时显示泛化标题
+      if (t.replace(/\s/g, '').length <= 2 && !/https?:\/\//.test(t)) {
+        return { title: '文字动态' };
+      }
       return { title: t.length > 30 ? t.slice(0, 30) + '…' : (t || '（空内容）') };
     }
     if (ct === 'image') {
