@@ -940,6 +940,7 @@
     channelMessages = {};
     currentChannel = null;
     unreadCounts = {};
+    _hotSig = null; // 退出登录清空热榜签名缓存，下次登录首屏保证重建（防旧签名抑制新榜单渲染）
     if(window._carousel) window._carousel.start();
   }
 
@@ -1829,6 +1830,24 @@
   }
 
   // ── 右侧边栏渲染（贴吧风格：热点话题 + 频道推荐）──
+  // v1.6.2：热门话题是纯前端聚合（computeHotItems 只读全频道内存缓存，本身不发网络请求），
+  // 但此前每次 renderMessages（切频道/加载更多都会触发）都无条件重建热榜 DOM：
+  // hotCardIn 入场动画整列重播、缩略图 <img> 重挂载闪跳，观感像「换频道就重新拉数据」。
+  // 修复：给榜单渲染结果算签名（排名序 + 评论数 + 标题/缩略图/角标），
+  // 签名不变直接复用现有 DOM，换频道零重绘；仅当榜单真实变化（新话题进榜、
+  // 评论数变化、内容被编辑/撤回）时才重建一次。相对时间不参与签名：
+  // 它随当前时刻自然增长，放进去会导致每跨一个时间档就整列重建；改为由
+  // updateRelativeTimes（60s）对 .hot-card-time[data-ts] 就地刷新文本。
+  var _hotSig = null;
+  function hotListSig(items) {
+    if (!items || !items.length) return 'empty';
+    // JSON.stringify 会转义内容里的特殊字符，保证不同数据不会拼出同一个签名
+    return JSON.stringify(items.map(function (m) {
+      var pv = hotPreviewOf(m);
+      return [m.id, m._comments || 0, pv.title, pv.thumb || '', pv.chip || ''];
+    }));
+  }
+
   function renderRightSidebar() {
     var hotEl = document.getElementById('hot-topics');
     var popupHotEl = document.getElementById('hot-topics-mobile');
@@ -1836,8 +1855,12 @@
     if (!hotEl || !recEl) return;
 
     var hotItems = computeHotItems();
-    buildHotCards(hotEl, hotItems);
-    if (popupHotEl) buildHotCards(popupHotEl, hotItems);
+    var sig = hotListSig(hotItems);
+    if (sig !== _hotSig) {
+      _hotSig = sig;
+      buildHotCards(hotEl, hotItems);
+      if (popupHotEl) buildHotCards(popupHotEl, hotItems);
+    }
 
     // ② 频道推荐：显示非公告频道
     recEl.innerHTML = '';
@@ -1965,7 +1988,7 @@
           '<div class="hot-card-title">'+escapeHtml(title)+'</div>'+
           '<div class="hot-card-meta">'+escapeHtml(chName)+' · '+cc+' 讨论</div>'+
           '<div class="hot-card-foot">'+
-            '<span class="hot-card-time">'+escapeHtml(ageStr)+'</span>'+
+            '<span class="hot-card-time" data-ts="'+escapeHtml(msg.created_at||'')+'">'+escapeHtml(ageStr)+'</span>'+
             '<span class="hot-heat-track"><span class="hot-heat-fill" style="width:'+pct+'%"></span></span>'+
           '</div>'+
         '</div>';
@@ -2290,13 +2313,13 @@
 
     // 头像（优先头像图，否则首字母）
     var avatarInner;
-    if (author.avatar_url) {
-      avatarInner = '<img src="'+escapeHtml(author.avatar_url)+'" alt="'+escapeHtml(author.nickname||'')+'" onerror="this.style.display=\'none\'">';
+    if (author.role === 'ai') {
+      avatarInner = '<svg class="bobo-mini-avatar" viewBox="-158 -158 316 316" preserveAspectRatio="xMidYMid slice"></svg>';
+    } else if (author.avatar_url) {
+      avatarInner = '<img class="bobo-user-avatar-img" src="' + escapeHtml(author.avatar_url) + '" alt="' + escapeHtml(author.nickname || '') + '">';
     } else {
       avatarInner = getInitial(author.nickname||author.username||'?');
     }
-    var avatarBg = getAvatarColor(author.username||'未知');
-
     // 称号（来自用户 profile 的 title 字段；无则不渲染）
     var titleHtml = '';
     if (author.title) {
@@ -3588,6 +3611,13 @@
         return '<span class="msg-time-char">' + (c === ' ' ? '&nbsp;' : escapeHtml(c)) + '</span>';
       }).join('');
       node.innerHTML = chars;
+    });
+    // 热门榜卡片的相对时间：榜单 DOM 因签名防重建不再随切频道刷新，这里就地更新文本
+    document.querySelectorAll('.hot-card-time[data-ts]').forEach(function(node) {
+      var ts = node.getAttribute('data-ts');
+      if (!ts) return;
+      var newText = formatRelativeTime(ts);
+      if (node.textContent !== newText) node.textContent = newText;
     });
   }
   var _relativeTimeInterval = setInterval(updateRelativeTimes, 60 * 1000);

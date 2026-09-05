@@ -450,7 +450,7 @@
     // 默认不轮播：常驻 idle，表情由事件驱动（BoboFX）。传 order 数组可开启自动轮播。
     var order = opts.order || ['idle'];
 
-    var idx = 0, blockStart = 0, clock = 0, last = null, running = true, timer = 0;
+    var idx = 0, blockStart = 0, clock = 0, last = null, running = !opts.silent, timer = 0;
 
     function starSvg(st, alpha, now) {
       var s = st.spec;
@@ -502,11 +502,11 @@
       }) : null;
       render(frame, clock, starAlpha, stars);
     }
-    requestAnimationFrame(tick);
+    if (!opts.silent) requestAnimationFrame(tick);
 
     /* ---------- 指针跟随（宿主默认整个文档：鼠标在页面任何地方，啵宝都看过来） ---------- */
     var MAX_YAW = 16, MAX_PITCH = 13, PITCH = 10;
-    if (followHost && window.matchMedia && window.matchMedia('(pointer: fine)').matches) {
+    if (followHost && !opts.silent && window.matchMedia && window.matchMedia('(pointer: fine)').matches) {
       if (followHost === document) {
         // 全页跟随：mousemove 在 document 上，坐标归一化以视口为参照
         document.addEventListener('mousemove', function (e) {
@@ -561,6 +561,68 @@
     document.addEventListener('DOMContentLoaded', mountDrawer);
   } else {
     mountDrawer();
+  }
+
+  /* ============ 迷你头像共享引擎：一个 rAF 驱动 N 个聊天头像 SVG ============ */
+  var minis = [];
+  var miniTickOn = false;
+  var miniEng = null;
+  var miniClock = 0, miniLast = null;
+  api.attachMini = function (svgEl) {
+    if (!svgEl || svgEl.dataset.boboMini) return;
+    svgEl.dataset.boboMini = '1';
+    svgEl.setAttribute('viewBox', '-158 -158 316 316');
+    minis.push(svgEl);
+    if (!miniEng) {
+      miniEng = createBobo(document.createElementNS('http://www.w3.org/2000/svg', 'svg'), {
+        color: api.COLOR, ink: api.INK, holdMs: 1e9, order: ['idle'], silent: true
+      });
+    }
+    if (!miniTickOn) {
+      miniTickOn = true;
+      requestAnimationFrame(miniTick);
+    }
+  };
+  function miniTick(ts) {
+    if (!minis.length) { miniTickOn = false; return; }
+    requestAnimationFrame(miniTick);
+    if (miniLast === null) { miniLast = ts; return; }
+    var dt = (ts - miniLast) / 1000;
+    miniLast = ts;
+    if (document.hidden || dt > 0.1) return;
+    miniClock += dt;
+    // 引擎内部不跑 rAF（holdMs 1e9 且 order 只有 idle），直接采样绘制
+    var frame = miniEng.sample(miniClock);
+    var html = miniRenderHtml(frame, miniClock);
+    for (var i = 0; i < minis.length; i++) {
+      if (minis[i].isConnected) minis[i].innerHTML = html;
+    }
+    // 清理已断开的节点
+    if (minis.length > 20) minis = minis.filter(function (el) { return el.isConnected; });
+  }
+  // 自动挂载：观察 DOM，发现 .bobo-mini-avatar 就接管（覆盖全量渲染/增量追加/评论区）
+  api.mountMinis = function (root) {
+    var host = root && root.querySelectorAll ? root : document;
+    var found = host.querySelectorAll ? host.querySelectorAll('svg.bobo-mini-avatar:not([data-bobo-mini])') : [];
+    for (var i = 0; i < found.length; i++) api.attachMini(found[i]);
+  };
+  function startAutoMount() {
+    if (!document.body || api._autoMount) return;
+    api._autoMount = true;
+    var mo = new MutationObserver(function () { api.mountMinis(document); });
+    mo.observe(document.body, { childList: true, subtree: true });
+    api.mountMinis(document);
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', startAutoMount);
+  else startAutoMount();
+
+  function miniRenderHtml(f, now) {
+    var s = '';
+    s += '<path d="' + f.bodyPath + '" fill="' + api.COLOR + '"/>';
+    for (var i = 0; i < f.eyes.length; i++) {
+      s += '<path d="' + f.eyes[i].d + '" transform="' + f.eyes[i].matrix + '" fill="' + api.INK + '" opacity="' + r2(f.eyes[i].alpha) + '"/>';
+    }
+    return s;
   }
 
   window.Bobo = api;
