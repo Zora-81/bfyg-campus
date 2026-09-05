@@ -445,9 +445,10 @@
     var svgEl = typeof svg === 'string' ? document.querySelector(svg) : svg;
     if (!svgEl) return null;
     svgEl.setAttribute('viewBox', '-158 -158 316 316');
-    var followHost = opts.followHost ? (typeof opts.followHost === 'string' ? document.querySelector(opts.followHost) : opts.followHost) : svgEl;
+    var followHost = opts.followHost ? (typeof opts.followHost === 'string' ? document.querySelector(opts.followHost) : opts.followHost) : document;
     var holdMs = opts.holdMs || 2600;
-    var order = opts.order || ['idle', 'notify', 'wink', 'idle', 'thinking', 'idle', 'celebrate'];
+    // 默认不轮播：常驻 idle，表情由事件驱动（BoboFX）。传 order 数组可开启自动轮播。
+    var order = opts.order || ['idle'];
 
     var idx = 0, blockStart = 0, clock = 0, last = null, running = true, timer = 0;
 
@@ -503,17 +504,27 @@
     }
     requestAnimationFrame(tick);
 
-    /* ---------- 指针跟随 ---------- */
+    /* ---------- 指针跟随（宿主默认整个文档：鼠标在页面任何地方，啵宝都看过来） ---------- */
     var MAX_YAW = 16, MAX_PITCH = 13, PITCH = 10;
     if (followHost && window.matchMedia && window.matchMedia('(pointer: fine)').matches) {
-      followHost.addEventListener('pointermove', function (e) {
-        var r = svgEl.getBoundingClientRect();
-        if (!r.width || !r.height) return;
-        var nx = clamp((e.clientX - (r.left + r.width / 2)) / (r.width / 2), -1, 1);
-        var ny = clamp((e.clientY - (r.top + r.height / 2)) / (r.height / 2), -1, 1);
-        eng.setLook({ yaw: nx * MAX_YAW, pitch: PITCH - ny * MAX_PITCH, mix: 1, spin: 0, wander: 0 }, clock);
-      });
-      followHost.addEventListener('pointerleave', function () { eng.setLook(null, clock); });
+      if (followHost === document) {
+        // 全页跟随：mousemove 在 document 上，坐标归一化以视口为参照
+        document.addEventListener('mousemove', function (e) {
+          var nx = clamp((e.clientX / window.innerWidth) * 2 - 1, -1, 1);
+          var ny = clamp((e.clientY / window.innerHeight) * 2 - 1, -1, 1);
+          eng.setLook({ yaw: nx * MAX_YAW, pitch: PITCH - ny * MAX_PITCH, mix: 1, spin: 0, wander: 0 }, clock);
+        }, { passive: true });
+        document.addEventListener('mouseleave', function () { eng.setLook(null, clock); });
+      } else {
+        followHost.addEventListener('pointermove', function (e) {
+          var r = svgEl.getBoundingClientRect();
+          if (!r.width || !r.height) return;
+          var nx = clamp((e.clientX - (r.left + r.width / 2)) / (r.width / 2), -1, 1);
+          var ny = clamp((e.clientY - (r.top + r.height / 2)) / (r.height / 2), -1, 1);
+          eng.setLook({ yaw: nx * MAX_YAW, pitch: PITCH - ny * MAX_PITCH, mix: 1, spin: 0, wander: 0 }, clock);
+        });
+        followHost.addEventListener('pointerleave', function () { eng.setLook(null, clock); });
+      }
     }
 
     /* ---------- 对外 API ---------- */
