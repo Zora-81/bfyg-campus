@@ -10,7 +10,7 @@
 
   <meta name="theme-color" content="#0a0c1a" />
 
-  <title>校园频道</title>
+  <title>校园频道 - 登录</title>
 
   <!-- 图片走 api.bfgzlt.cc.cd（Worker 代理），预连接省去首开 DNS+TLS 握手 -->
   <link rel="preconnect" href="https://api.bfgzlt.cc.cd" crossorigin />
@@ -19,7 +19,7 @@
 
     (function(){
 
-      var v = '1.5.96';
+      var v = '1.5.52';
 
       // 暴露版本号全局：__APP_VERSION 供设置面板；window.v 供 app.js 记忆树版本读取（根治兜底串漏 bump）
       window.__APP_VERSION = v;
@@ -79,22 +79,21 @@
 
   </script>
 
-  <!-- v1.5.54: 清除残留 SW/缓存，避免旧 Service Worker 继续拦截新 JS -->
+  <!-- v1.5.52: 清除残留 SW/缓存，避免旧 Service Worker 继续拦截新 JS -->
   <script>
     (function(){
       if (!('serviceWorker' in navigator)) return;
       try {
-        var CURRENT_SWV = '5';
+        var flag = 'sw_cleared_v52';
+        if (localStorage.getItem(flag)) return;
         navigator.serviceWorker.getRegistrations().then(function(regs){
-          var stale = regs.filter(function(r){ return (r.scriptURL||'').indexOf('swv='+CURRENT_SWV) === -1; });
-          if (stale.length) stale.forEach(function(reg){ reg.unregister(); });
+          regs.forEach(function(reg){ reg.unregister(); });
           if (window.caches && caches.keys) {
             caches.keys().then(function(keys){
-              keys.forEach(function(k){
-                if (k !== 'campus-app-v'+CURRENT_SWV && k !== 'campus-img-v'+CURRENT_SWV) caches.delete(k);
-              });
+              keys.forEach(function(k){ caches.delete(k); });
             }).catch(function(){});
           }
+          try { localStorage.setItem(flag, '1'); } catch(e){}
         }).catch(function(){});
       } catch(e){}
     })();
@@ -119,7 +118,6 @@
   <link rel="stylesheet" href="../css/welcome-intro.css" />
 
   <link rel="stylesheet" href="../css/style.css" />
-  <link rel="stylesheet" href="../css/manuscript-v2.css" />
 
   <!-- Chip 信用卡资料卡样式 -->
   <link rel="stylesheet" href="../css/chip-card.css" />
@@ -749,56 +747,12 @@
 
 </style>
 
-
-  <style>
-    /* 内联兜底：不受外部 CSS/JS 缓存、GSAP clearProps 影响 */
-    .ch-item { display:flex !important; width:100% !important; box-sizing:border-box !important; opacity:1 !important; visibility:visible !important; }
-    .ch-item .ch-name { display:block !important; flex:1 1 auto !important; opacity:1 !important; visibility:visible !important; }
-    .ch-item { position:relative !important; z-index:1 !important; }
-    .ch-category-title { position:relative !important; z-index:1 !important; will-change:transform !important; }
-    .mt-drawer-entry, .mt-drawer-entry-btn { position:relative !important; z-index:1 !important; will-change:transform !important; display:flex !important; visibility:visible !important; opacity:1 !important; }
-    .drawer-server { position:relative !important; z-index:1 !important; }
-    .drawer-server-icon { position:relative !important; z-index:1 !important; will-change:transform !important; }
-    .drawer-server-name { position:relative !important; z-index:1 !important; will-change:transform !important; }
-    .ch-item .ch-name,
-    .drawer-user-name,
-    .drawer-user-tag { position:relative !important; z-index:1 !important; will-change:transform !important; }
-    .drawer-user { position:relative !important; z-index:1 !important; }
-    .drawer-user-avatar { position:relative !important; z-index:1 !important; }
-    .drawer-user { display:flex !important; align-items:center !important; opacity:1 !important; visibility:visible !important; }
-    .drawer-user-avatar { display:flex !important; width:36px !important; height:36px !important; opacity:1 !important; visibility:visible !important; background:linear-gradient(135deg,#7c5cfc,#8B6DFD) !important; color:#fff !important; }
-    .drawer-user-info { display:block !important; flex:1 !important; opacity:1 !important; visibility:visible !important; }
-    [data-theme="light"] .ch-item,
-    [data-theme="light"] .ch-item .ch-name,
-    [data-theme="light"] .drawer-user-name { color:#1F1B16 !important; }
-    [data-theme="light"] .drawer-user-tag { color:#5C5548 !important; }
-    [data-theme="light"] .drawer-user-avatar { width:38px !important; height:38px !important; border-radius:34% 44% 38% 46% !important; border:none !important; background:#FFFDF7 !important; color:#1F1B16 !important; box-shadow:2px 3px 0 rgba(31,27,22,0.10) !important; }
-    /* 自定义壁纸：即使 body 仍是 custom/starry 配色，也强制频道文字与头像可见 */
-    [data-theme="custom"] .ch-item,
-    [data-theme="custom"] .ch-item .ch-name,
-    [data-theme="custom"] .drawer-user-name { color:#1F1B16 !important; }
-    [data-theme="custom"] .ch-item { background:#FFFDF7 !important; border:1.5px dashed rgba(31,27,22,0.18) !important; box-shadow:2px 3px 0 rgba(31,27,22,0.06) !important; }
-    [data-theme="custom"] .drawer-user-tag { color:#5C5548 !important; }
-    [data-theme="custom"] .drawer-user-avatar { background:linear-gradient(135deg,#7c5cfc,#8B6DFD) !important; color:#fff !important; }
-
-    [data-theme="light"] .drawer-server-icon { width:74px !important; height:74px !important; border:3px solid #FFFDF7 !important; border-radius:8px 10px 6px 12px !important; padding:0 !important; object-fit:cover !important; background:#FFFDF7 !important; box-shadow:0 2px 6px rgba(31,27,22,0.18) !important; }
-    [data-theme="classroom"] .drawer-server-icon { width:96px !important; height:96px !important; border:none !important; padding:0 !important; object-fit:cover !important; }
-    [data-theme="light"] .drawer-server-name,
-    [data-theme="classroom"] .drawer-server-name { font-size:1.78rem !important; font-weight:700 !important; color:var(--text) !important; }
-    [data-theme="light"] .drawer-user,
-    [data-theme="classroom"] .drawer-user { background:transparent !important; }
-    [data-theme="light"] .ch-category-title,
-    [data-theme="classroom"] .ch-category-title { display:flex !important; opacity:1 !important; visibility:visible !important; }
-  </style>
-
   <!-- 终极兜底：即使外部 JS/CSS 被旧缓存，也强制校园手稿抽屉显示频道名和头像 -->
   <script>
     (function(){
       function fixLightDrawer(){
         var body = document.body;
-        if (!body) return;
-        var isLight = body.dataset.theme === 'light' || body.dataset.theme === 'custom';
-        var isPaper = body.dataset.theme === 'light';
+        if (!body || body.dataset.theme !== 'light') return;
         try {
           var items = document.querySelectorAll('#sidebar-channels .ch-item');
           Array.prototype.forEach.call(items, function(el){
@@ -807,79 +761,15 @@
             el.style.setProperty('box-sizing','border-box','important');
             el.style.setProperty('opacity','1','important');
             el.style.setProperty('visibility','visible','important');
-            if (isLight) el.style.setProperty('color','#1F1B16','important');
-            else el.style.removeProperty('color');
+            el.style.setProperty('color','#1F1B16','important');
             var n = el.querySelector('.ch-name');
             if (n) {
               n.style.setProperty('display','block','important');
               n.style.setProperty('opacity','1','important');
               n.style.setProperty('visibility','visible','important');
-              if (isLight) n.style.setProperty('color','#1F1B16','important');
-              else n.style.removeProperty('color');
+              n.style.setProperty('color','#1F1B16','important');
             }
           });
-          var cats = document.querySelectorAll('#sidebar-channels .ch-category-title');
-          Array.prototype.forEach.call(cats, function(cat){
-            cat.style.setProperty('display','flex','important');
-            cat.style.setProperty('opacity','1','important');
-            cat.style.setProperty('visibility','visible','important');
-            cat.style.setProperty('position','relative','important');
-            cat.style.setProperty('z-index','1','important');
-            if (isLight) cat.style.setProperty('color','#5C5548','important');
-            else cat.style.removeProperty('color');
-          });
-          var server = document.querySelector('.drawer-server');
-          if (server) {
-            server.style.setProperty('display','flex','important');
-            server.style.setProperty('position','relative','important');
-            server.style.setProperty('z-index','1','important');
-            var sevIcon = server.querySelector('.drawer-server-icon');
-            if (sevIcon) {
-              sevIcon.style.setProperty('display','block','important');
-              sevIcon.style.setProperty('position','relative','important');
-              sevIcon.style.setProperty('z-index','1','important');
-              if (isPaper) {
-                sevIcon.style.setProperty('width','74px','important');
-                sevIcon.style.setProperty('height','74px','important');
-                sevIcon.style.setProperty('border','3px solid #FFFDF7','important');
-                sevIcon.style.setProperty('border-radius','8px 10px 6px 12px','important');
-                sevIcon.style.setProperty('background','#FFFDF7','important');
-                sevIcon.style.setProperty('box-shadow','0 2px 6px rgba(31,27,22,0.18)','important');
-                sevIcon.style.setProperty('object-fit','cover','important');
-              } else {
-                sevIcon.style.setProperty('width','96px','important');
-                sevIcon.style.setProperty('height','96px','important');
-                sevIcon.removeProperty('border');
-                sevIcon.removeProperty('border-radius');
-                sevIcon.removeProperty('background');
-                sevIcon.removeProperty('box-shadow');
-                sevIcon.removeProperty('object-fit');
-              }
-            }
-            var sevName = server.querySelector('.drawer-server-name');
-            if (sevName) {
-              sevName.style.setProperty('position','relative','important');
-              sevName.style.setProperty('z-index','1','important');
-              if (isLight) sevName.style.setProperty('color','#1F1B16','important');
-              else sevName.style.removeProperty('color');
-            }
-          }
-          var mt = document.querySelector('.mt-drawer-entry') || document.getElementById('mt-entry-btn');
-          if (mt) {
-            mt.style.setProperty('display','block','important');
-            mt.style.setProperty('visibility','visible','important');
-            mt.style.setProperty('opacity','1','important');
-            mt.style.setProperty('position','relative','important');
-            mt.style.setProperty('z-index','1','important');
-          }
-          var mtBtn = document.querySelector('.mt-drawer-entry-btn') || document.getElementById('mt-entry-btn');
-          if (mtBtn) {
-            mtBtn.style.setProperty('display','flex','important');
-            mtBtn.style.setProperty('visibility','visible','important');
-            mtBtn.style.setProperty('opacity','1','important');
-            mtBtn.style.setProperty('position','relative','important');
-            mtBtn.style.setProperty('z-index','1','important');
-          }
           var user = document.querySelector('.drawer-user');
           if (user) {
             user.style.setProperty('display','flex','important');
@@ -889,28 +779,12 @@
             var avatar = user.querySelector('.drawer-user-avatar');
             if (avatar) {
               avatar.style.setProperty('display','flex','important');
+              avatar.style.setProperty('width','36px','important');
+              avatar.style.setProperty('height','36px','important');
               avatar.style.setProperty('opacity','1','important');
               avatar.style.setProperty('visibility','visible','important');
-              if (isPaper) {
-                // 校园手稿 v2：贴纸相片，去掉圆圈外环
-                avatar.style.setProperty('width','38px','important');
-                avatar.style.setProperty('height','38px','important');
-                avatar.style.setProperty('border-radius','34% 44% 38% 46%','important');
-                avatar.style.setProperty('border','none','important');
-                avatar.style.setProperty('background','#FFFDF7','important');
-                avatar.style.setProperty('color','#1F1B16','important');
-                avatar.style.setProperty('box-shadow','2px 3px 0 rgba(31,27,22,0.10)','important');
-              } else {
-                avatar.style.setProperty('width','36px','important');
-                avatar.style.setProperty('height','36px','important');
-                if (isLight) avatar.style.setProperty('background','linear-gradient(135deg,#7c5cfc,#8B6DFD)','important');
-                else avatar.removeProperty('background');
-                if (isLight) avatar.style.setProperty('color','#fff','important');
-                else avatar.removeProperty('color');
-                avatar.removeProperty('border-radius');
-                avatar.removeProperty('border');
-                avatar.removeProperty('box-shadow');
-              }
+              avatar.style.setProperty('background','linear-gradient(135deg,#7c5cfc,#8B6DFD)','important');
+              avatar.style.setProperty('color','#fff','important');
             }
             var info = user.querySelector('.drawer-user-info');
             if (info) {
@@ -945,8 +819,7 @@
   </script>
 
 
-
-  </head>
+</head>
 
 <body data-theme="starry">
 
@@ -1336,14 +1209,11 @@
 
           <div class="nav-channel-info" id="nav-channel-card" data-ch="chat">
 
-            <span class="ch-card-bar" id="ch-card-bar"><i></i><i></i><i></i><span class="ch-win-title" id="ch-win-title">chat.exe — 综合大厅</span></span>
+            <span class="ch-card-bar" id="ch-card-bar"></span>
 
             <div class="ch-card-text">
-              <span class="ch-win-icon" id="ch-win-icon"></span>
-              <div class="ch-card-textmain">
-                <h2 class="nav-channel-title" id="channel-title">综合大厅</h2>
-                <span class="nav-channel-desc" id="channel-desc">自由聊天，分享日常</span>
-              </div>
+              <h2 class="nav-channel-title" id="channel-title">综合大厅</h2>
+              <span class="nav-channel-desc" id="channel-desc">自由聊天，分享日常</span>
             </div>
 
           </div>
@@ -1515,7 +1385,7 @@
 
             <input type="file" id="file-input" accept="image/*,.pdf,.txt,.doc,.docx,.xls,.xlsx" style="display:none" />
 
-            <input type="text" id="msg-input" placeholder="写点什么…" class="msg-input" />
+            <input type="text" id="msg-input" placeholder="发送消息到 #综合交流" class="msg-input" />
 
             <div class="input-actions">
 
@@ -1597,8 +1467,7 @@
 
         <div class="drawer-server">
 
-          <!-- 啵宝：动态吉祥物替换校徽位（js/bobo.js 挂载到 #bobo-drawer-icon） -->
-          <svg id="bobo-drawer-icon" class="drawer-server-icon" aria-hidden="true"></svg>
+          <img src="/images/school-badge-transparent.png" alt="" class="drawer-server-icon" />
 
           <span class="drawer-server-name">校园频道</span>
 
@@ -1865,9 +1734,6 @@
   <script src="../js/shooting-stars.js"></script>
 
   <script src="../js/main-bg.js"></script>
-
-  <!-- 啵宝吉祥物：抽屉头部动态图标（零依赖，挂载 #bobo-drawer-icon） -->
-  <script src="../js/bobo.js" defer></script>
 
   <!-- InsForge SDK 客户端（ESM，CDN 引入），注入 window.IF 并派发 IF_READY -->
 
@@ -2151,30 +2017,28 @@
   </script>
 
   <script>
-    // 彻底移除 Service Worker：此前 cache-first 旧 SW 把旧 HTML/CSS 永远缓存，
-    // 导致前端修复永远到不了浏览器（强刷也无效）。聊天 app 必须联网，离线缓存弊大于利。
-    // 这里只卸载、不再注册任何 SW —— 清一次后浏览器永远拉最新代码，死循环从根上消失。
-    (function () {
-      if (!('serviceWorker' in navigator)) return;
-      function killAll() {
-        var hadController = !!navigator.serviceWorker.controller;
-        return navigator.serviceWorker.getRegistrations().then(function (regs) {
-          return Promise.all(regs.map(function (r) { return r.unregister(); })).then(function () {
-            if ('caches' in window) {
-              return caches.keys().then(function (keys) {
-                return Promise.all(keys.map(function (k) { return caches.delete(k); }));
-              });
-            }
-          }).then(function () {
-            // 若本页正被旧 SW 控制，注销后必须 reload 一次，确保后续从网络拉最新代码
-            if (hadController) { location.reload(); }
-          });
-        }).catch(function () {});
-      }
-      // 页面加载即尝试注销；只要有 SW 在控制，注销完立刻 reload（自愈，无需手动清）
-      if (document.readyState === 'complete' || document.readyState === 'interactive') killAll();
-      else window.addEventListener('load', killAll);
-    })();
+    // 注册 Service Worker：app 壳 network-first（改动即时生效），图片 cache-first（离线兜底）
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        // 清掉所有旧注册（含无 query 的旧 /sw.js 与旧 swv 版本），
+        // 避免多个同作用域 SW 互相拦截导致更新永远失败
+        navigator.serviceWorker.getRegistrations().then(function (regs) {
+          var hasNew = regs.some(function (r) { return (r.scriptURL || '').indexOf('swv=4') !== -1; });
+          if (hasNew) {
+            // 新版已安装，幂等注册确保其处于活跃状态
+            navigator.serviceWorker.register('/sw.js?swv=4').catch(function () {});
+          } else if (regs.length > 0) {
+            // 只有旧版：先全部注销，再刷新一次。否则旧 SW 仍控制当前页面，
+            // 会拦截 /sw.js?swv=4 请求并返回旧 sw.js，导致新版永远装不上。
+            regs.forEach(function (r) { r.unregister(); });
+            location.reload();
+          } else {
+            // 干净环境直接注册
+            navigator.serviceWorker.register('/sw.js?swv=4').catch(function () {});
+          }
+        });
+      });
+    }
   </script>
 
 <!-- 矩形小人动画（来自用户第 2 个 HTML，verbatim） -->

@@ -57,3 +57,16 @@ campus-promo/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# 工作区回收站（根目录散落截图/临时文件统一收容）
+_trash/
+
+# 独立子项目（自带 .git，不纳入主仓库）
+campus-3d-showcase/
+
+# 临时对比/在线调试产物
+_live_style.css
+prod_idx.html
+prod_intro.css
+prod_css.txt
+html/index.html.bak

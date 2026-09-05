@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>欢迎卡 Demo · 消息流频道卡 4 方案</title>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:#FFFDF7;color:#1F1B16;font-family:'Noto Sans SC',sans-serif;padding:28px 20px 60px;max-width:1080px;margin:0 auto;}
+h1{font-size:1.5rem;font-weight:900;margin-bottom:4px;}
+.sub{color:#6b6350;font-size:.85rem;margin-bottom:26px;}
+.sec{margin-bottom:44px;}
+.sec>h2{font-size:1.12rem;font-weight:800;margin-bottom:2px;}
+.sec>h2 em{font-style:normal;background:#1F1B16;color:#FFFDF7;border-radius:4px;padding:1px 7px;margin-right:8px;font-size:.9rem;}
+.sec>.note{color:#6b6350;font-size:.8rem;margin-bottom:14px;}
+.card{position:relative;width:100%;margin-bottom:14px;}
+.cname{font-family:ui-monospace,Consolas,monospace;font-size:.62rem;color:#8a8270;letter-spacing:.08em;margin-bottom:5px;text-transform:uppercase;}
+/* ════ 1 像素窗口 ════ */
+.d1{background:#EDE9DC;border:2px solid #1F1B16;border-radius:7px;box-shadow:4px 4px 0 rgba(31,27,22,.35);overflow:hidden;}
+.d1 .bar{display:flex;align-items:center;gap:4px;height:20px;padding:0 9px;background:linear-gradient(180deg,var(--c),var(--cd));}
+.d1 .bar i{width:6px;height:6px;border-radius:1.5px;}
+.d1 .bar i:nth-child(1){background:#3AC25D;}.d1 .bar i:nth-child(2){background:#F2B63C;}.d1 .bar i:nth-child(3){background:#E05A3F;}
+.d1 .bar b{flex:1;font-family:ui-monospace,Consolas,monospace;font-weight:400;font-size:.64rem;color:#fff;letter-spacing:.05em;text-shadow:0 1px 0 rgba(0,0,0,.35);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.d1 .bd{display:flex;align-items:center;gap:13px;padding:11px 14px;position:relative;}
+.d1 .bd::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(180deg,rgba(31,27,22,.045) 0 1px,transparent 1px 3px);pointer-events:none;}
+.d1 .ic{width:46px;height:46px;flex:none;display:flex;align-items:center;justify-content:center;font-size:26px;background:var(--tint);border:2px solid var(--c);border-radius:6px;box-shadow:2px 2px 0 rgba(31,27,22,.18);}
+.d1 .tx{min-width:0;flex:1;}
+.d1 .tx h3{font-size:1.15rem;font-weight:900;line-height:1.2;}
+.d1 .tx p{font-size:.78rem;color:#6b6350;margin-top:2px;min-height:1.1em;}
+.d1 .tx p .cur{color:var(--c);animation:blink 1.05s steps(1) infinite;}
+@keyframes blink{0%,55%{opacity:1}56%,100%{opacity:0}}
+.d1 .on{flex:none;margin-left:auto;display:flex;align-items:center;gap:5px;font-family:ui-monospace,Consolas,monospace;font-size:.6rem;color:#2E7D43;background:rgba(63,166,92,.12);border:1px solid rgba(63,166,92,.35);border-radius:4px;padding:3px 7px;}
+.d1 .on i{width:6px;height:6px;border-radius:50%;background:#3FA65C;box-shadow:0 0 6px rgba(63,166,92,.8);animation:pu 1.6s ease-in-out infinite;}
+@keyframes pu{0%,100%{opacity:1}50%{opacity:.35}}
+.d1 .nth{flex:none;font-family:ui-monospace,Consolas,monospace;font-size:.58rem;color:#8a8270;border:1px dashed #b7ad93;border-radius:4px;padding:3px 7px;background:rgba(255,255,255,.5);}
+/* ════ 2 手账扉页 ════ */
+.d2{background:#FFFDF7;border:1.5px solid #d8d0ba;border-radius:4px 10px 6px 12px;box-shadow:2px 3px 0 rgba(31,27,22,.06);padding:20px 24px 16px 30px;
+background-image:repeating-linear-gradient(180deg,transparent 0 27px,#e9e2cf 27px 28px);}
+.d2::before{content:"";position:absolute;top:-9px;left:26px;width:74px;height:20px;background:rgba(255,214,90,.5);transform:rotate(-3deg);box-shadow:0 1px 2px rgba(0,0,0,.08);}
+.d2 .chp{font-family:'Caveat','Kaiti SC','STKaiti',KaiTi,cursive;color:var(--c);font-size:1.02rem;font-weight:700;letter-spacing:.05em;}
+.d2 h3{font-size:1.6rem;font-weight:900;letter-spacing:.14em;margin:2px 0 4px;}
+.d2 p{font-family:'Caveat','Kaiti SC','STKaiti',KaiTi,cursive;font-size:1.06rem;color:#5c5442;}
+.d2 .sig{margin-top:12px;border-top:1.5px dashed #c9c0a8;padding-top:7px;font-family:'Caveat','Kaiti SC','STKaiti',KaiTi,cursive;font-size:.92rem;color:#8a8270;display:flex;justify-content:space-between;}
+.d2 .stamp{position:absolute;right:18px;top:14px;width:52px;height:52px;border:2.5px solid var(--cd);border-radius:50%;color:var(--cd);display:flex;align-items:center;justify-content:center;transform:rotate(12deg);font-weight:900;font-size:.72rem;opacity:.75;letter-spacing:.1em;}
+/* ════ 3 借书卡 ════ */
+.d3{background:#FFFDF7;border:1.5px solid #b7ad93;display:flex;overflow:hidden;border-radius:3px;box-shadow:3px 3px 0 rgba(31,27,22,.12);}
+.d3 .stub{flex:none;width:86px;background:linear-gradient(160deg,var(--c),var(--cd));color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:12px 6px;}
+.d3 .stub b{font-size:1.7rem;font-weight:900;}
+.d3 .stub span{font-size:.58rem;letter-spacing:.2em;opacity:.85;writing-mode:vertical-rl;}
+.d3 .mid{flex:1;min-width:0;padding:12px 14px;border-right:1.5px dashed #b7ad93;}
+.d3 .mid h3{font-size:1.2rem;font-weight:900;}
+.d3 .mid p{font-size:.76rem;color:#6b6350;margin-top:2px;}
+.d3 .mid .no{font-family:ui-monospace,Consolas,monospace;font-size:.62rem;color:#8a8270;margin-top:7px;letter-spacing:.06em;}
+.d3 .dates{flex:none;width:190px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;background:repeating-linear-gradient(180deg,#FFFDF7 0 22px,#f1ebdb 22px 23px);}
+.d3 .dates .lab{font-family:ui-monospace,Consolas,monospace;font-size:.56rem;color:#8a8270;letter-spacing:.14em;}
+.d3 .dates .row{display:flex;align-items:center;gap:6px;font-family:ui-monospace,Consolas,monospace;font-size:.66rem;color:#4b4335;}
+.d3 .dates .row i{flex:1;border-bottom:1.5px solid #c9c0a8;height:12px;}
+.d3 .clip{position:absolute;top:-10px;right:26px;font-size:1.2rem;transform:rotate(8deg);filter:drop-shadow(1px 1px 1px rgba(0,0,0,.2));}
+.d3 .rule{position:absolute;top:8px;right:52px;background:#fffef5;border:1px solid #d8d0ba;font-size:.6rem;color:#6b6350;padding:3px 7px;transform:rotate(4deg);box-shadow:1px 2px 0 rgba(31,27,22,.08);max-width:180px;}
+/* ════ 4 极简一行 ════ */
+.d4{display:flex;align-items:center;gap:14px;padding:6px 4px;}
+.d4 .ln{flex:1;border-top:1.5px dashed #c9c0a8;}
+.d4 .txt{font-family:'Caveat','Kaiti SC','STKaiti',KaiTi,cursive;font-size:1.25rem;color:#4b4335;white-space:nowrap;}
+.d4 .txt b{color:var(--c);font-weight:700;}
+
+/* ════ 4+ 加强版（与线上 v1.5.91 同款）════ */
+.wc4{display:flex;align-items:center;gap:10px;margin-bottom:16px;padding:12px 2px 8px;position:relative;}
+.wc4 .ln{flex:1;min-width:14px;border-top:1.5px dashed #c9c0a8;position:relative;}
+.wc4 .ln::before{content:"";position:absolute;left:0;right:0;top:-4px;border-top:1px dotted rgba(201,192,168,.5);}
+.wc4 .st{color:var(--c);font-size:.66rem;flex:none;}
+.wc4 .tx{display:flex;align-items:baseline;gap:7px;flex:none;}
+.wc4 .ic{font-size:1.08rem;align-self:center;filter:drop-shadow(1px 1px 0 rgba(31,27,22,.14));}
+.wc4 .nm{font-size:1.06rem;font-weight:900;letter-spacing:.04em;padding:0 7px;border-radius:3px;background:linear-gradient(104deg,rgba(0,0,0,0) 1.5%,var(--hl) 5% 94%,rgba(0,0,0,0) 98.5%);}
+.wc4 .ds{font-family:'Caveat','Kaiti SC','STKaiti',KaiTi,cursive;font-size:1.05rem;color:#6b6350;}
+.wc4 .pg{flex:none;font-family:ui-monospace,Consolas,monospace;font-size:.58rem;color:#8a8270;border:1px dashed #c9c0a8;border-radius:999px;padding:2px 8px;background:rgba(255,255,255,.55);}
+.wc4 .tp{position:absolute;top:-3px;left:calc(50% - 36px);width:72px;height:15px;background:rgba(255,214,90,.45);transform:rotate(-2.5deg);box-shadow:0 1px 2px rgba(0,0,0,.07);border-left:1px dashed rgba(255,255,255,.65);border-right:1px dashed rgba(255,255,255,.65);}
+.replay{margin-top:2px;font-family:ui-monospace,Consolas,monospace;font-size:.62rem;color:#8a8270;}
+</style>
+</head>
+<body>
+<h1>消息流欢迎卡 · 4 方案 Demo</h1>
+<div class="sub">每套方案都按 5 个频道各做了一张（公告栏 / 综合大厅 / 学习园地 / 生活日常 / 二次元世界）— 看中哪个编号，回我「选 N」即可。</div>
+<div class="sec" id="s1"><h2><em>1</em>频道.exe 大窗口（和顶栏 D 同款放大）</h2><div class="note">标题栏三键 + CRT 扫描线 + 介绍打字机逐字打出 + ONLINE 在聊人数 + 今日第 N 位彩蛋</div><div id="c1"></div></div>
+<div class="sec" id="s2"><h2><em>2</em>手账扉页（校园手稿原生）</h2><div class="note">胶带贴角 + 横线纸 + 「第 X 章」手写章题 + 底部虚线签名栏 + 频道色圆形印章</div><div id="c2"></div></div>
+<div class="sec" id="s3"><h2><em>3</em>借书卡（图书馆通行券）</h2><div class="note">频道色票根大字 + 索书号 + 借阅日期格 + 回形针别着频道规则小纸条</div><div id="c3"></div></div>
+<div class="sec" id="s4"><h2><em>4</em>极简一行 · 加强版（已上线这个）</h2><div class="note">马克笔划重点 + 频道emoji + 胶带 + 星星虚线 + 日记页码 —— 还是一行，但画面丰富了</div><div id="c4"></div></div>
+<div class="replay">↻ 刷新页面可重看打字机效果</div>
+<script>
+var CH=[
+ {k:'notice',zi:'急',icon:'📢',name:'公告栏',desc:'学校通知 · 必读',c:'#E05A3F',cd:'#B03A20',tint:'rgba(224,90,63,.10)',rule:'置顶通知 · 仅管理员发布',admin:'校学生会',ch:1},
+ {k:'chat',zi:'聊',icon:'💬',name:'综合大厅',desc:'聊天灌水的地方',c:'#8B6DFD',cd:'#6a4be0',tint:'rgba(139,109,253,.10)',rule:'文明发言 · 禁止刷屏',admin:'竹深幽静',ch:2},
+ {k:'book',zi:'学',icon:'📖',name:'学习园地',desc:'作业资料 · 打卡',c:'#5B8DEF',cd:'#3d6fe8',tint:'rgba(91,141,239,.10)',rule:'资料共享 · 提问先搜索',admin:'暖白',ch:3},
+ {k:'life',zi:'常',icon:'🌿',name:'生活日常',desc:'日常分享 · 树洞',c:'#3FA65C',cd:'#2e9147',tint:'rgba(63,166,92,.10)',rule:'随手记录 · 尊重隐私',admin:'竹深幽静',ch:4},
+ {k:'anime',zi:'燃',icon:'✨',name:'二次元世界',desc:'番剧 · 漫画 · 讨论',c:'#F0568F',cd:'#e93a7c',tint:'rgba(240,86,143,.10)',rule:'标清剧透 · 快乐吃谷',admin:'暖白',ch:5}
+];
+var now=new Date(),doy=Math.ceil((now-new Date(now.getFullYear(),0,0))/864e5);
+var ymd=now.getFullYear()+'.'+String(now.getMonth()+1).padStart(2,'0')+'.'+String(now.getDate()).padStart(2,'0');
+var onl=[12,1024,57,88,236];
+// ══ 1 像素窗口 ══
+document.getElementById('c1').innerHTML=CH.map(function(c,i){
+ return '<div class="cname">'+c.k+'.card</div><div class="card d1" style="--c:'+c.c+';--cd:'+c.cd+';--tint:'+c.tint+'">'
+ +'<div class="bar"><i></i><i></i><i></i><b>'+c.k+'.exe — '+c.name+'</b></div>'
+ +'<div class="bd"><div class="ic">'+c.icon+'</div><div class="tx"><h3>'+c.name+'</h3><p class="tw" data-t="✎ '+c.desc+'"></p></div>'
+ +'<div class="on"><i></i>ONLINE '+onl[i]+'</div><div class="nth">今日第 '+(3+i*7)+' 位</div></div></div>';
+}).join('');
+// ══ 2 手账扉页 ══
+document.getElementById('c2').innerHTML=CH.map(function(c){
+ return '<div class="cname">'+c.k+'.page</div><div class="card d2" style="--c:'+c.c+';--cd:'+c.cd+'">'
+ +'<div class="stamp">'+c.zi+'</div><div class="chp">第 '+c.ch+' 章 · 第 '+doy+' 页</div>'
+ +'<h3>'+c.name+'</h3><p>'+c.desc+'。翻开这一页，想说的话都写在这里。</p>'
+ +'<div class="sig"><span>—— 本页管理：'+c.admin+'</span><span>'+ymd+' · 星期'+'日一二三四五六'[now.getDay()]+'</span></div></div>';
+}).join('');
+// ══ 3 借书卡 ══
+document.getElementById('c3').innerHTML=CH.map(function(c){
+ return '<div class="cname">'+c.k+'.ticket</div><div class="card d3" style="--c:'+c.c+';--cd:'+c.cd+'">'
+ +'<span class="clip">📎</span><span class="rule">本频道规：'+c.rule+'</span>'
+ +'<div class="stub"><b>'+c.zi+'</b><span>'+c.name+'</span></div>'
+ +'<div class="mid"><h3>'+c.name+'</h3><p>'+c.desc+'</p><div class="no">NO.'+now.getFullYear()+'-'+String(doy).padStart(4,'0')+' · 宝丰一高校内通行</div></div>'
+ +'<div class="dates"><span class="lab">BORROW · DATE</span><div class="row">'+ymd+'<i></i></div><div class="row">往期 <i></i></div><div class="row">归还 <i></i>√</div></div></div>';
+}).join('');
+// ══ 4 极简一行 ══
+document.getElementById('c4').innerHTML=CH.map(function(c){
+ return '<div class="wc4" style="--c:'+c.c+';--cd:'+c.cd+';--hl:'+c.tint+'"><span class="tp"></span>'
+ +'<span class="ln"></span><span class="st">✦</span>'
+ +'<span class="tx"><span class="ic">'+c.icon+'</span><span class="nm">'+c.name+'</span><span class="ds">'+c.desc+'</span></span>'
+ +'<span class="st">✦</span><span class="ln"></span>'
+ +'<span class="pg">第 '+doy+' 页</span></div>';
+}).join('');
+// 打字机
+document.querySelectorAll('.tw').forEach(function(el){
+ var t=el.dataset.t,i=0;el.innerHTML='';
+ (function type(){ if(i<=t.length){ el.innerHTML=t.slice(0,i)+'<span class="cur">▌</span>'; i++; setTimeout(type,55);} })();
+});
+</script>
+</body>
+</html>

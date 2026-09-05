@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>正在清除旧缓存…</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: system-ui, "Noto Sans SC", sans-serif;
+    background: #0d1027; color: #eef0f6;
+    display: flex; align-items: center; justify-content: center;
+    height: 100vh; margin: 0;
+  }
+  .box {
+    text-align: center; padding: 32px 40px;
+    background: #1e2140; border-radius: 16px;
+    box-shadow: 0 8px 24px rgba(8,10,30,.4);
+  }
+  h1 { font-size: 1.2rem; margin: 0 0 8px; }
+  p { color: #949ab0; margin: 0; font-size: .9rem; }
+  .spin {
+    margin: 16px auto 0; width: 28px; height: 28px;
+    border: 3px solid #7c5cfc; border-top-color: transparent;
+    border-radius: 50%; animation: sp 1s linear infinite;
+  }
+  @keyframes sp { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+  <div class="box">
+    <h1>正在清除旧缓存…</h1>
+    <p>马上就好，请勿关闭页面</p>
+    <div class="spin"></div>
+  </div>
+<script>
+(function () {
+  function go() {
+    // 跳回首页并强制绕过一切缓存（时间戳 + 版本参数双保险）
+    var url = '/?v=reload&_t=' + Date.now();
+    try { location.replace(url); } catch (e) { location.href = url; }
+  }
+  (async function () {
+    // 1) 注销所有 Service Worker 注册（含旧 cache-first 版本）
+    try {
+      if ('serviceWorker' in navigator) {
+        var regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map(function (r) { return r.unregister(); }));
+      }
+    } catch (e) {}
+    // 2) 清空所有 Cache Storage（含旧 CSS/图片缓存）
+    try {
+      if ('caches' in window) {
+        var keys = await caches.keys();
+        await Promise.all(keys.map(function (k) { return caches.delete(k); }));
+      }
+    } catch (e) {}
+    // 给 unregister 足够时间生效，再跳回首页（带版本参数绕过一切缓存）
+    setTimeout(go, 900);
+  })();
+})();
+</script>
+</body>
+</html>

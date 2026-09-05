@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>导航卡设计方案 · 宝丰校园</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  background:#0f1117; color:#d8dae2; min-height:100vh;
+  font-family:"LXGW WenKai","Kaiti SC","STKaiti","KaiTi",system-ui,-apple-system,sans-serif;
+  padding:40px 16px 80px; display:flex; flex-direction:column; align-items:center; gap:56px;
+}
+h1 { font-size:1.5rem; color:#fff; letter-spacing:.06em; }
+h1 small { display:block; font-size:.8rem; color:#7c8296; font-weight:400; margin-top:6px; letter-spacing:.12em; }
+.demo { width:100%; max-width:860px; display:flex; flex-direction:column; gap:14px; }
+.demo > h2 { font-size:1.05rem; color:#fff; }
+.demo > h2 em { font-style:normal; color:var(--c,#8B6DFD); margin-right:8px; }
+.note { font-size:.8rem; color:#8a90a3; line-height:1.7; }
+.stage {
+  border-radius:18px; padding:22px 18px; display:flex; align-items:center; justify-content:center;
+  min-height:130px; position:relative; overflow:visible;
+}
+.stage.dark { background:linear-gradient(160deg,#161a2b,#0d0f1a); border:1px solid #232840; }
+.stage.warm { background:linear-gradient(160deg,#221c14,#141009); border:1px solid #33291a; }
+.stage.paper { background:linear-gradient(160deg,#efe8d8,#e2d9c4); border:1px solid #cfc2a4; }
+.fakebar { display:flex; align-items:center; gap:14px; width:100%; max-width:560px; }
+.fakebar .dot { width:34px; height:34px; border-radius:50%; background:rgba(128,128,128,.25); flex-shrink:0; }
+.pills { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+.pill {
+  border:1px solid #3a4059; background:transparent; color:#aeb4c8; cursor:pointer;
+  padding:5px 14px; border-radius:999px; font-size:.8rem; font-family:inherit; transition:all .2s;
+}
+.pill:hover { border-color:#5a6285; color:#fff; }
+.pill.on { background:var(--c,#8B6DFD); border-color:var(--c,#8B6DFD); color:#fff; }
+.replay {
+  border:1px dashed #5a6285; background:transparent; color:#8a90a3; cursor:pointer;
+  padding:5px 14px; border-radius:10px 14px 9px 13px; font-size:.8rem; font-family:inherit;
+}
+.replay:hover { color:#fff; border-color:#8a90a3; }
+
+/* ════════ 方案 A · 火漆信封 ════════ */
+.nc-a {
+  position:relative; width:100%; max-width:420px; height:66px;
+  background:linear-gradient(180deg,#FBF5E8,#F1E8D3);
+  border:1px solid #D8CBB0; border-radius:8px 12px 6px 10px;
+  box-shadow:0 10px 24px rgba(0,0,0,.35), inset 0 -2px 0 rgba(120,100,60,.08);
+  display:flex; align-items:center; padding:0 70px 0 26px;
+}
+.nc-a .a-air {
+  position:absolute; left:8px; top:8px; bottom:8px; width:8px; border-radius:4px;
+  background:repeating-linear-gradient(135deg, var(--cd,#B03A20) 0 5px, #F5EFE0 5px 10px, #2b3a67 10px 15px, #F5EFE0 15px 20px);
+  opacity:.85;
+}
+.nc-a .a-flap {
+  position:absolute; inset:0; border-radius:inherit; pointer-events:none;
+  background:
+    linear-gradient(75deg, transparent 48%, rgba(150,130,90,.18) 48.5%, transparent 49.5%),
+    linear-gradient(-75deg, transparent 48%, rgba(150,130,90,.18) 48.5%, transparent 49.5%),
+    linear-gradient(180deg, rgba(150,130,90,.10), transparent 46%);
+}
+.nc-a .a-name { font-size:1.15rem; font-weight:800; color:#3a2f1e; letter-spacing:.05em; }
+.nc-a .a-name u {
+  text-decoration:none;
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='7' viewBox='0 0 14 7'%3E%3Cpath d='M0 5 Q3.5 1.5 7 5 T14 5' fill='none' stroke='%23B03A20' stroke-width='1.7' stroke-linecap='round'/%3E%3C/svg%3E") repeat-x left 100%/14px 7px;
+  padding-bottom:4px;
+}
+.nc-a .a-desc { font-size:.72rem; color:#8a7a58; margin-top:3px; letter-spacing:.08em; }
+.nc-a .a-seal {
+  position:absolute; right:14px; bottom:-12px; width:46px; height:46px; border-radius:50%;
+  background:radial-gradient(circle at 34% 30%, var(--c,#8B6DFD), var(--cd,#6a4be0) 72%);
+  box-shadow:0 4px 10px rgba(0,0,0,.35), inset 0 -3px 6px rgba(0,0,0,.28), inset 0 2px 4px rgba(255,255,255,.3);
+  color:#fff; display:flex; align-items:center; justify-content:center;
+  font-size:1.25rem; font-weight:800; transform:rotate(8deg); z-index:2;
+  text-shadow:0 -1px 0 rgba(0,0,0,.4), 0 1px 1px rgba(255,255,255,.25);
+}
+.nc-a .a-seal i {
+  position:absolute; inset:5px; border-radius:50%;
+  border:1.5px dashed rgba(255,255,255,.5);
+}
+.nc-a.switching { animation:envShake .45s .08s ease; }
+.nc-a.switching .a-seal { animation:sealStamp .55s cubic-bezier(.2,1.5,.3,1); }
+@keyframes sealStamp {
+  0% { transform:scale(2.2) rotate(-40deg); opacity:0; }
+  55% { transform:scale(.9) rotate(14deg); opacity:1; }
+  75% { transform:scale(1.06) rotate(5deg); }
+  100% { transform:scale(1) rotate(8deg); }
+}
+@keyframes envShake {
+  0%,100% { transform:translate(0,0) rotate(0); }
+  30% { transform:translate(-2px,1px) rotate(-.6deg); }
+  60% { transform:translate(2px,-1px) rotate(.5deg); }
+}
+</style>
+</head>
+<body>
+<h1>导航卡设计方案 <small>宝丰校园 · 手稿计划 · 点下面的频道按钮实时换装/重播动效</small></h1>
+<style>
+/* ════════ 方案 B · 霓虹灯牌 ════════ */
+.nc-b {
+  position:relative; width:100%; max-width:420px; height:70px;
+  background:linear-gradient(180deg,#131728,#0d101f);
+  border:1px solid #2a3052; border-radius:16px;
+  box-shadow:0 0 28px color-mix(in srgb, var(--c,#8B6DFD) 22%, transparent), inset 0 0 18px rgba(0,0,0,.5);
+  display:flex; align-items:center; gap:14px; padding:0 18px;
+}
+.nc-b .b-icon {
+  width:42px; height:42px; flex-shrink:0; border-radius:50%;
+  border:2px solid var(--c,#8B6DFD); color:var(--c,#8B6DFD);
+  display:flex; align-items:center; justify-content:center; font-size:1.2rem;
+  animation:bPulse 2.4s ease-in-out infinite;
+}
+@keyframes bPulse {
+  0%,100% { box-shadow:0 0 6px var(--c,#8B6DFD), inset 0 0 4px var(--c,#8B6DFD); }
+  50% { box-shadow:0 0 16px var(--c,#8B6DFD), inset 0 0 8px var(--c,#8B6DFD); }
+}
+.nc-b .b-name {
+  font-size:1.2rem; font-weight:800; color:#fff; letter-spacing:.08em;
+  text-shadow:0 0 6px var(--c,#8B6DFD), 0 0 16px var(--c,#8B6DFD), 0 0 34px var(--cd,#6a4be0);
+}
+.nc-b .b-desc { font-size:.62rem; letter-spacing:.34em; color:var(--c,#8B6DFD); margin-top:4px; opacity:.85; }
+.nc-b .b-eq { margin-left:auto; display:flex; align-items:flex-end; gap:3px; height:26px; }
+.nc-b .b-eq i { width:4px; border-radius:2px; background:var(--c,#8B6DFD); box-shadow:0 0 6px var(--c,#8B6DFD); animation:eq 1s ease-in-out infinite; }
+.nc-b .b-eq i:nth-child(1){ height:40%; animation-delay:0s; }
+.nc-b .b-eq i:nth-child(2){ height:90%; animation-delay:.15s; }
+.nc-b .b-eq i:nth-child(3){ height:60%; animation-delay:.3s; }
+.nc-b .b-eq i:nth-child(4){ height:100%; animation-delay:.45s; }
+.nc-b .b-eq i:nth-child(5){ height:50%; animation-delay:.6s; }
+@keyframes eq { 0%,100%{ transform:scaleY(.4);} 50%{ transform:scaleY(1);} }
+.nc-b.switching .b-name { animation:flickerIn .8s steps(1) both; }
+.nc-b.switching .b-icon { animation:bPulse 2.4s ease-in-out infinite, flickerIn .8s steps(1) both; }
+@keyframes flickerIn {
+  0% { opacity:0; } 8% { opacity:1; } 16% { opacity:.2; } 24% { opacity:1; }
+  36% { opacity:.3; } 44% { opacity:1; } 58% { opacity:.5; } 70%,100% { opacity:1; }
+}
+
+/* ════════ 方案 C · 复古车票 ════════ */
+.nc-c {
+  position:relative; width:100%; max-width:430px; height:64px;
+  background:linear-gradient(180deg,#F8F2E3,#EFE6CE);
+  border:1px solid #D8CBB0; border-radius:10px;
+  box-shadow:0 8px 20px rgba(0,0,0,.35);
+  display:flex; align-items:stretch; overflow:hidden;
+}
+.nc-c .c-side {
+  width:56px; flex-shrink:0; display:flex; align-items:center; justify-content:center;
+  background:linear-gradient(160deg, var(--c,#8B6DFD), var(--cd,#6a4be0));
+  color:#fff; font-size:1.5rem; font-weight:800;
+}
+.nc-c .c-mid { flex:1; padding:10px 14px; min-width:0; }
+.nc-c .c-name { font-size:1.08rem; font-weight:800; color:#3a2f1e; }
+.nc-c .c-sub { font-size:.62rem; color:#8a7a58; letter-spacing:.14em; margin-top:4px; font-family:ui-monospace,Consolas,monospace; }
+.nc-c .c-right {
+  width:96px; flex-shrink:0; border-left:2px dashed #C9BB9C;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px;
+  position:relative;
+}
+.nc-c .c-right::before, .nc-c .c-right::after {
+  content:""; position:absolute; left:-9px; width:16px; height:16px; border-radius:50%;
+  background:var(--stage-bg,#161a2b);
+}
+.nc-c .c-right::before { top:-9px; } .nc-c .c-right::after { bottom:-9px; }
+.nc-c .c-code {
+  width:52px; height:18px; border-radius:2px;
+  background:repeating-linear-gradient(90deg,#3a2f1e 0 2px,transparent 2px 4px,#3a2f1e 4px 5px,transparent 5px 8px);
+  opacity:.85;
+}
+.nc-c .c-date { font-size:.6rem; color:#8a7a58; letter-spacing:.12em; font-family:ui-monospace,Consolas,monospace; }
+.nc-c.switching { animation:ticketIn .5s cubic-bezier(.2,1.3,.4,1) both; }
+@keyframes ticketIn {
+  0% { transform:translateX(80px) rotate(4deg); opacity:0; }
+  100% { transform:translateX(0) rotate(0); opacity:1; }
+}
+.nc-c:hover { transform:translateY(-3px) rotate(-.5deg); transition:transform .25s; }
+
+/* ════════ 方案 D · 像素窗口 ════════ */
+.nc-d {
+  width:100%; max-width:430px; background:#EDE9DC; border:2px solid #1b1b1b; border-radius:6px;
+  box-shadow:6px 6px 0 rgba(0,0,0,.45); overflow:hidden; position:relative;
+}
+.nc-d::after {
+  content:""; position:absolute; inset:0; pointer-events:none;
+  background:repeating-linear-gradient(180deg, rgba(0,0,0,.04) 0 1px, transparent 1px 3px);
+}
+.nc-d .d-bar {
+  height:26px; background:linear-gradient(180deg, var(--c,#8B6DFD), var(--cd,#6a4be0));
+  display:flex; align-items:center; gap:5px; padding:0 8px;
+}
+.nc-d .d-bar i { width:9px; height:9px; background:#1b1b1b; border-radius:2px; }
+.nc-d .d-bar span { font-family:ui-monospace,Consolas,monospace; font-size:.68rem; color:#fff; letter-spacing:.06em; margin-left:4px; }
+.nc-d .d-body { display:flex; align-items:center; gap:12px; padding:10px 14px; }
+.nc-d .d-icon { font-size:1.7rem; filter:grayscale(.1); }
+.nc-d .d-txt b { display:block; font-size:1.05rem; color:#1b1b1b; }
+.nc-d .d-txt em { font-style:normal; font-size:.72rem; color:#6b6350; }
+.nc-d .d-cursor { display:inline-block; margin-left:3px; animation:blink 1s steps(1) infinite; color:var(--cd,#6a4be0); }
+@keyframes blink { 50% { opacity:0; } }
+.nc-d .d-status {
+  margin-left:auto; font-family:ui-monospace,Consolas,monospace; font-size:.6rem; color:#fff;
+  background:#1b1b1b; padding:3px 7px; border-radius:3px; letter-spacing:.1em;
+}
+.nc-d.switching { animation:winOpen .45s cubic-bezier(.2,1.4,.4,1); transform-origin:0 100%; }
+@keyframes winOpen {
+  0% { transform:scale(.6,0.06); opacity:0; }
+  60% { transform:scale(1.03,1.04); opacity:1; }
+  100% { transform:scale(1,1); }
+}
+</style>
+<style>
+/* ════════ 方案 E · 书架抽书（可当频道切换器用） ════════ */
+.shelf-wrap { width:100%; max-width:520px; display:flex; flex-direction:column; align-items:center; }
+.shelf { display:flex; align-items:flex-end; gap:10px; padding:0 14px; height:118px; }
+.book {
+  width:46px; height:88px; border-radius:3px 7px 2px 5px; cursor:pointer; position:relative;
+  background:linear-gradient(90deg, var(--cd,#6a4be0) 0 8%, var(--c,#8B6DFD) 30%, var(--cd,#6a4be0) 100%);
+  box-shadow:inset -3px 0 5px rgba(0,0,0,.3), 0 4px 8px rgba(0,0,0,.4);
+  display:flex; align-items:center; justify-content:center;
+  transition:transform .35s cubic-bezier(.3,1.5,.4,1), width .35s cubic-bezier(.3,1.5,.4,1), height .35s;
+}
+.book::before {
+  content:""; position:absolute; right:3px; top:4px; bottom:4px; width:5px; border-radius:2px;
+  background:repeating-linear-gradient(180deg,#f6efdd 0 2px,#d9cdb0 2px 3px); opacity:.9;
+}
+.book .bk-t {
+  writing-mode:vertical-rl; color:#fff; font-size:.82rem; font-weight:800; letter-spacing:.22em;
+  text-shadow:0 1px 2px rgba(0,0,0,.4);
+}
+.book .bk-ribbon {
+  display:none; position:absolute; top:-7px; right:10px; width:10px; height:20px;
+  background:repeating-linear-gradient(45deg,#E05A3F 0 4px,#c33a20 4px 8px);
+  clip-path:polygon(0 0,100% 0,100% 100%,50% 75%,0 100%);
+}
+.book:hover { transform:translateY(-8px) rotate(-3deg); }
+.book.active { width:96px; height:104px; transform:translateY(-14px); }
+.book.active .bk-t { writing-mode:horizontal-tb; letter-spacing:.1em; font-size:.95rem; }
+.book.active .bk-ribbon { display:block; }
+.book.active::after {
+  content:""; position:absolute; left:8px; right:12px; bottom:7px; height:14px; border-radius:3px;
+  background:rgba(255,255,255,.16); border:1px dashed rgba(255,255,255,.4);
+}
+.shelf-board {
+  width:100%; max-width:560px; height:12px; border-radius:3px;
+  background:linear-gradient(180deg,#7a5232,#4e3320);
+  box-shadow:0 10px 22px rgba(0,0,0,.5), inset 0 2px 0 rgba(255,255,255,.12);
+  margin-top:-2px;
+}
+.shelf-info { margin-top:16px; font-size:.82rem; color:#8a90a3; }
+.shelf-info b { color:#fff; font-size:.95rem; margin:0 4px; }
+.book.wob { animation:bookWob .4s ease; }
+@keyframes bookWob { 25% { transform:rotate(2.5deg) translateY(-3px);} 60% { transform:rotate(-1.5deg);} }
+
+/* 方案 E 浅色书桌版 */
+.stage.paper .shelf-info { color:#6b5c3a; }
+.stage.paper .shelf-info b { color:#3a2f1e; }
+</style>
+
+<!-- ════════ A 火漆信封 ════════ -->
+<section class="demo" id="sec-a" style="--c:#8B6DFD; --cd:#6a4be0;">
+  <h2><em>A</em>火漆信封 · 封蜡章</h2>
+  <p class="note">频道卡 = 一封拆开的信：左缘航空斜纹、信封盖折线、右下角频道色火漆章。切换频道时火漆章「啪」地盖下来，信封跟着颤一下。章可以做成点击直达频道最新消息的入口。</p>
+  <div class="stage dark">
+    <div class="fakebar"><div class="dot"></div>
+      <div class="nc-a" id="card-a">
+        <div class="a-air"></div><div class="a-flap"></div>
+        <div class="a-mid"><div class="a-name"><u class="js-name">综合大厅</u></div><div class="a-desc js-desc">✎ 聊天灌水的地方</div></div>
+        <div class="a-seal"><i></i><span class="js-ch" style="position:relative">聊</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="pills" data-for="a"><button class="replay" data-act="replay">↻ 重播盖章</button></div>
+</section>
+
+<!-- ════════ B 霓虹灯牌 ════════ -->
+<section class="demo" id="sec-b" style="--c:#8B6DFD; --cd:#6a4be0;">
+  <h2><em>B</em>霓虹灯牌 · 深夜招牌</h2>
+  <p class="note">频道名做成霓虹灯管字，图标在呼吸的霓虹环里，右侧五根跳动的音量柱暗示「这个频道正热闹」。切频道 = 灯管重新通电（闪烁点亮）。适合星空/夜间主题，校园手稿主题下可自动降级为彩色灯箱。</p>
+  <div class="stage dark">
+    <div class="fakebar"><div class="dot"></div>
+      <div class="nc-b" id="card-b">
+        <div class="b-icon js-ch">💬</div>
+        <div class="b-mid"><div class="b-name js-name">综合大厅</div><div class="b-desc js-en">CHAT · LIVE</div></div>
+        <div class="b-eq"><i></i><i></i><i></i><i></i><i></i></div>
+      </div>
+    </div>
+  </div>
+  <div class="pills" data-for="b"><button class="replay" data-act="replay">↻ 重播通电</button></div>
+</section>
+
+<!-- ════════ C 复古车票 ════════ -->
+<section class="demo" id="sec-c" style="--c:#8B6DFD; --cd:#6a4be0;">
+  <h2><em>C</em>复古车票 · 校内通行券</h2>
+  <p class="note">频道卡 = 一张打进校门的月台票：左侧频道色票根（大字）、中间票名 + 票号、右侧撕线 + 条形码 + 日期，撕线两端的圆孔是真「打孔」。切频道 = 新票从右边撕下来递给你。日期每天自动变，票号可以当「今日第 N 位进入者」彩蛋。</p>
+  <div class="stage dark">
+    <div class="fakebar"><div class="dot"></div>
+      <div class="nc-c" id="card-c">
+        <div class="c-side js-ch">聊</div>
+        <div class="c-mid"><div class="c-name js-name">综合大厅</div><div class="c-sub js-sub">NO. 20260603 · 校内通行</div></div>
+        <div class="c-right"><div class="c-code"></div><div class="c-date js-date">2026.06.03</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="pills" data-for="c"><button class="replay" data-act="replay">↻ 重播撕票</button></div>
+</section>
+
+<!-- ════════ D 像素窗口 ════════ -->
+<section class="demo" id="sec-d" style="--c:#8B6DFD; --cd:#6a4be0;">
+  <h2><em>D</em>像素窗口 · 频道.exe</h2>
+  <p class="note">频道 = 电脑老系统的窗口：频道色标题栏 + 三个实体按键 + 米色窗口体 + CRT 扫描线 + 硬阴影，状态栏显示在线人数，正文一行打字机光标闪烁。切频道 = 窗口从任务栏弹起展开。二次元频道用这套会特别搭。</p>
+  <div class="stage dark">
+    <div class="fakebar"><div class="dot"></div>
+      <div class="nc-d" id="card-d">
+        <div class="d-bar"><i></i><i></i><i></i><span class="js-win">chat.exe — 综合大厅</span></div>
+        <div class="d-body">
+          <div class="d-icon js-ch">💬</div>
+          <div class="d-txt"><b class="js-name">综合大厅</b><em>✎ <span class="js-desc">聊天灌水的地方</span><span class="d-cursor">▌</span></em></div>
+          <div class="d-status">ONLINE 1024</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="pills" data-for="d"><button class="replay" data-act="replay">↻ 重播开窗</button></div>
+</section>
+
+<!-- ════════ E 书架抽书 ════════ -->
+<section class="demo" id="sec-e" style="--c:#8B6DFD; --cd:#6a4be0;">
+  <h2><em>E</em>书架抽书 · 频道切换器</h2>
+  <p class="note">彻底换思路：导航不再是「一张卡」，而是一排书脊 —— 每个频道是一本竖放的书，当前频道整本被抽出来（变宽、上浮、别上书签），书名从竖排变横排。直接点书就能切换频道，可以放在顶栏，也可以放在抽屉顶部当「我的书架」。<b>点下面的书试试。</b></p>
+  <div class="stage warm" style="--stage-bg:#221c14;">
+    <div class="shelf-wrap">
+      <div class="shelf" id="shelf"></div>
+      <div class="shelf-board"></div>
+      <div class="shelf-info">当前抽出：<b class="js-name">综合大厅</b><span class="js-desc"> — 聊天灌水的地方</span></div>
+    </div>
+  </div>
+  <div class="pills" data-for="e"></div>
+</section>
+
+<script>
+(function(){
+  var CH = [
+    { k:'notice', ch:'急', icon:'📢', name:'公告栏',   en:'NOTICE · READ ME', desc:'学校通知 · 必读',      c:'#E05A3F', cd:'#B03A20' },
+    { k:'chat',   ch:'聊', icon:'💬', name:'综合大厅', en:'CHAT · LIVE',      desc:'聊天灌水的地方',      c:'#8B6DFD', cd:'#6a4be0' },
+    { k:'book',   ch:'学', icon:'📖', name:'学习园地', en:'STUDY · WORK',     desc:'作业资料 · 打卡',      c:'#5B8DEF', cd:'#3d6fe8' },
+    { k:'life',   ch:'常', icon:'🌿', name:'生活日常', en:'DAILY · LIFE',     desc:'日常分享 · 树洞',      c:'#3FA65C', cd:'#2e9147' },
+    { k:'anime',  ch:'燃', icon:'✨', name:'二次元世界', en:'ANIME · 咚!',     desc:'番剧 · 漫画 · 讨论',   c:'#F0568F', cd:'#e93a7c' }
+  ];
+  var d = new Date();
+  var dstr = d.getFullYear() + '.' + String(d.getMonth()+1).padStart(2,'0') + '.' + String(d.getDate()).padStart(2,'0');
+  var serial = 'NO. ' + d.getFullYear() + String(d.getMonth()+1).padStart(2,'0') + String(d.getDate()).padStart(2,'0') + ' · 校内通行';
+
+  function q(sel, root){ return (root||document).querySelector(sel); }
+  function qa(sel, root){ return Array.prototype.slice.call((root||document).querySelectorAll(sel)); }
+
+  // 重播动画：移除类 → 强制 reflow → 加回
+  function replay(el, cls){
+    el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls);
+    clearTimeout(el._t); el._t = setTimeout(function(){ el.classList.remove(cls); }, 900);
+  }
+
+  // 每个方案一套 pills + 卡片更新
+  function bindSection(id, cardId, cls, apply){
+    var sec = document.getElementById('sec-' + id);
+    var card = document.getElementById(cardId);
+    var pills = q('.pills', sec);
+    CH.forEach(function(item){
+      var b = document.createElement('button');
+      b.className = 'pill'; b.type = 'button'; b.textContent = item.name;
+      b.style.setProperty('--c', item.c);
+      b.addEventListener('click', function(){
+        qa('.pill', pills).forEach(function(x){ x.classList.remove('on'); });
+        b.classList.add('on');
+        sec.style.setProperty('--c', item.c);
+        sec.style.setProperty('--cd', item.cd);
+        apply(card, item, sec);
+        if (cls) replay(card, cls);
+      });
+      pills.insertBefore(b, q('.replay', pills));
+      if (item.k === 'chat') { b.classList.add('on'); }
+    });
+    q('.replay', pills).addEventListener('click', function(){ if (cls) replay(card, cls); });
+  }
+
+  // A 信封
+  bindSection('a', 'card-a', 'switching', function(card, item){
+    q('.js-name', card).textContent = item.name;
+    q('.js-desc', card).textContent = '✎ ' + item.desc;
+    q('.js-ch', card).textContent = item.ch;
+  });
+  // B 霓虹
+  bindSection('b', 'card-b', 'switching', function(card, item){
+    q('.js-name', card).textContent = item.name;
+    q('.js-en', card).textContent = item.en;
+    q('.js-ch', card).textContent = item.icon;
+  });
+  // C 车票
+  bindSection('c', 'card-c', 'switching', function(card, item){
+    q('.js-name', card).textContent = item.name;
+    q('.js-ch', card).textContent = item.ch;
+    q('.js-sub', card).textContent = serial;
+    q('.js-date', card).textContent = dstr;
+  });
+  // D 窗口
+  bindSection('d', 'card-d', 'switching', function(card, item){
+    q('.js-name', card).textContent = item.name;
+    q('.js-desc', card).textContent = item.desc;
+    q('.js-ch', card).textContent = item.icon;
+    q('.js-win', card).textContent = item.k + '.exe — ' + item.name;
+  });
+
+  // E 书架：生成书脊 + 点击切换
+  var shelf = document.getElementById('shelf');
+  var secE = document.getElementById('sec-e');
+  CH.forEach(function(item){
+    var bk = document.createElement('div');
+    bk.className = 'book' + (item.k === 'chat' ? ' active' : '');
+    bk.style.setProperty('--c', item.c);
+    bk.style.setProperty('--cd', item.cd);
+    bk.innerHTML = '<span class="bk-t">' + item.name + '</span><i class="bk-ribbon"></i>';
+    bk.addEventListener('click', function(){
+      qa('.book', shelf).forEach(function(x){
+        x.classList.remove('active');
+        if (x !== bk) { x.classList.remove('wob'); void x.offsetWidth; x.classList.add('wob'); }
+      });
+      bk.classList.add('active');
+      secE.style.setProperty('--c', item.c);
+      secE.style.setProperty('--cd', item.cd);
+      q('.js-name', secE).textContent = item.name;
+      q('.js-desc', secE).textContent = ' — ' + item.desc;
+    });
+    shelf.appendChild(bk);
+  });
+})();
+</script>
+</body>
+</html>
