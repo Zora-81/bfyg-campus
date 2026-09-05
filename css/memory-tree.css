@@ -61,41 +61,39 @@ body { font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI
 .mt-hud.show { opacity: 1; transform: translateY(0); }
 .mt-hud > * { pointer-events: auto; flex-shrink: 0; }
 
-/* 返回频道胶囊按钮（与音乐卡片同高同风格） */
+/* 返回频道按钮（无边框，与粒子读信页导航一致） */
 .mt-back-btn {
   display: inline-flex; align-items: center; gap: 7px;
   height: 64px; padding: 0 22px 0 18px; border-radius: 999px;
-  background: rgba(12,14,28,.58); border: 1px solid rgba(255,255,255,.14);
-  backdrop-filter: blur(16px) saturate(180%); -webkit-backdrop-filter: blur(16px) saturate(180%);
+  background: none; border: none;
   font-size: 16px; font-weight: 600; letter-spacing: .5px;
-  box-shadow: 0 6px 26px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.08);
+  color: rgba(235,238,250,.62);
+  transition: all .25s;
+  text-shadow: 0 1px 10px rgba(0,0,0,.85), 0 1px 2px rgba(0,0,0,.9);
 }
-.mt-back-btn:hover { background: rgba(30,34,62,.72); border-color: rgba(150,170,255,.45); box-shadow: 0 0 20px rgba(120,150,255,.28); }
+.mt-back-btn:hover { color: #fff; transform: translateY(-1px); }
 .mt-back-arrow { font-size: 17px; opacity: .9; }
 
-/* 靠左的标题（与音乐卡片同高同风格） */
+/* 靠左的标题（无边框，与粒子读信页导航一致） */
 .mt-hud-title-wrap {
   display: inline-flex; align-items: center; gap: 8px;
   height: 64px; padding: 0 18px; border-radius: 999px;
-  background: rgba(12,14,28,.58); border: 1px solid rgba(255,255,255,.14);
-  backdrop-filter: blur(16px) saturate(180%); -webkit-backdrop-filter: blur(16px) saturate(180%);
-  box-shadow: 0 6px 26px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.08);
+  background: none; border: none;
   cursor: pointer; color: inherit; font: inherit; outline: none;
+  transition: all .25s;
 }
-.mt-hud-title-wrap:hover { background: rgba(20,24,48,.7); border-color: rgba(150,170,255,.35); box-shadow: 0 0 20px rgba(120,150,255,.25), inset 0 1px 0 rgba(255,255,255,.1); }
+.mt-hud-title-wrap:hover { color: #fff; transform: translateY(-1px); }
 .mt-hud-icon { font-size: 18px; filter: drop-shadow(0 0 10px rgba(150,120,255,.6)); }
 .mt-hud-title { font-size: 16px; font-weight: 700; letter-spacing: 1.5px; text-shadow: 0 0 14px rgba(150,120,255,.7); }
 
-/* 音乐卡片（圆形旋转唱片，单曲目：点击播放 / 暂停） */
+/* 音乐卡片（无边框，与粒子读信页导航一致） */
 .mt-music-card {
   display: inline-flex; align-items: center; gap: 10px;
   height: 64px; padding: 6px 12px 6px 8px; border-radius: 999px;
-  background: rgba(12,14,28,.58); border: 1px solid rgba(255,255,255,.14);
-  backdrop-filter: blur(16px) saturate(180%); -webkit-backdrop-filter: blur(16px) saturate(180%);
-  box-shadow: 0 6px 26px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.08);
+  background: none; border: none;
   transition: all .2s ease; cursor: default;
 }
-.mt-music-card:hover { border-color: rgba(150,170,255,.4); box-shadow: 0 0 24px rgba(120,150,255,.22); }
+.mt-music-card:hover { color: rgba(255,255,255,.9); }
 .mt-music-card.no-audio { opacity: .85; }
 
 /* 圆形旋转唱片 */
@@ -291,7 +289,7 @@ body { font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI
 .mt-comments-empty { font-size: 12.5px; color: rgba(180,195,230,.4); padding: 8px 0; }
 .mt-comment { padding: 10px 12px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.06); border-radius: 11px; }
 .mt-comment-top { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
-.mt-comment-avatar { width: 24px; height: 24px; border-radius: 50%; background: linear-gradient(135deg,#6a8cff,#c08bff); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: #fff; flex-shrink: 0; }
+.mt-comment-avatar { width: 24px; height: 24px; border-radius: 34% 44% 38% 46%; background: linear-gradient(135deg,#6a8cff,#c08bff); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: #fff; flex-shrink: 0; }
 .mt-comment-name { font-size: 13px; font-weight: 600; color: #e8ecff; }
 .mt-comment-time { font-size: 11px; color: rgba(180,195,230,.45); margin-left: auto; }
 .mt-comment-body { font-size: 13px; line-height: 1.6; color: rgba(210,220,245,.88); white-space: pre-wrap; word-break: break-word; }
@@ -341,6 +339,7 @@ body { font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI
 .mt-input:focus { border-color: rgba(150,170,255,.55); box-shadow: 0 0 0 3px rgba(120,150,255,.15); }
 .mt-input:disabled { opacity: .45; cursor: not-allowed; }
 .mt-textarea { min-height: 120px; line-height: 1.6; }
+.mt-post-title-input { padding: 10px 14px; font-size: 15px; font-weight: 600; letter-spacing: .03em; }
 .mt-post-author-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 .mt-post-anon { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: rgba(220,228,250,.8); cursor: pointer; user-select: none; }
 .mt-post-anon input { width: 16px; height: 16px; accent-color: #6a8cff; cursor: pointer; }

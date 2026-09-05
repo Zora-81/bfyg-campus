@@ -149,7 +149,7 @@ const el = {
   commentsCount: $('#mt-comments-count'),
   form: $('#mt-comment-form'), text: $('#mt-comment-text'),
   postModal: $('#mt-post-modal'), postTrigger: $('#mt-post-trigger'), postClose: $('#mt-post-close'),
-  postCancel: $('#mt-post-cancel'), postForm: $('#mt-post-form'), postText: $('#mt-post-text'),
+  postCancel: $('#mt-post-cancel'), postForm: $('#mt-post-form'), postText: $('#mt-post-text'), postTitle: $('#mt-post-title'),
   postAnon: $('#mt-post-anon'),
   postImageBtn: $('#mt-post-image-btn'), postImageInput: $('#mt-post-image-input'),
   postImageRow: $('#mt-post-image-row'), postImagePreview: $('#mt-post-image-preview'),
@@ -403,13 +403,56 @@ function init() {
     const warmStart = performance.now();
     const runScene = async function () {
       try {
+        // 🔧 精准诊断：定位 MTScene 未定义 / create 失败的精确原因
+        const diag = [];
+        diag.push('MTScene=' + !!window.MTScene);
+        diag.push('canvas=' + !!el?.canvas);
+        if (!window.MTScene) {
+          // three.module.js 已确认可加载(abs-import-three=OK)，但 MTScene 仍 false
+          // → 直接 import three-scene 模块本身 + OrbitControls，拿模块级真实错误
+          try {
+            const tsScript = document.querySelector('script[src*="three-scene"]');
+            const tsSrc = tsScript ? new URL(tsScript.getAttribute('src'), location.href).href : null;
+            diag.push('three-scene-src=' + (tsSrc || 'null'));
+            await import(/* @vite-ignore */ tsSrc);
+            diag.push('import-three-scene=OK');
+          } catch (ei) {
+            diag.push('import-three-scene=FAIL(' + (ei?.stack || ei?.message || ei) + ')');
+          }
+          try {
+            await import('/js/vendor/OrbitControls.js');
+            diag.push('import-orbit=OK');
+          } catch (eo) {
+            diag.push('import-orbit=FAIL(' + (eo?.message || eo) + ')');
+          }
+        }
+        // 将诊断写进页面（红底醒目）
+        if (!window.MTScene) {
+          const db = document.createElement('div');
+          db.style.cssText = 'position:fixed;top:50px;left:50%;transform:translateX(-50%);background:#c0392b;color:#fff;font-size:12px;padding:10px 16px;border-radius:8px;z-index:99999;font-family:monospace;max-width:90vw;word-break:break-all;white-space:pre-wrap;';
+          db.textContent = '🔴 ' + diag.join(' | ');
+          document.body.appendChild(db);
+          // 不要立即 return——等 3 秒让用户看到诊断，再走 fallback
+          await new Promise(r => setTimeout(r, 5000));
+        }
         sceneApi = window.MTScene.create({
           canvas: el.canvas, config: CFG, data: [], reducedMotion: reduced,
           onNodeClick: openDetail,
           onReady: finishLoad
         });
-      } catch (e) { console.error(e); showFallback(); return; }
-      if (!sceneApi || sceneApi.fallback) { showFallback(); return; }
+        window.__mtSceneApi = sceneApi;  // 暴露给 letter-reader 等外部模块调用（如 resetCamera）
+      } catch (e) {
+        console.error('MTScene.create error:', e);
+        showFallback(); return;
+      }
+      if (!sceneApi || sceneApi.fallback) {
+        const reason = !window.MTScene ? 'MTScene未定义(模块加载失败?)' : (sceneApi.fallback ? 'WebGL不可用' : 'sceneApi为空');
+        const fbBanner = document.createElement('div');
+        fbBanner.style.cssText = 'position:fixed;top:60px;left:50%;transform:translateX(-50%);background:#e67e22;color:#fff;font-size:13px;padding:8px 16px;border-radius:8px;z-index:99999;font-family:monospace;';
+        fbBanner.textContent = '⚠️ 3D Fallback原因: ' + reason;
+        document.body.appendChild(fbBanner);
+        showFallback(); return;
+      }
 
       bindUI();
       initMusicPlayer();
@@ -452,9 +495,46 @@ function tryAuth() {
   else window.addEventListener('IF_READY', start, { once: true });
 }
 
+// 读信页照片加载失败 → 回退到现有详情弹层（memory-tree.js 注入），带上真实错误
+window.__mtOpenDetailFallback = (item, imgErr) => {
+  openDetail(item, null, true, imgErr);
+};
+
 // ---------- 详情 / 评论 ----------
-async function openDetail(item, origin) {
+async function openDetail(item, origin, forceFallback, imgErr) {
   currentItem = item;
+  // 图片帖 → 全屏读信页（粒子照片 + 文字叠层），纯文字帖走原弹层
+  // forceFallback=true（读信页照片加载失败）时直接走原弹层
+  // 兼容两种数据结构：3D 节点走 addPostNode 映射出 item.url；回退网格/原始 post 只有 item.imageUrl
+  const photoUrl = item && (item.url || item.imageUrl);
+  if (!forceFallback && photoUrl && window.LetterReader) {
+    if (window.LetterReader.isOpen && window.LetterReader.isOpen()) { return; }
+    window.LetterReader.setDeleteHandler(async (id) => {
+      const target = id || (currentItem && currentItem.id);
+      if (!target) return;
+      try { if (window.MTPosts && window.MTPosts.remove) window.MTPosts.remove(target); } catch (e) {}
+      try { if (window.MTPosts && window.MTPosts.removeRemote) await window.MTPosts.removeRemote(target); } catch (e) {}
+      if (sceneApi && sceneApi.removeNode) sceneApi.removeNode(target);
+      if (postIds) postIds.delete(target);
+      buildFallbackGrid();
+      window.LetterReader.close();
+      toast('已删除该帖子');
+    });
+    window.LetterReader.setDeleteVisible(isAdmin());
+    await window.LetterReader.open(item, origin);
+    return;
+  }
+  // 纯文字帖不是错误：不再给用户弹出“走了fallback”的红色诊断条。
+  // 若是读信页照片真正失败走这里，仅在控制台保留原因，避免打扰用户。
+  if (forceFallback || (photoUrl && !window.LetterReader)) {
+    const reasons = [];
+    if (forceFallback) reasons.push('forceFallback=true(读信页内部照片加载失败)');
+    if (!photoUrl) reasons.push('photoUrl空(url=' + (item?.url) + ' imageUrl=' + (item?.imageUrl) + ')');
+    if (!window.LetterReader) reasons.push('LetterReader未定义(模块加载失败?)');
+    if (imgErr) reasons.push('imgErr=' + imgErr);
+    console.warn('[MemoryTree] fallback 详情:', reasons.join(' | '));
+  }
+
   const isPost = item.isPost || (!item.url && item.content);
   const title = isPost ? (item.content.length > 22 ? item.content.slice(0, 22) + '…' : item.content) : (item.title || '记忆');
   el.detailMedia.innerHTML = '';
@@ -701,6 +781,7 @@ let isSubmitting = false;
 async function submitPost() {
   if (isSubmitting) return;
   const content = el.postText.value.trim();
+  const title = (el.postTitle && el.postTitle.value.trim()) || '';
   if (!content) return;
   // 不能只发 emoji / 空白 / 标点，必须包含至少一个真实文字或数字
   if (!/[\p{L}\p{N}]/u.test(content)) {
@@ -732,11 +813,12 @@ async function submitPost() {
         return;
       }
     }
-    const res = window.MTPosts.submit({ content, authorName, anonymous, imageUrl, authorId: (currentUser && currentUser.id) || null });
+    const res = window.MTPosts.submit({ title: title || undefined, content, authorName, anonymous, imageUrl, authorId: (currentUser && currentUser.id) || null });
     if (!res || !res.ok) { toast('发布失败，请重试'); return; }
 
     toast('留言已挂上记忆树 ✦');
     el.postText.value = '';
+    if (el.postTitle) el.postTitle.value = '';
     resetPostImage();
     el.postModal.hidden = true;
 
@@ -752,7 +834,8 @@ async function submitPost() {
     }).catch(() => {});
 
     // 打开刚发布的留言详情
-    const postItem = { ...res.post, title: res.post.content.length > 18 ? res.post.content.slice(0, 18) + '…' : res.post.content, location: res.post.authorName || '匿名同学', year: fmtTime(res.post.created_at), url: res.post.imageUrl || '', emoji: '✦', isPost: true };
+    const postTitle = res.post.title || (title || (res.post.content.length > 18 ? res.post.content.slice(0, 18) + '…' : res.post.content));
+    const postItem = { ...res.post, title: postTitle, location: res.post.location || '', year: fmtTime(res.post.created_at), url: res.post.imageUrl || '', emoji: '✦', isPost: true };
     openDetail(postItem);
   } finally {
     isSubmitting = false;
@@ -786,7 +869,7 @@ function bindUI() {
       return;
     }
     // 兜底：直接打开记忆树（无父页面，如书签/新标签）时，带版本号跳回主频道
-    let v = '1.4.57';
+    let v = '1.4.59';
     try {
       v = localStorage.getItem('mt_v') || v;
       if (!v) {
@@ -918,10 +1001,14 @@ function buildFallbackGrid() {
     node.addEventListener('click', () => {
       const id = node.getAttribute('data-id');
       const kind = node.getAttribute('data-kind');
-      const it = kind === 'post'
+      const raw = kind === 'post'
         ? posts.find(p => p.id === id)
         : DATA.find(d => d.id === id);
-      if (it) openDetail(it);
+      if (raw) {
+        // 归一化：确保点击回调传给 openDetail 的 item 同时有 url 和 imageUrl
+        const it = (!raw.url && raw.imageUrl) ? Object.assign({}, raw, { url: raw.imageUrl }) : raw;
+        openDetail(it);
+      }
     });
   });
 }

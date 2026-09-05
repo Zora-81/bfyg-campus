@@ -61,11 +61,10 @@ window.MT_CONFIG = {
 // 所有节点均使用真实照片 url 加载（来自 images/ 校园真实素材），不再生成 AI 占位图。
 // 字段：id, media_type('image'|'video'), url, title, location, year
 window.MT_DATA = [
-  { id: 'm01', media_type: 'image', url: 'images/campus-aerial.jpg', title: '校园航拍 · 香山路新校区', location: '宝丰一高', year: '2025' },
+  { id: 'm01', media_type: 'image', url: 'images/campus-aerial.jpg', title: '校园航拍 · 香山路新校区', location: '宝丰校园', year: '2025' },
   { id: 'm02', media_type: 'image', url: 'images/campus-01.jpg', title: '晨光里的教学楼', location: '教学楼 A 区', year: '2024' },
   { id: 'm03', media_type: 'image', url: 'images/campus-02.jpg', title: '林荫道与读书声', location: '中央大道', year: '2024' },
   { id: 'm04', media_type: 'image', url: 'images/campus-03.jpg', title: '实验室的午后', location: '人工智能实验室', year: '2025' },
   { id: 'm05', media_type: 'image', url: 'images/campus-04.jpg', title: '操场与晚风', location: '田径场', year: '2024' },
-  { id: 'm06', media_type: 'image', url: 'images/school-night.jpg', title: '夜色中的校园', location: '宝丰一高', year: '2025' },
-  { id: 'm07', media_type: 'image', url: 'images/starry-nebula.png', title: '星河下的记忆', location: '记忆星海', year: '—' }
+  { id: 'm06', media_type: 'image', url: 'images/school-night.jpg', title: '夜色中的校园', location: '宝丰校园', year: '2025' },
 ];

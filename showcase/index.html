@@ -3,38 +3,90 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>宝丰一高校园频道 · 滚动穿越校园</title>
-<meta name="description" content="宝丰一高校园频道展示页：实时聊天、匿名树洞、热门话题、记忆树星空档案。向下滚动，一起飞进校园。" />
-<meta name="theme-color" content="#05071a" />
-<link rel="icon" type="image/png" href="assets/school-badge-new.png" />
+<title>宝丰校园论坛</title>
+<meta name="description" content="宝丰校园频道。树顶的校园世界，滚动鼠标从树冠坠到树根，沿途是全景、教学楼、树洞、操场和夜色。" />
+<meta name="theme-color" content="#05070f" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='9' fill='%237c5cfc'/%3E%3C/svg%3E" />
 <link rel="stylesheet" href="style.css" />
+<style>
+@font-face{font-family:'MSZ';src:url(assets/mashanzheng.woff2) format('woff2');font-display:swap}
+@font-face{font-family:'ZK';src:url(assets/zcool.woff2) format('woff2');font-display:swap}
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
 </head>
 <body>
-<canvas id="fx"></canvas>
-<div class="page-progress"><i id="progress"></i></div>
 
-<nav class="nav" id="nav">
-  <a class="brand" href="#hero">
-    <img src="assets/school-badge-new.png" alt="校徽" />
-    <span>宝丰一高校园频道<small>BFGZLT.CC.CD</small></span>
-  </a>
-  <div class="nav-links">
-    <a href="#journey">穿越校园</a>
-    <a href="#features">功能亮点</a>
-    <a href="#finale">进入频道</a>
-  </div>
-  <a class="nav-cta" href="https://bfgzlt.cc.cd" target="_blank" rel="noreferrer">进入频道</a>
-</nav>
+<div class="loader" id="loader" aria-hidden="true">
+  <div class="loader-mark">校园频道</div>
+  <div class="loader-bar"><i id="loaderFill"></i></div>
+  <div class="loader-pct"><span id="loaderPct">0</span>%</div>
+</div>
 
-<header class="hero" id="hero">
-  <div class="hero-inner">
-    <span class="hero-badge">⚡ 宝丰一高 · 校园频道 · 正式开放</span>
-    <h1>下一站<br /><span class="grad">属于我们的校园频道</span></h1>
-    <p>实时聊天、匿名树洞、热门话题、记忆树星空档案——把整座校园装进一个网页。向下滚动，像推开校门一样飞进去。</p>
-    <div class="hero-actions">
-      <a class="btn btn-primary" href="https://bfgzlt.cc.cd" target="_blank" rel="noreferrer">立即进入 →</a>
-      <a class="btn btn-ghost" href="#journey">开始穿越 ↓</a>
-    </div>
+<header class="hud hud-top" id="hudTop">
+  <a class="brand" href="https://bfgzlt.cc.cd" target="_blank" rel="noreferrer">宝丰校园论坛</a>
+  <div class="pill" role="navigation" aria-label="快捷入口">
+    <button class="pill-link" type="button" data-fly="2">树洞</button>
+    <span class="pill-line" aria-hidden="true"></span>
+    <a class="pill-link pill-cta" href="https://bfgzlt.cc.cd" target="_blank" rel="noreferrer">进入频道</a>
   </div>
-  <div class="hero-scroll">SCROLL TO FLY IN</div>
 </header>
+
+<div class="hud hud-rail" id="hudRail">
+  <div class="rail-track"><i id="railFill"></i></div>
+</div>
+
+<section class="world" id="world" aria-label="校园频道世界">
+  <canvas id="gl"></canvas>
+  <div class="title-card" id="titleCard">
+    <h1 class="title-main">校园频道</h1>
+    <p class="title-sub">BAOFENG CAMPUS CHANNEL</p>
+  </div>
+</section>
+
+<div class="caption" id="caption" aria-live="polite">
+  <span class="cap-kicker" id="capKicker">CAMPUS AERIAL</span>
+  <h2 class="cap-title" id="capTitle">校园全景</h2>
+  <p class="cap-desc" id="capDesc">先从天上认识这座校园。</p>
+</div>
+
+<aside class="hud inquiry" id="inquiry" aria-label="板块向导">
+  <p class="inq-label">你想找什么？</p>
+  <nav class="inq-list" id="inqList">
+    <button type="button" data-fly="0">-&gt;全景</button>
+    <button type="button" data-fly="1">-&gt;教学楼</button>
+    <button type="button" data-fly="2">-&gt;树洞</button>
+    <button type="button" data-fly="3">-&gt;操场</button>
+    <button type="button" data-fly="4">-&gt;夜色</button>
+  </nav>
+  <form class="inq-form" id="inqForm">
+    <label class="sr-only" for="inqInput">搜索板块</label>
+    <input id="inqInput" type="text" placeholder="有什么问题尽管问……" autocomplete="off" />
+  </form>
+  <p class="inq-hint" id="inqHint" role="status"></p>
+</aside>
+
+<aside class="panel" id="panel" aria-hidden="true" role="dialog" aria-labelledby="panelTitle">
+  <button class="panel-close" id="panelClose" type="button">关闭</button>
+  <span class="panel-kicker" id="panelKicker"></span>
+  <h3 id="panelTitle"></h3>
+  <p id="panelDesc"></p>
+  <ul id="panelFeats"></ul>
+  <a id="panelCta" class="panel-cta" href="https://bfgzlt.cc.cd" target="_blank" rel="noreferrer">进入频道</a>
+</aside>
+
+<footer class="footer">宝丰校园论坛 BFGZLT.CC.CD</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.7/dist/gsap.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.7/dist/ScrollTrigger.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/animejs@3.2.2/lib/anime.min.js"></script>
+<script src="world.config.js"></script>
+<script type="module" src="app.js"></script>
+</body>
+</html>

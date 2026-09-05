@@ -23,7 +23,8 @@ window.MTPosts = (function () {
     if (!r) return null;
     return {
       id: r.id,
-      content: r.content,
+      content: r.content || '',
+      title: r.title || '',
       authorName: r.author_name || '匿名同学',
       anonymous: !!r.anonymous,
       imageUrl: r.image_url || '',
@@ -37,7 +38,8 @@ window.MTPosts = (function () {
   function toCloud(p) {
     return {
       id: p.id,
-      content: p.content,
+      content: p.content || '',
+      title: p.title || '',
       author_name: p.authorName || '匿名同学',
       anonymous: !!p.anonymous,
       image_url: p.imageUrl || '',
@@ -51,10 +53,10 @@ window.MTPosts = (function () {
     _read() { try { return JSON.parse(localStorage.getItem(KEY) || '[]'); } catch (e) { return []; } },
     _write(a) { try { localStorage.setItem(KEY, JSON.stringify(a)); } catch (e) {} },
     list() { return this._read().sort((a, b) => b.created_at - a.created_at); },
-    submit({ content, authorName, anonymous, imageUrl, authorId }) {
+    submit({ title, content, authorName, anonymous, imageUrl, authorId }) {
       const arr = this._read();
       const rec = {
-        id: uid(), content: String(content).trim(),
+        id: uid(), title: (title || '').trim(), content: String(content || '').trim(),
         authorName: anonymous ? '匿名同学' : (authorName || '匿名同学'),
         anonymous: !!anonymous, imageUrl: imageUrl || '', authorId: authorId || null,
         created_at: Date.now(), isPost: true
@@ -107,10 +109,10 @@ window.MTPosts = (function () {
       return this._cache || [];
     },
     list() { return (this._cache || []).slice().sort((a, b) => b.created_at - a.created_at); },
-    submit({ content, authorName, anonymous, imageUrl, authorId }) {
+    submit({ title, content, authorName, anonymous, imageUrl, authorId }) {
       const id = uuid();
       const rec = {
-        id, content: String(content).trim(),
+        id, title: (title || '').trim(), content: String(content || '').trim(),
         authorName: anonymous ? '匿名同学' : (authorName || '匿名同学'),
         anonymous: !!anonymous, imageUrl: imageUrl || '',
         authorId: authorId || (window.__mtCurrentUserId) || null,

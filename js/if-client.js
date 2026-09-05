@@ -7,9 +7,38 @@
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@insforge/sdk@1.4.4/+esm'
 
 const INS_FORGE_URL = 'https://api.bfgzlt.cc.cd'
+// 直连兜底：Worker 反代域名(api.bfgzlt.cc.cd)偶发抖动/超时时，最后尝试直连 InsForge 主机。
+// 大陆部分网络会屏蔽 *.insforge.app，此兜底仅为"最后一搏"，失败不影响原错误抛出。
+const INS_FORGE_DIRECT = 'https://r683ebwu.ap-southeast.insforge.app'
 const ANON_KEY = 'anon_a09338fe0bdb3e2a0797c92a73a8431ddae4b38f7b12333fe41ebbeccba6e2ea'
 
 const insforge = createClient({ baseUrl: INS_FORGE_URL, anonKey: ANON_KEY, debug: true })
+
+// ---- 直连兜底：反代域名整体超时/抖动时，对关键查询用原生 fetch 直连 InsForge 主机重试一次 ----
+// 走与 @insforge/sdk 相同的 REST 端点(/api/database/records/{table})与鉴权头；
+// SDK 持有的登录 token 通过 getAccessToken() 复用，RLS 语义与 SDK 查询完全一致。
+async function directFallbackSelect(table, query, ms) {
+  const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null
+  const timer = ctrl ? setTimeout(function(){ ctrl.abort() }, ms || 12000) : null
+  try {
+    // 鉴权优先级：已登录用户 token > anon key（RLS 语义与 SDK 查询一致）
+    // SDK 1.4.4 的 token 挂在 auth.tokenManager.getAccessToken()；getAnonKey 不一定存在。
+    let token = null
+    try {
+      if (typeof insforge.auth.getAccessToken === 'function') token = insforge.auth.getAccessToken()
+    } catch (e) { /* 继续尝试 tokenManager */ }
+    if (!token && insforge.auth.tokenManager && typeof insforge.auth.tokenManager.getAccessToken === 'function') {
+      try { token = insforge.auth.tokenManager.getAccessToken() } catch (e) { /* 未登录则为 null */ }
+    }
+    const headers = { 'Authorization': 'Bearer ' + (token || ANON_KEY) }
+    const url = INS_FORGE_DIRECT + '/api/database/records/' + table + (query || '')
+    const res = await fetch(url, { headers: headers, signal: ctrl ? ctrl.signal : undefined })
+    if (!res.ok) throw new Error('direct fallback HTTP ' + res.status)
+    return await res.json()
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
 
 // ---- 超时包装：DB 请求最多等 ms 毫秒，超时则 resolve(null) 不抛错，避免整条链 hang ----
 function withTimeout(promise, ms) {
@@ -318,10 +347,44 @@ async function getCurrentUser() {
 // data
 // ---------------------------------------------------------------------------
 async function listChannels() {
-  const { data, error } = await insforge.database
-    .from('channels').select('*').order('created_at', { ascending: true })
-  if (error) throw error
-  return data
+  // 跨国链路抖动下 SELECT /channels 偶发整体失败 → 整屏"加载频道失败"。
+  // 对齐 getMessages 的防护：超时 + 重试 + 直连兜底，降低单次网络抖动直接击穿的概率。
+  let lastErr = null
+  const MAX = 3
+  for (let attempt = 0; attempt < MAX; attempt++) {
+    const t0 = Date.now()
+    try {
+      const raceTimeout = (p, ms) => Promise.race([
+        p,
+        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))
+      ])
+      const { data, error } = await raceTimeout(
+        insforge.database
+          .from('channels').select('*')
+          .order('created_at', { ascending: true }),
+        12000
+      )
+      if (error) throw error
+      if (data == null) throw new Error('channels query returned null data')
+      if (attempt > 0) console.warn(`[listChannels] 第${attempt + 1}次成功，耗时${Date.now() - t0}ms`)
+      return data
+    } catch (e) {
+      lastErr = e
+      console.warn(`[listChannels] 第${attempt + 1}次失败(${Date.now() - t0}ms):`, e && (e.message || e.name || e))
+      if (attempt < MAX - 1) await new Promise(r => setTimeout(r, 600 * (attempt + 1)))
+    }
+  }
+  // 末次兜底：直连 InsForge 主机再试一次（反代域名被掐时的逃生门）
+  try {
+    const rows = await directFallbackSelect('channels', '?order=created_at.asc', 10000)
+    if (Array.isArray(rows)) {
+      console.warn('[listChannels] 直连兜底成功，', rows.length, '条频道')
+      return rows
+    }
+  } catch (e2) {
+    console.warn('[listChannels] 直连兜底失败:', e2 && (e2.message || e2))
+  }
+  throw lastErr
 }
 
 // 跨国链路（Cloudflare→新加坡 InsForge）偶发抖动：查询也加重试 + 超时兜底，与 sendMessage 对齐，

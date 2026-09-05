@@ -8,8 +8,8 @@
 // 原生 JS，不引 React，关闭真 Bloom，靠 AdditiveBlending 自发光。
 // 挂载：window.MTScene.create(opts) -> sceneApi
 
-import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import * as THREE from './vendor/three.module.js';
+import { OrbitControls } from './vendor/OrbitControls.js';
 
 function webglAvailable() {
   try {
@@ -814,11 +814,102 @@ window.MTScene = {
       return t;
     }
 
+    // 照片帖占位卡（图片加载中/失败时使用）：图标 + 标题/内容摘要 + 作者，比纯色块清晰
+    function createPhotoPlaceholderTexture(post) {
+      const w = 512, h = 512;
+      const cv = document.createElement('canvas');
+      cv.width = w; cv.height = h;
+      const ctx = cv.getContext('2d');
+      // 浅色底（在深色星空场景中高对比度可见，不再用暗色渐变）
+      ctx.fillStyle = 'rgba(248,245,235,0.96)';
+      ctx.fillRect(0, 0, w, h);
+      // 横线格纸纹理（与校园手稿主题一致）
+      ctx.strokeStyle = 'rgba(180,170,150,0.25)';
+      ctx.lineWidth = 1;
+      for (let y = 28; y < h; y += 28) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
+      // 边框（明显紫色，手绘感）
+      ctx.strokeStyle = 'rgba(124,92,252,0.55)';
+      ctx.lineWidth = 4;
+      ctx.setLineDash([12, 6]);
+      ctx.strokeRect(14, 14, w - 28, h - 28);
+      ctx.setLineDash([]);
+      // 相机图标（居上，大尺寸）
+      ctx.fillStyle = 'rgba(124,92,252,0.7)';
+      ctx.font = '110px sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('📷', w / 2, h * 0.26);
+      // 标题或内容摘要（大字、深色、高对比）
+      const title = (post.title || post.content || '').trim();
+      const display = title.length > 40 ? title.slice(0, 40) + '…' : title || '照片记忆';
+      ctx.font = 'bold 30px "Noto Sans SC","Microsoft YaHei",sans-serif';
+      ctx.fillStyle = 'rgba(31,27,22,0.88)';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      const maxWidth = w - 72;
+      const chars = display.split('');
+      const lines = []; let line = '';
+      for (const ch of chars) {
+        const test = line + ch;
+        if (ctx.measureText(test).width > maxWidth && line) { lines.push(line); line = ch; }
+        else line = test;
+      }
+      if (line) lines.push(line);
+      if (lines.length > 3) { lines.length = 3; lines[2] = lines[2].replace(/.$/, '…'); }
+      const startY = h * 0.52;
+      lines.forEach((l, i) => ctx.fillText(l, w / 2, startY + i * 38));
+      // 底部作者（清晰可见）
+      ctx.font = 'bold 20px "Noto Sans SC","Microsoft YaHei",sans-serif';
+      ctx.fillStyle = 'rgba(124,92,252,0.72)';
+      ctx.fillText('— ' + (post.authorName || '匿名同学'), w / 2, h - 48);
+      const t = new THREE.CanvasTexture(cv);
+      t.colorSpace = THREE.SRGBColorSpace; t.needsUpdate = true;
+      return t;
+    }
+
+    function createErrorPlaceholder(post, imgSrc, statusInfo) {
+      const w = 512, h = 512;
+      const cv = document.createElement('canvas');
+      cv.width = w; cv.height = h;
+      const ctx = cv.getContext('2d');
+      ctx.fillStyle = '#FFF5F5';
+      ctx.fillRect(0, 0, w, h);
+      ctx.strokeStyle = 'rgba(220,80,80,0.12)';
+      ctx.lineWidth = 1;
+      for (let y = 28; y < h; y += 28) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
+      ctx.strokeStyle = 'rgba(220,80,80,0.4)'; ctx.lineWidth = 3;
+      ctx.strokeRect(12, 12, w - 24, h - 24);
+      ctx.fillStyle = '#C04040';
+      ctx.font = '80px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('⚠', w / 2, h * 0.26);
+      ctx.font = 'bold 22px "Noto Sans SC","Microsoft YaHei",sans-serif';
+      ctx.fillStyle = '#A03030'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('照片加载失败', w / 2, h * 0.44);
+      ctx.font = '15px monospace';
+      ctx.fillStyle = '#C05050';
+      const st = (statusInfo || '未知错误').slice(0, 30);
+      ctx.fillText(st.length < (statusInfo||'').length ? st+'…' : st, w / 2, h * 0.54);
+      const title = (post.title || post.content || '').trim();
+      if (title) {
+        ctx.font = '17px "Noto Sans SC","Microsoft YaHei",sans-serif';
+        ctx.fillStyle = '#606060';
+        const dTitle = title.length > 20 ? title.slice(0, 20) + '…' : title;
+        ctx.fillText(dTitle, w / 2, h * 0.66);
+      }
+      ctx.font = '15px "Noto Sans SC","Microsoft YaHei",sans-serif';
+      ctx.fillStyle = '#909090';
+      ctx.fillText('— ' + (post.authorName || '匿名同学'), w / 2, h - 48);
+      const t2 = new THREE.CanvasTexture(cv);
+      t2.colorSpace = THREE.SRGBColorSpace; t2.needsUpdate = true;
+      return t2;
+    }
+
     function makeMediaNode(item, idx, texOverride) {
       let tex2;
       if (texOverride) tex2 = texOverride;
       else {
-        tex2 = loader.load(item.url || '');
+        // 所有图片 URL 统一走 proxiedImgUrl 代理（api.bfgzlt.cc.cd → /img?u= 同域）
+        // 避免 CORS 导致 TextureLoader 加载失败、照片卡显示为纯色块
+        const src = proxiedImgUrl(item.url || '');
+        tex2 = loader.load(src);
         tex2.colorSpace = THREE.SRGBColorSpace;
         tex2.anisotropy = 4;
       }
@@ -1188,49 +1279,92 @@ window.MTScene = {
         const isImage = !!(post.imageUrl && /^https?:\/\/|\/|images\//.test(post.imageUrl));
         const item = {
           ...post,
-          title: (post.content && post.content.length > 18) ? post.content.slice(0, 18) + '…' : (post.content || '记忆'),
-          location: post.authorName || '匿名同学',
+          // 优先用用户输入的独立标题；无标题时才从内容截断生成
+          title: (post.title && post.title.trim()) || (post.content && post.content.length > 18 ? post.content.slice(0, 18) + '…' : (post.content || '记忆')),
+          location: post.location || '',
           year: fmtTime(post.created_at),
           url: isImage ? post.imageUrl : '',
           emoji: '✦', isPost: true
         };
         if (isImage) {
-          // 图片帖：先用文字星占位，图片异步加载完成后替换为「照片 + 底部发布人字幕」纹理（失败则保留文字星）
-          const tex = createTextCardTexture(post);
+          // 图片帖：先用文字/图标占位卡，图片异步加载完成后替换为「照片 + 底部发布人字幕」纹理
+          const tex = createPhotoPlaceholderTexture(post);
           makeMediaNode(item, nodes.length, tex);
           const lastNode = nodes[nodes.length - 1];
           const caption = post.authorName || '匿名同学';
-          try {
-            loader.load(post.imageUrl, (t) => {
-              t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
-              let mapTex = t;
-              try {
-                const img = t.image;
-                if (img && img.width) {
+          // 先走同域 /img 代理（便于 canvas 读像素），代理失败再回退直连 api.bfgzlt.cc.cd
+          // （直连经 Worker 反代同样带 CORS，且不携带可能引发 403 的服务端密钥）。
+          const sources = Array.from(new Set([
+            proxiedImgUrl(post.imageUrl),
+            post.imageUrl
+          ].filter(Boolean)));
+          let sourceIndex = 0;
+          function loadPhotoForNode() {
+            const src = sources[sourceIndex];
+            try {
+              const img = new Image();
+              img.crossOrigin = 'anonymous';
+              img.onload = () => {
+                try {
                   const cv = document.createElement('canvas');
-                  cv.width = img.width; cv.height = img.height;
+                  const MAX_DIM = 512;
+                  let w = img.naturalWidth, h = img.naturalHeight;
+                  if (w > MAX_DIM || h > MAX_DIM) {
+                    const s = MAX_DIM / Math.max(w, h); w = Math.round(w * s); h = Math.round(h * s);
+                  }
+                  cv.width = w; cv.height = h;
                   const ctx = cv.getContext('2d');
-                  ctx.drawImage(img, 0, 0, cv.width, cv.height);
-                  const capH = Math.max(28, Math.round(cv.height * 0.13));
-                  const g = ctx.createLinearGradient(0, cv.height - capH, 0, cv.height);
+                  ctx.drawImage(img, 0, 0, w, h);
+                  // 底部渐变 + 作者字幕
+                  const capH = Math.max(24, Math.round(h * 0.13));
+                  const g = ctx.createLinearGradient(0, h - capH, 0, h);
                   g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,0.6)');
-                  ctx.fillStyle = g; ctx.fillRect(0, cv.height - capH, cv.width, capH);
+                  ctx.fillStyle = g; ctx.fillRect(0, h - capH, w, capH);
                   ctx.font = Math.round(capH * 0.5) + 'px "Noto Sans SC","Microsoft YaHei",sans-serif';
                   ctx.fillStyle = 'rgba(255,255,255,0.94)'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-                  ctx.fillText('— ' + caption, cv.width / 2, cv.height - capH / 2);
+                  ctx.fillText('— ' + caption, w / 2, h - capH / 2);
                   const ct = new THREE.CanvasTexture(cv);
                   ct.colorSpace = THREE.SRGBColorSpace; ct.anisotropy = 4;
-                  mapTex = ct;
+                  if (lastNode && lastNode.userData && lastNode.userData.mesh) {
+                    const mat = lastNode.userData.mesh.material;
+                    if (mat.map && mat.map.dispose) { try { mat.map.dispose(); } catch (e) {} }
+                    mat.map = ct;
+                    mat.needsUpdate = true;
+                  }
+                } catch (e) { console.warn('[MTScene] 照片纹理合成失败:', e); }
+              };
+              img.onerror = async () => {
+                sourceIndex++;
+                if (sourceIndex < sources.length) {
+                  console.warn('[MTScene] 照片代理加载失败，改用直连重试:', src, '→', sources[sourceIndex]);
+                  loadPhotoForNode();
+                  return;
                 }
-              } catch (e) { /* 合成失败，回退原图 */ }
-              if (lastNode && lastNode.userData && lastNode.userData.mesh) {
-                const mat = lastNode.userData.mesh.material;
-                if (mat.map && mat.map.dispose) { try { mat.map.dispose(); } catch (e) {} }
-                mat.map = mapTex;
-                mat.needsUpdate = true;
-              }
-            }, undefined, () => { /* 加载失败，保留文字星占位 */ });
-          } catch (e) { /* 忽略加载异常 */ }
+                console.warn('[MTScene] 照片Image加载失败:', src);
+                // 尝试获取 HTTP 状态码以便诊断
+                let statusInfo = 'unknown';
+                try {
+                  const fr = await fetch(src, {method:'HEAD'});
+                  statusInfo = fr.status + ' ' + fr.statusText;
+                } catch(e2) { statusInfo = e2.message; }
+                console.warn('[MTScene] 照片失败HTTP状态:', src, '→', statusInfo);
+                // 更新占位符为错误提示（让用户知道不是代码问题）
+                if (lastNode && lastNode.userData && lastNode.userData.mesh) {
+                  const errTex = createErrorPlaceholder(post, src, statusInfo);
+                  const mat = lastNode.userData.mesh.material;
+                  if (mat.map && mat.map.dispose) { try { mat.map.dispose(); } catch (e) {} }
+                  mat.map = errTex;
+                  mat.needsUpdate = true;
+                }
+              };
+              img.src = src;
+            } catch (e) {
+              console.warn('[MTScene] 图片加载异常:', src, e);
+              sourceIndex++;
+              if (sourceIndex < sources.length) loadPhotoForNode();
+            }
+          }
+          loadPhotoForNode();
         } else {
           makeStarNode(item, nodes.length);
         }
@@ -1259,6 +1393,25 @@ window.MTScene = {
         }
         nodes.splice(i, 1);
       },
+      // 重置相机到初始正视位置（从读信页返回时调用）
+      resetCamera() {
+        const targetPos = new THREE.Vector3(0, 18, 150);
+        const targetLookAt = new THREE.Vector3(0, 18, 0);
+        controls.enabled = false;
+        let start = null;
+        const duration = 800;
+        function step(t) {
+          if (start === null) start = t;
+          const k = Math.min(1, (t - start) / duration);
+          const e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
+          camera.position.lerpVectors(camera.position, targetPos, e);
+          controls.target.lerpVectors(controls.target, targetLookAt, e);
+          camera.lookAt(controls.target);
+          if (k < 1) requestAnimationFrame(step);
+          else { controls.enabled = true; }
+        }
+        requestAnimationFrame(step);
+      },
       dispose() {
         running = false; cancelAnimationFrame(rafId);
         window.removeEventListener('resize', onResize);
@@ -1270,3 +1423,17 @@ window.MTScene = {
     return api;
   }
 };
+
+// 图片同域代理：上传图走 api.bfgzlt.cc.cd（跨域），读像素会被 CORS 拦；
+// 生产域 bfgzlt.cc.cd 走 /img?u= 同域 Pages Function 代理绕开 CORS。
+function proxiedImgUrl(url) {
+  if (!url) return url;
+  try {
+    const u = new URL(url);
+    const host = location.hostname;
+    if (u.hostname === host) return url;
+    if (host === 'bfgzlt.cc.cd' && u.hostname === 'api.bfgzlt.cc.cd') return '/img?u=' + encodeURIComponent(url);
+    return url;
+  } catch (e) { return url; }
+}
+

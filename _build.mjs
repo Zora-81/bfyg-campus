@@ -36,8 +36,16 @@ copyDir('css', path.join(out, 'css'));
 copyDir('js', path.join(out, 'js'));
 copyDir('images', path.join(out, 'images'));
 if (fs.existsSync('audio')) copyDir('audio', path.join(out, 'audio'));
-// 注意：Cloudflare Pages Functions 由 wrangler 从「项目根 functions/」读取构建，
-// 不能拷进 web_build（否则 .ts 源会被当静态文件上传且可能与真实路由冲突）。
+// Cloudflare Pages Functions：必须位于构建产物目录下，wrangler pages deploy <dir> 才会
+// 编译并挂载为路由；根目录的 functions/ 不会被自动包含（实测 /img 返回 SPA 的 HTML）。
+// 只拷 .ts 源文件——node_modules/package.json 会造成 wrangler 无法识别 Functions 目录。
+if (fs.existsSync('functions')) {
+  fs.mkdirSync(path.join(out, 'functions'), { recursive: true });
+  for (const f of fs.readdirSync('functions')) {
+    if (f.endsWith('.ts')) fs.copyFileSync(path.join('functions', f), path.join(out, 'functions', f));
+  }
+  console.log('copied functions/*.ts');
+}
 
 // Cloudflare Pages 缓存头规则
 if (fs.existsSync('_headers')) {
@@ -52,7 +60,7 @@ if (fs.existsSync('sw.js')) {
 }
 
 // HTML：../css|js|images/ -> css|js|images/
-const htmlFiles = ['index.html', 'admin.html', 'memory-tree.html'];
+const htmlFiles = ['index.html', 'v52.html', 'v53.html', 'v54.html', 'v58.html', 'v59.html', 'v60.html', 'v61.html', 'v62.html', 'v63.html', 'v64.html', 'v65.html', 'v66.html', 'v67.html', 'v68.html', 'v69.html', 'v70.html', 'v71.html', 'v72.html', 'admin.html', 'nav-demos.html', 'welcome-demos.html', 'memory-tree.html', 'clear-sw.html'];
 const htmlSrc = {};
 for (const f of htmlFiles) {
   const p = path.join('html', f);

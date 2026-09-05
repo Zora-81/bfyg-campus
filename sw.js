@@ -5,8 +5,8 @@
 //    <img> 请求为 no-cors，响应在 SW 内是 opaque，Cache API 可存（仅大小惩罚，可接受）
 //  - 不缓存 HTML 文档（交给 var v 反缓存机制）与 POST/API 请求
 
-const APP_CACHE = 'campus-app-v4';
-const IMG_CACHE = 'campus-img-v4';
+const APP_CACHE = 'campus-app-v5';
+const IMG_CACHE = 'campus-img-v5';
 const IMG_HOST = 'api.bfgzlt.cc.cd';
 const IMG_RE = /\.(jpg|jpeg|png|webp|gif|avif)(\?|$)/i;
 

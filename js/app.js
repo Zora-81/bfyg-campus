@@ -199,9 +199,60 @@
     };
   })();
 
+  /* ============ 啵宝 bot 触发（functions/bobo-reply） ============
+     每条用户消息必回（含评论串）；1.5s 去抖只回最后一条；啵宝自己的消息跳过。
+     fire-and-forget：失败静默，绝不影响聊天本身。 */
+  var BoboBot = (function () {
+    var DEBOUNCE = 1500;
+    // 按对话流去抖：同一频道+评论串内的连发合并为最后一条
+    var timers = {};
+    function botUid() {
+      // profiles.role='ai' 且 username='bobo' 的 id；加载一次缓存
+      if (BoboBot._uid !== undefined) return BoboBot._uid;
+      BoboBot._uid = null;
+      try {
+        if (IF && IF.insforge && IF.insforge.database) {
+          IF.insforge.database.from('profiles').select('id').eq('username', 'bobo').limit(1)
+            .then(function (res) {
+              var d = res && res.data;
+              BoboBot._uid = (d && d[0] && d[0].id) || null;
+            }).catch(function () {});
+        }
+      } catch (e) {}
+      return BoboBot._uid;
+    }
+    function fire(key, payload) {
+      if (timers[key]) clearTimeout(timers[key]);
+      timers[key] = setTimeout(function () {
+        timers[key] = null;
+        var uid = botUid();
+        if (uid && payload.authorId === uid) return; // 啵宝自己 → 不触发
+        try {
+          fetch('https://r683ebwu.function2.insforge.app/bobo-reply', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          }).catch(function () {});
+        } catch (e) {}
+      }, DEBOUNCE);
+    }
+    return {
+      onMessage: function (msg) {
+        var uid = BoboBot._uid;
+        if (uid && msg.author_id === uid) return;
+        fire(msg.channel_id + ':' + (msg.parent_id || ''), {
+          messageId: msg.id, channelId: msg.channel_id,
+          authorId: msg.author_id, content: msg.content,
+          parentReply: msg.parent_id || null
+        });
+      }
+    };
+  })();
+
   function handleIncomingMessage(msg) {
     var chId = msg.channel_id;
     BoboFX.message();
+    BoboBot.onMessage(msg);
     if (!channelMessages[chId]) channelMessages[chId] = [];
     var messages = channelMessages[chId];
 
@@ -2247,8 +2298,8 @@
 
     // 角色标签
     var role = author.role || 'member';
-    var roleLabel = role === 'admin' ? '管理员' : role === 'moderator' ? '版主' : '成员';
-    var roleCls = role === 'admin' ? 'admin' : role === 'moderator' ? 'moderator' : 'member';
+    var roleLabel = role === 'admin' ? '管理员' : role === 'moderator' ? '版主' : role === 'ai' ? '吉祥物' : '成员';
+    var roleCls = role === 'admin' ? 'admin' : role === 'moderator' ? 'moderator' : role === 'ai' ? 'bobo' : 'member';
 
     // 内容区块（文字 / 图片横排 / 文件）
     var contentBlock;
@@ -2594,6 +2645,21 @@
     } else {
       messagesArea.appendChild(node);
     }
+    // v1.5.99：新消息插到最顶后，若紧随其后的旧消息与它同人且 5 分钟内、同一天，
+    // 则把那条【降级】为 continuation（折叠头像行），保证每组的头像只在最新一条上。
+    try {
+      var nextEl = node.nextElementSibling;
+      if (nextEl && nextEl.classList && nextEl.classList.contains('msg-group') &&
+          !nextEl.classList.contains('day-divider')) {
+        var oldMsg = currentChannel ? findMessageById(currentChannel.id, nextEl.getAttribute('data-msg-id')) : null;
+        if (oldMsg && oldMsg.author_id === msg.author_id &&
+            sameCalendarDay(oldMsg.created_at, msg.created_at) &&
+            Math.abs(new Date(oldMsg.created_at).getTime() - new Date(msg.created_at).getTime()) <= 5 * 60000) {
+          nextEl.classList.add('msg-continuation');
+          if (oldMsg) oldMsg._continuation = true;
+        }
+      }
+    } catch (e) {}
     if (animate && typeof gsap !== 'undefined' && !REDUCED_MOTION) {
       gsap.killTweensOf(node);
       if (document.body.dataset.theme === 'light') {
@@ -2720,26 +2786,30 @@
       for (var _k=0; _k<dispMsgs.length; _k++){ if (dispMsgs[_k].id === pendingJumpMsgId){ if (_k >= renderWinEnd) renderWinEnd = Math.min(dispMsgs.length, _k + 20); break; } }
     }
     var renderCount = Math.min(renderWinEnd, dispMsgs.length);
-    var prevRendered = null; // 上一条渲染的消息（更新、视觉在上方）
+    var prevRendered = null; // 上一条渲染出来的消息（更新、视觉在上方）
     for (var _i=0; _i<renderCount; _i++){
       var _m = dispMsgs[_i];
-      // 跨天分隔线：倒序流往下翻，遇到日期变化插一枚日期章
+      _m._continuation = false; // 复位标记，防止跨渲染残留
+      var node = buildMessageGroup(_m);
+      if (!node) continue; // v1.5.99：已撤回等不可见消息不渲染，也不留「空日期章」
+      // 跨天分隔线：仅在上一条【实际渲染出】的消息与本条跨天时插日期章
       if (prevRendered && !sameCalendarDay(prevRendered.created_at, _m.created_at)) {
         var dateDiv = document.createElement('div'); dateDiv.className = 'day-divider';
         dateDiv.innerHTML = '<span>'+dayLabelOf(_m.created_at)+'</span>';
         messagesArea.appendChild(dateDiv);
       }
-      var node = buildMessageGroup(_m);
-      if (node) {
-        // 同人连续（5 分钟内）：当前这条是较旧的一条，收起头像/昵称行，视觉上归入上一条的组（呼吸感）
-        if (prevRendered && prevRendered.author_id === _m.author_id &&
-            Math.abs(new Date(prevRendered.created_at).getTime() - new Date(_m.created_at).getTime()) <= 5 * 60000) {
-          node.classList.add('msg-consecutive');
-        }
-        if (_i >= _prevRenderedEnd) node.classList.add('msg-new'); // 本批新增，仅这些做滑入
-        messagesArea.appendChild(node);
-        prevRendered = _m;
+      // 同人连续（5 分钟内且同一天）：较旧的一条折叠头像/昵称行，缩进归入上一条的视觉组
+      // v1.5.99：改用代码库现成的 .msg-continuation（PC grid / 平板 / 移动端三断点全兼容），
+      // 原 .msg-consecutive 在 PC 端被 .msg-feed-left{display:contents !important} 压制，从未生效。
+      if (prevRendered && prevRendered.author_id === _m.author_id &&
+          sameCalendarDay(prevRendered.created_at, _m.created_at) &&
+          Math.abs(new Date(prevRendered.created_at).getTime() - new Date(_m.created_at).getTime()) <= 5 * 60000) {
+        _m._continuation = true;
+        node.classList.add('msg-continuation');
       }
+      if (_i >= _prevRenderedEnd) node.classList.add('msg-new'); // 本批新增，仅这些做滑入
+      messagesArea.appendChild(node);
+      prevRendered = _m;
     }
     // 是否还有更早消息由服务端分页返回长度决定（_noMoreOlder），不再依赖本地总数
     // （原底部「加载更早」按钮已移除：改为滚动到底自动加载）

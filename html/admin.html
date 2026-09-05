@@ -45,6 +45,9 @@
         <button class="admin-nav-item" data-module="logs">
           <span class="nav-icon">🗂️</span> 审核日志
         </button>
+        <button class="admin-nav-item" data-module="bobo">
+          <span class="nav-icon">🔵</span> 啵宝管理
+        </button>
       </nav>
       <div class="admin-sidebar-footer">
         <a class="admin-back-link" href="index.html">← 返回频道</a>
@@ -280,7 +283,48 @@
       </section>
 
       <!-- ── Module: 审核日志 ── -->
-      <section class="admin-module" id="module-logs">
+      
+      <!-- ── Module: 啵宝管理 ── -->
+      <section class="admin-module" id="module-bobo">
+        <div class="admin-toolbar">
+          <label style="display:flex;align-items:center;gap:8px;font-size:14px;">
+            <input type="checkbox" id="bobo-enabled" style="width:18px;height:18px;cursor:pointer;" />
+            <span>啵宝总开关（关闭后不回复也不发周报）</span>
+          </label>
+          <button class="btn-primary" id="bobo-refresh">刷新数据</button>
+          <button class="btn-primary" id="bobo-test-weekly" style="background:#3b82f6;">手动发一次周报（测试）</button>
+        </div>
+        <div style="display:flex;gap:16px;margin:14px 0;flex-wrap:wrap;">
+          <div style="background:var(--bg-elevated,#282c4a);border-radius:12px;padding:14px 20px;min-width:140px;">
+            <div style="font-size:12px;opacity:.7;">近1小时回复</div>
+            <div style="font-size:22px;font-weight:800;" id="bobo-stat-hour">-</div>
+          </div>
+          <div style="background:var(--bg-elevated,#282c4a);border-radius:12px;padding:14px 20px;min-width:140px;">
+            <div style="font-size:12px;opacity:.7;">近24小时回复</div>
+            <div style="font-size:22px;font-weight:800;" id="bobo-stat-day">-</div>
+          </div>
+          <div style="background:var(--bg-elevated,#282c4a);border-radius:12px;padding:14px 20px;min-width:140px;">
+            <div style="font-size:12px;opacity:.7;">记忆条数</div>
+            <div style="font-size:22px;font-weight:800;" id="bobo-stat-mem">-</div>
+          </div>
+        </div>
+        <h4 style="margin:10px 0 6px;font-size:14px;">🧠 啵宝的记忆（只读）</h4>
+        <div class="admin-table-wrap">
+          <table class="admin-table" id="bobo-mem-table">
+            <thead><tr><th style="width:90px;">范围</th><th>内容</th><th style="width:80px;">权重</th><th style="width:160px;">更新时间</th></tr></thead>
+            <tbody id="bobo-mem-tbody"></tbody>
+          </table>
+        </div>
+        <h4 style="margin:14px 0 6px;font-size:14px;">📜 回复日志（最近50条）</h4>
+        <div class="admin-table-wrap">
+          <table class="admin-table" id="bobo-log-table">
+            <thead><tr><th style="width:90px;">类型</th><th style="width:60px;">成功</th><th style="width:180px;">模型</th><th>备注</th><th style="width:160px;">时间</th></tr></thead>
+            <tbody id="bobo-log-tbody"></tbody>
+          </table>
+        </div>
+      </section>
+
+<section class="admin-module" id="module-logs">
         <div class="admin-table-wrap" id="log-table-wrap">
           <table class="admin-table" id="log-table">
             <thead>

@@ -1488,6 +1488,99 @@
     setTimeout(function () { if (toast.parentNode) toast.remove(); }, 3000);
   }
 
+  /* ========== 啵宝管理（module-bobo） ========== */
+  function boboLoadData() {
+    if (!IF) return;
+    var dbi = db();
+    // 配置开关
+    dbi.from('bobo_config').select('enabled').eq('id', 1).limit(1).then(function (res) {
+      var row = res && res.data && res.data[0];
+      var el = document.getElementById('bobo-enabled');
+      if (el && row) el.checked = !!row.enabled;
+    }).catch(function () {});
+    // 统计
+    var oneHourAgo = new Date(Date.now() - 3600000).toISOString();
+    var oneDayAgo = new Date(Date.now() - 86400000).toISOString();
+    dbi.from('bobo_reply_log').select('id', { count: 'exact', head: true }).eq('kind', 'reply').gte('created_at', oneHourAgo)
+      .then(function (r) { var el = document.getElementById('bobo-stat-hour'); if (el) el.textContent = (r && r.count) || 0; }).catch(function () {});
+    dbi.from('bobo_reply_log').select('id', { count: 'exact', head: true }).eq('kind', 'reply').gte('created_at', oneDayAgo)
+      .then(function (r) { var el = document.getElementById('bobo-stat-day'); if (el) el.textContent = (r && r.count) || 0; }).catch(function () {});
+    dbi.from('bobo_memories').select('id', { count: 'exact', head: true })
+      .then(function (r) { var el = document.getElementById('bobo-stat-mem'); if (el) el.textContent = (r && r.count) || 0; }).catch(function () {});
+    // 记忆列表
+    dbi.from('bobo_memories').select('scope,content,weight,updated_at').order('updated_at', { ascending: false }).limit(30).then(function (res) {
+      var tb = document.getElementById('bobo-mem-tbody');
+      if (!tb) return;
+      tb.innerHTML = '';
+      var rows = (res && res.data) || [];
+      if (!rows.length) { tb.innerHTML = '<tr><td colspan="4" style="opacity:.6;padding:14px;">啵宝还没有记忆——同学们聊起来它就会记住啦</td></tr>'; return; }
+      rows.forEach(function (m) {
+        var tr = document.createElement('tr');
+        var scopeTxt = m.scope === 'user' ? '同学' : (m.scope === 'channel' ? '频道' : '全局');
+        tr.innerHTML = '<td>' + scopeTxt + '</td><td style="max-width:420px;">' + String(m.content).replace(/</g, '&lt;') + '</td><td>' + (Math.round(m.weight * 100) / 100) + '</td><td>' + new Date(m.updated_at).toLocaleString('zh-CN') + '</td>';
+        tb.appendChild(tr);
+      });
+    }).catch(function () {});
+    // 回复日志
+    dbi.from('bobo_reply_log').select('kind,ok,model,note,created_at').order('created_at', { ascending: false }).limit(50).then(function (res) {
+      var tb = document.getElementById('bobo-log-tbody');
+      if (!tb) return;
+      tb.innerHTML = '';
+      var rows = (res && res.data) || [];
+      if (!rows.length) { tb.innerHTML = '<tr><td colspan="5" style="opacity:.6;padding:14px;">暂无日志</td></tr>'; return; }
+      var kindTxt = { reply: '回复', weekly: '周报', self_comment: '自评论', memory: '记忆' };
+      rows.forEach(function (l) {
+        var tr = document.createElement('tr');
+        tr.innerHTML = '<td>' + (kindTxt[l.kind] || l.kind) + '</td><td>' + (l.ok ? '✅' : '⛔') + '</td><td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;">' + String(l.model || '-') + '</td><td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;">' + String(l.note || '-') + '</td><td>' + new Date(l.created_at).toLocaleString('zh-CN') + '</td>';
+        tb.appendChild(tr);
+      });
+    }).catch(function () {});
+  }
+
+  function boboBind() {
+    var sw = document.getElementById('bobo-enabled');
+    if (sw && !sw.dataset.bound) {
+      sw.dataset.bound = '1';
+      sw.addEventListener('change', function () {
+        db().from('bobo_config').update({ enabled: sw.checked, updated_at: new Date().toISOString() }).eq('id', 1)
+          .then(function (res) {
+            if (res && res.error) throw res.error;
+            showToast(sw.checked ? '🔵 啵宝已开启' : '⚪ 啵宝已关闭', 'success');
+          }).catch(function (e) {
+            sw.checked = !sw.checked;
+            showToast('保存失败：' + ((e && e.message) || '未知错误'), 'error');
+          });
+      });
+    }
+    var rf = document.getElementById('bobo-refresh');
+    if (rf && !rf.dataset.bound) {
+      rf.dataset.bound = '1';
+      rf.addEventListener('click', boboLoadData);
+    }
+    var tw = document.getElementById('bobo-test-weekly');
+    if (tw && !tw.dataset.bound) {
+      tw.dataset.bound = '1';
+      tw.addEventListener('click', function () {
+        tw.disabled = true;
+        showToast('正在生成周报…（约10-20秒）');
+        fetch('https://r683ebwu.function2.insforge.app/bobo-weekly', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+          .then(function (r) { return r.json(); })
+          .then(function (j) {
+            if (j && j.ok) showToast('✅ 周报已发到综合大厅', 'success');
+            else showToast('周报未发：' + ((j && j.why) || '未知'), 'error');
+            boboLoadData();
+          }).catch(function () { showToast('周报请求失败', 'error'); })
+          .finally(function () { tw.disabled = false; });
+      });
+    }
+  }
+  // 模块激活时自动加载（监听 class 变化，模块由 nav 切换 active class）
+  var boboObserver = new MutationObserver(function () {
+    var sec = document.getElementById('module-bobo');
+    if (sec && sec.classList.contains('active')) { boboBind(); boboLoadData(); }
+  });
+  if (document.body) boboObserver.observe(document.body, { attributes: true, subtree: true, attributeFilter: ['class'] });
+
   /* ========== BOOT ========== */
   if (window.IF) checkAuth();
   // 否则由顶部 IF_READY 监听触发
