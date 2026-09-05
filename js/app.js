@@ -2320,6 +2320,7 @@
     } else {
       avatarInner = getInitial(author.nickname||author.username||'?');
     }
+    var avatarBg = getAvatarColor(author.username||'未知');
     // 称号（来自用户 profile 的 title 字段；无则不渲染）
     var titleHtml = '';
     if (author.title) {

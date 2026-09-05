@@ -530,6 +530,7 @@
     /* ---------- 对外 API ---------- */
     return {
       setState: function (name) { eng.setState(name, clock); return !!STATES[name]; },
+      sample: function () { return eng.sample(clock); },
       reset: function () { eng.reset(clock); idx = 0; timer = 0; },
       pause: function () { running = false; },
       resume: function () { if (!running) { running = true; requestAnimationFrame(tick); } },
