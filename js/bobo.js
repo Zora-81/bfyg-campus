@@ -134,7 +134,8 @@
 
   /* ============ 球面眼睛 + 生命感（bloub face.ts） ============ */
   var EYE_SPLIT = 15.46, EYE_W = 0.186, EYE_H = 0.412;
-  var REST_GAZE = { yaw: 28.49, pitch: 28.62, roll: -13 };
+  // v1.6.7: 待机正视（原版 bloub 测量值是斜看28°，用户要求正视前方）
+  var REST_GAZE = { yaw: 0, pitch: -4, roll: 0 };
   var deg = function (d) { return d * Math.PI / 180; };
   function spinPair(u, v, ang) {
     var c = Math.cos(ang), s = Math.sin(ang);
@@ -234,7 +235,7 @@
       dur: 1.6, morph: 0.3, blinkIn: true,
       pose: function () {
         return basePose({
-          gaze: { yaw: -5.37, pitch: 4.55, roll: 6.7 }, split: 16.25,
+          gaze: { yaw: 0, pitch: 4, roll: 0 }, split: 16.25,
           eyes: [eyeCfg(0.236, 0.464), eyeCfg(0.447, 0.089)]
         });
       }
@@ -247,7 +248,7 @@
         var r = 0.16 * (p < 1 ? pop : 1);
         var a = -50 * Math.PI / 180;
         return basePose({
-          gaze: { yaw: -21.94, pitch: -5.82, roll: -12.2 }, split: 18.89,
+          gaze: { yaw: 0, pitch: -6, roll: 0 }, split: 18.89,
           eyes: pairE(0.505, 0.498),
           notif: { x: Math.cos(a) * 1.05, y: Math.sin(a) * 1.05, r: r }
         });
@@ -286,7 +287,7 @@
         var hop = Math.abs(Math.sin(t * TAU / 0.7));
         return basePose({
           sil: circle(1, { cy: -0.14 * hop, sy: 1 - 0.05 * (1 - hop), sx: 1 + 0.04 * (1 - hop) }),
-          gaze: { yaw: 8, pitch: -10, roll: 0 }, split: 17,
+          gaze: { yaw: 0, pitch: -8, roll: 0 }, split: 17,
           eyes: pairE(0.27, 0.17, 14)
         });
       }

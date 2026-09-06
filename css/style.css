@@ -1041,10 +1041,12 @@ body.main-active #monster-login { display:none !important; }
 body[data-theme="starry"] #main-bg::after,
 body[data-theme="custom"] #main-bg::after {
   background:
+    /* 地平线辉光（v1.6.7）：底部一道极淡的"校园夜色"，给星空一个参照系 */
+    linear-gradient(0deg, hsla(var(--channel-hue,265), 60%, 30%, 0.13) 0%, transparent 9%),
     radial-gradient(ellipse at 50% 0%, transparent 30%, rgba(5,8,22,var(--main-bg-dim)) 100%),
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E");
-  background-size: auto, 160px 160px;
-  background-repeat: no-repeat, repeat;
+  background-size: auto, auto, 160px 160px;
+  background-repeat: no-repeat, no-repeat, repeat;
 }
 
 #main-dots {
@@ -4374,3 +4376,13 @@ body { --channel-hue: 265; }
 /* 啵宝动态迷你头像：SVG铺满头像圆框（主feed + 评论串通用） */
 .bobo-avatar-host { background:transparent !important; }
 .bobo-avatar-host .bobo-mini-avatar { width:100%; height:100%; display:block; border-radius:inherit; }
+
+/* ── 傍晚星空（v1.6.7）：18~21 点底部辉光变暖橙，模拟"刚入夜的天" ── */
+body.hour-dusk[data-theme="starry"] #main-bg::after {
+  background:
+    linear-gradient(0deg, rgba(255,159,90,0.10) 0%, rgba(255,120,90,0.04) 5%, transparent 11%),
+    radial-gradient(ellipse at 50% 0%, transparent 30%, rgba(5,8,22,var(--main-bg-dim)) 100%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E");
+  background-size: auto, auto, 160px 160px;
+  background-repeat: no-repeat, no-repeat, repeat;
+}

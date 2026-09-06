@@ -71,5 +71,6 @@ test('initial channel load hydrates reply messages separately from top-level pag
 
 test('hot topics exclude recalled messages', () => {
   // computeHotItems 遍历时必须在计入热度前跳过 is_recalled 的消息（话题与子评论均不计）
-  assert.match(appSource, /function computeHotItems\(\) \{[\s\S]{0,400}if \(m\.is_recalled\) return/);
+  // v1.6.3 起守卫为 `if (!m || m.is_recalled) return`（顺带防御空对象）
+  assert.match(appSource, /function computeHotItems\(\) \{[\s\S]{0,400}m\.is_recalled\) return/);
 });

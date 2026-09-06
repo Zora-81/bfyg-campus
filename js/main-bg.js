@@ -212,6 +212,37 @@
     ctx.globalAlpha = 1;
   }
 
+  // ── 卫星彩蛋（v1.6.7）：极慢匀速小亮点横穿，2~4 分钟一次，发现靠缘分 ──
+  var sats = [];
+  var satTimer = 0, satNext = rand(3600, 7200); // 30fps 帧 ≈ 2~4 分钟
+  function spawnSat() {
+    var fromLeft = Math.random() > 0.5;
+    sats.push({
+      x: fromLeft ? -20 : W + 20,
+      y: rand(H * 0.06, H * 0.42),       // 只在上半天飞
+      vx: (fromLeft ? 1 : -1) * rand(0.35, 0.6), // 极慢匀速
+      vy: rand(-0.02, 0.02),
+      life: 0, max: 2600,
+      tw: rand(0.05, 0.12)               // 自身微闪
+    });
+  }
+  function drawSats() {
+    satTimer++;
+    if (satTimer >= satNext) { satTimer = 0; satNext = rand(3600, 7200); spawnSat(); }
+    for (var i = sats.length - 1; i >= 0; i--) {
+      var s = sats[i];
+      s.life++;
+      s.x += s.vx; s.y += s.vy;
+      if (s.life >= s.max || s.x < -40 || s.x > W + 40) { sats.splice(i, 1); continue; }
+      var tw = 0.55 + 0.45 * Math.sin(s.life * s.tw * Math.PI);
+      var edge = Math.min(1, s.life / 60, (s.max - s.life) / 60); // 出入屏渐隐
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, 1.1, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255,250,235,' + (0.42 * tw * edge).toFixed(3) + ')';
+      ctx.fill();
+    }
+  }
+
   function spawnMeteor() {
     // 从屏幕上方或左侧边缘刷新，向右下划过
     var fromTop = Math.random() > 0.35;
@@ -280,7 +311,7 @@
       drawSpikeStar(stars[i], rotation, px, py);
     }
     meteorTimer++;
-    if (meteorTimer >= meteorNext) { meteorTimer = 0; meteorNext = rand(60, 150); spawnMeteor(); }
+    if (meteorTimer >= meteorNext) { meteorTimer = 0; meteorNext = rand(240, 600); spawnMeteor(); }
     for (var j = meteors.length - 1; j >= 0; j--) {
       var m = meteors[j];
       m.life++;
@@ -289,6 +320,7 @@
       if (m.life >= m.max || m.x > W + 120 || m.y > H + 120) { meteors.splice(j, 1); continue; }
       drawMeteor(m);
     }
+    drawSats(); // 卫星彩蛋（v1.6.7）
   }
 
   // 鼠标/指针视差输入（app.js 也可能通过 GSAP 设置容器）
@@ -310,7 +342,7 @@
   function currentTheme() { return document.body.dataset.theme || 'starry'; }
   function setMode(theme) {
     mode = (theme === 'starry') ? 'starry' : 'dots';
-    if (mode === 'starry') { buildStars(); meteors = []; }
+    if (mode === 'starry') { buildStars(); meteors = []; sats = []; satTimer = 0; satNext = rand(600, 1800); }
     else buildDots(theme === 'custom' ? 'starry' : theme);
   }
   // 供主题切换时调用，重建背景

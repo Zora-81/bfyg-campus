@@ -133,7 +133,29 @@ export default async function (req) {
     const botId = await rpc('bobo_uid', {});
     if (authorId === botId) return json({ ok: false, why: 'self' });
 
-    // 3. 限流熔断（每小时40 / 每天200）
+    // 3. 幂等锁：同一条触发消息只处理一次（多标签页/多设备防重）
+    let claimed = false;
+    try {
+      const cr = await rpc('bobo_claim', { p_msg: messageId });
+      claimed = Array.isArray(cr) ? (cr[0] === true) : (cr === true);
+      if (claimed) {
+        // 立刻占坑：直接 SQL 插 claim 行，唯一索引保证双调用只有一个成功
+        try {
+          const ins = await fetch(BASE + '/api/database/records/bobo_reply_log', {
+            method: 'POST',
+            headers: { 'apikey': SERVICE, 'Authorization': 'Bearer ' + SERVICE, 'Content-Type': 'application/json', 'Prefer': 'resolution=ignore-duplicates' },
+            body: JSON.stringify({ trigger_msg_id: messageId, kind: 'claim', ok: true, note: 'lock:' + messageId }),
+          });
+          if (!ins.ok) claimed = false; // 占坑失败 → 弃权（另一个调用者已处理）
+        } catch (e) { claimed = false; }
+      }
+    } catch (e) {
+      // 锁调用失败：改为拒绝回复（fail-closed），保证绝不双回复；锁故障时啵宝沉默可接受
+      claimed = false;
+    }
+    if (!claimed) return json({ ok: false, why: 'already-claimed' });
+
+    // 3.5 限流熔断（每小时40 / 每天200）
     const rateOk = await rpc('bobo_rate_check', {}).catch(() => false);
     if (!rateOk) return json({ ok: false, why: 'rate' });
 
