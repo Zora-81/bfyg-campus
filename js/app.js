@@ -1894,15 +1894,18 @@
   }
 
   // 计算热度榜（评论数 + 48h 时间衰减）
+  // v1.6.3：评论数口径对齐消息卡 💬（countThreadReplies 递归整栋楼）。
+  // 旧逻辑只数直接评论，楼中楼全部漏计——「啵宝，你在吗」整栋楼 8 层只显示 2 讨论，
+  // 热度分也被压低导致排序错误。用 kids 邻接表 BFS 递归，每条消息只访问一次，全量 O(n)。
   function computeHotItems() {
     var allMsgs = [];
-    var commentCounts = {}; // 顶层消息 id -> 评论/回复数
+    var kids = {}; // parent_id -> [子消息(未撤回)]
     Object.keys(channelMessages).forEach(function(chId) {
       var msgs = channelMessages[chId] || [];
       msgs.forEach(function(m) {
-        if (m.is_recalled) return; // 撤回的消息不计入热门榜（话题与子评论均不计）
+        if (!m || m.is_recalled) return; // 撤回的消息不计入热门榜（话题与子评论均不计）
         if (m.parent_id) {
-          commentCounts[m.parent_id] = (commentCounts[m.parent_id] || 0) + 1; // 统计评论
+          (kids[m.parent_id] = kids[m.parent_id] || []).push(m);
         } else {
           allMsgs.push(m); // 只取原始消息（话题）
         }
@@ -1914,7 +1917,21 @@
       var ageH = (nowTs - new Date(m.created_at).getTime()) / 3600000;
       if (isNaN(ageH) || ageH < 0) ageH = 0;
       var timeScore = Math.exp(-ageH / 48);
-      var cc = commentCounts[m.id] || 0;
+      // 递归统计整栋楼（直接评论 + 楼中楼），与消息卡 💬 口径一致
+      var cc = 0;
+      var queue = [m.id], seen = {};
+      while (queue.length) {
+        var pid = queue.shift();
+        var list = kids[pid];
+        if (!list) continue;
+        for (var i = 0; i < list.length; i++) {
+          var c = list[i];
+          if (seen[c.id]) continue;
+          seen[c.id] = true;
+          cc++;
+          queue.push(c.id);
+        }
+      }
       m._heat = cc * 10 + timeScore * 5;
       m._comments = cc;
     });
@@ -2070,6 +2087,16 @@
               var rootId = sec.id.replace(/^comment-/, '');
               var root = merged.find(function (m) { return m.id === rootId; });
               if (root) renderCommentList(sec, root);
+            });
+            // 评论合并回填后，刷新主feed各消息的评论计数（否则显示0）
+            var allBtns = messagesArea.querySelectorAll('.msg-interact-btn[data-act="comment"][data-msg-id]');
+            Array.prototype.forEach.call(allBtns, function (btn) {
+              var mid = btn.getAttribute('data-msg-id');
+              var cntEl = btn.querySelector('.msg-interact-count');
+              if (cntEl && mid) {
+                var root = merged.find(function (m) { return m.id === mid; });
+                if (root) cntEl.textContent = MessageThread.countThreadReplies(merged, mid);
+              }
             });
           }
         } catch (e) { console.warn('[loadChannelSnapshot] 回复合并失败', e); }

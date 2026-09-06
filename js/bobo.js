@@ -530,7 +530,7 @@
     /* ---------- 对外 API ---------- */
     return {
       setState: function (name) { eng.setState(name, clock); return !!STATES[name]; },
-      sample: function () { return eng.sample(clock); },
+      sample: function (t) { return eng.sample(t === undefined ? clock : t); },
       reset: function () { eng.reset(clock); idx = 0; timer = 0; },
       pause: function () { running = false; },
       resume: function () { if (!running) { running = true; requestAnimationFrame(tick); } },
@@ -591,15 +591,19 @@
     var dt = (ts - miniLast) / 1000;
     miniLast = ts;
     if (document.hidden || dt > 0.1) return;
-    miniClock += dt;
-    // 引擎内部不跑 rAF（holdMs 1e9 且 order 只有 idle），直接采样绘制
-    var frame = miniEng.sample(miniClock);
-    var html = miniRenderHtml(frame, miniClock);
-    for (var i = 0; i < minis.length; i++) {
-      if (minis[i].isConnected) minis[i].innerHTML = html;
+    try {
+      miniClock += dt;
+      var frame = miniEng.sample(miniClock);
+      var html = miniRenderHtml(frame, miniClock);
+      if (html !== window.__boboLastHtml) {
+        window.__boboLastHtml = html;
+        for (var i = 0; i < minis.length; i++) {
+          if (minis[i].isConnected) minis[i].innerHTML = html;
+        }
+      }
+    } catch (e) {
+      // 自愈：引擎异常时跳帧，不让 rAF 链崩
     }
-    // 清理已断开的节点
-    if (minis.length > 20) minis = minis.filter(function (el) { return el.isConnected; });
   }
   // 自动挂载：观察 DOM，发现 .bobo-mini-avatar 就接管（覆盖全量渲染/增量追加/评论区）
   api.mountMinis = function (root) {
