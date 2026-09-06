@@ -1936,7 +1936,31 @@
       m._comments = cc;
     });
     allMsgs.sort(function(a, b){ return b._heat - a._heat; });
-    return allMsgs.slice(0, 7);
+
+    // v1.6.7：同标题+同频道去重合并——同一句话（如和啵宝的对话）不占两个坑位。
+    // 合并规则：title 相同且 channel 相同 → 取热度最高的一条为代表，讨论数相加，_dup 记合并数。
+    var merged = [];
+    var seenKey = {};
+    for (var mi = 0; mi < allMsgs.length; mi++) {
+      var mm = allMsgs[mi];
+      var mtitle = (function(){
+        var pv0 = hotPreviewOf(mm);
+        return pv0.title;
+      })();
+      var key = mm.channel_id + '|' + mtitle;
+      if (seenKey[key]) {
+        var rep = seenKey[key];       // 已存在的代表条目
+        rep._comments = (rep._comments || 0) + (mm._comments || 0);
+        rep._heat = (rep._heat || 0) + (mm._heat || 0);
+        rep._dup = (rep._dup || 1) + 1;
+        // 合并后热度可能反超：重排由下方 sort 处理
+        continue;
+      }
+      seenKey[key] = mm;
+      merged.push(mm);
+    }
+    merged.sort(function(a, b){ return b._heat - a._heat; });
+    return merged.slice(0, 7);
   }
 
   // 热门榜预览（v1.5.93）：text→截断标题；image→首图缩略图；file→类型角标+文件名
@@ -2002,7 +2026,7 @@
         (pv.thumb ? '<img class="hot-card-thumb" src="'+escapeHtml(pv.thumb)+'" alt="" loading="lazy" onerror="this.remove()">' : '')+
         (pv.chip ? '<span class="hot-card-chip">'+pv.chip+'</span>' : '')+
         '<div class="hot-card-body">'+
-          '<div class="hot-card-title">'+escapeHtml(title)+'</div>'+
+          '<div class="hot-card-title">'+escapeHtml(title)+(msg._dup>1?'<span class="hot-dup-badge">×'+msg._dup+'</span>':'')+'</div>'+
           '<div class="hot-card-meta">'+escapeHtml(chName)+' · '+cc+' 讨论</div>'+
           '<div class="hot-card-foot">'+
             '<span class="hot-card-time" data-ts="'+escapeHtml(msg.created_at||'')+'">'+escapeHtml(ageStr)+'</span>'+
@@ -2069,7 +2093,45 @@
       _loadTimeout(45000, 'getMessages')
     ]);
     var replyPromise = IF.getReplyMessages
-      ? IF.getReplyMessages(ch.id, { limit: 1000 }).catch(function () { return []; })
+      ? IF.getReplyMessages(ch.id, { limit: 1000 }).catch(function () { return []; }).then(function (replies) {
+          // 跨国链路失败兜底：首轮拿空且频道里明明有顶层消息 → 45秒后再试一次（评论合并自愈）
+          try {
+            if ((!replies || !replies.length) && ch.id) {
+              setTimeout(function () {
+                if (currentChannel && currentChannel.id === ch.id && IF.getReplyMessages) {
+                  IF.getReplyMessages(ch.id, { limit: 1000 }).then(function (re2) {
+                    if (re2 && re2.length && channelMessages[ch.id]) {
+                      var topNow = channelMessages[ch.id].filter(function (m) { return !m.parent_id; });
+                      var m2 = MessageThread.mergeMessages(topNow, re2);
+                      channelMessages[ch.id] = m2;
+                      var secs = messagesArea.querySelectorAll('.msg-comment-section.open');
+                      Array.prototype.forEach.call(secs, function (sec) {
+                        var rid = sec.id.replace(/^comment-/, '');
+                        var root = m2.find(function (m) { return m.id === rid; });
+                        if (root) renderCommentList(sec, root);
+                      });
+                      var btns = messagesArea.querySelectorAll('.msg-interact-btn[data-act="comment"][data-msg-id]');
+                      var dirty = false;
+                      Array.prototype.forEach.call(btns, function (btn) {
+                        var mid = btn.getAttribute('data-msg-id');
+                        var cEl = btn.querySelector('.msg-interact-count');
+                        if (cEl && mid) {
+                          var root2 = m2.find(function (m) { return m.id === mid; });
+                          if (root2) {
+                            var n2 = MessageThread.countThreadReplies(m2, mid);
+                            if (String(n2) !== cEl.textContent) { cEl.textContent = n2; dirty = true; }
+                          }
+                        }
+                      });
+                      if (dirty) { var st2 = messagesArea.scrollTop; renderMessages({ animate: false }); messagesArea.scrollTop = st2; }
+                    }
+                  }).catch(function () {});
+                }
+              }, 45000);
+            }
+          } catch (e) {}
+          return replies;
+        })
       : Promise.resolve([]);
 
     // 主 feed 只等顶层消息；回复/楼中楼后台合并，避免二次元等大频道因回复多导致骨架屏长时间卡住。
@@ -2088,16 +2150,28 @@
               var root = merged.find(function (m) { return m.id === rootId; });
               if (root) renderCommentList(sec, root);
             });
-            // 评论合并回填后，刷新主feed各消息的评论计数（否则显示0）
+            // 评论合并回填后，刷新主feed各消息的评论计数（否则显示0）；
+            // 若有任何计数与显示不符，说明整屏都是旧数据 → 全量重渲染一次（保持滚动位置）
+            var needsRerender = false;
             var allBtns = messagesArea.querySelectorAll('.msg-interact-btn[data-act="comment"][data-msg-id]');
             Array.prototype.forEach.call(allBtns, function (btn) {
               var mid = btn.getAttribute('data-msg-id');
               var cntEl = btn.querySelector('.msg-interact-count');
               if (cntEl && mid) {
                 var root = merged.find(function (m) { return m.id === mid; });
-                if (root) cntEl.textContent = MessageThread.countThreadReplies(merged, mid);
+                if (root) {
+                  var n = MessageThread.countThreadReplies(merged, mid);
+                  if (String(n) !== cntEl.textContent) { cntEl.textContent = n; needsRerender = true; }
+                }
               }
             });
+            if (needsRerender && currentChannel && currentChannel.id === ch.id) {
+              try {
+                var st = messagesArea.scrollTop;
+                renderMessages({ animate: false, restoreScroll: false });
+                messagesArea.scrollTop = st;
+              } catch (e) {}
+            }
           }
         } catch (e) { console.warn('[loadChannelSnapshot] 回复合并失败', e); }
       });
@@ -2348,6 +2422,8 @@
       avatarInner = getInitial(author.nickname||author.username||'?');
     }
     var avatarBg = getAvatarColor(author.username||'未知');
+    // v1.6.7：bot 消息视觉降权——极淡底色 + 头像呼吸光晕（在场但不抢戏）
+    if (author.role === 'ai') group.classList.add('msg-bot-card');
     // 称号（来自用户 profile 的 title 字段；无则不渲染）
     var titleHtml = '';
     if (author.title) {
@@ -3058,7 +3134,7 @@
     var allIds = flat.map(function(item){ return item.c.id; });
 
     function renderAfter(agg) {
-      var DEFAULT_SHOW = 3;
+      var DEFAULT_SHOW = 5; // v1.6.7：3 条太局促，8 层楼露一半才像对话
       var INCREMENT = 6;
       var total = flat.length;
       var visibleCount = Math.min(DEFAULT_SHOW, total);
@@ -3599,6 +3675,7 @@
     if (min < 60) return min + '分钟前';
     var hour = Math.floor(min / 60);
     if (hour < 24) return hour + '小时前';
+    // v1.6.7：跨天后相对时间失去信息量，直接显示绝对时间（与日期章口径统一）
     var today = new Date();
     var todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
     var yesterdayStart = todayStart - 24*60*60*1000;
