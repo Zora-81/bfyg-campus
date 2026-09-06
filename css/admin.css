@@ -1156,3 +1156,9 @@
   color: var(--text);
   background: var(--bg-hover);
 }
+
+/* 啵宝管理页签：记忆表/日志表竖向滚动 */
+#module-bobo .admin-table-wrap {
+  max-height: 380px;
+  overflow-y: auto;
+}

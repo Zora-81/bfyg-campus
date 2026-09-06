@@ -2387,7 +2387,7 @@
     // 贴吧风格模板：头像+昵称横排 → 内容 → 底部互动
     group.innerHTML =
       '<div class="msg-feed-left">'+
-        '<div class="msg-feed-avatar" style="background:'+avatarBg+'" title="查看资料" onclick="window.openChipCard(\''+escapeHtml(author.id)+'\');event.stopPropagation();">'+avatarInner+'</div>'+
+        '<div class="msg-feed-avatar'+(author.role==='ai'?' bobo-avatar-host':'')+'" style="background:'+(author.role==='ai'?'transparent':avatarBg)+'" title="查看资料" onclick="window.openChipCard(\''+escapeHtml(author.id)+'\');event.stopPropagation();">'+avatarInner+'</div>'+
         '<div class="msg-feed-meta">'+
           '<span class="msg-feed-name">'+escapeHtml(author.nickname||author.username||'未知')+'</span>'+
           '<span class="msg-feed-role"><span class="role-badge '+roleCls+'">'+roleLabel+'</span></span>'+
@@ -3095,9 +3095,14 @@
     var name = a.nickname || a.username || '未知';
     var color = getAvatarColor(a.username || '?');
     var init = getInitial(name);
-    var avatarInner = a.avatar_url
-      ? '<img src="'+escapeHtml(a.avatar_url)+'" alt="'+escapeHtml(name)+'" onerror="this.style.display=\'none\'">'
-      : init;
+    var avatarInner;
+    if (a.role === 'ai') {
+      avatarInner = '<svg class="bobo-mini-avatar" viewBox="-158 -158 316 316" preserveAspectRatio="xMidYMid slice"></svg>';
+    } else if (a.avatar_url) {
+      avatarInner = '<img src="' + escapeHtml(a.avatar_url) + '" alt="' + escapeHtml(name) + '">';
+    } else {
+      avatarInner = init;
+    }
     var la = agg[comment.id] || { total: 0, mine: false };
     // 一致性兜底：自己点过赞至少算 1
     if (la.mine && la.total <= 0) la.total = 1;
