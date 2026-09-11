@@ -778,7 +778,17 @@ function updatePostAuthorHint() {
 
 let isSubmitting = false;
 
+// 游客（未登录）尝试写入 → 请父页面弹注册面板（iframe 内无认证 UI）
+function requireAuthInTree(hint) {
+  if (currentUser && currentUser.id) return true;
+  try { window.parent.postMessage({ type: 'mt-need-auth', hint: hint }, '*'); } catch (e) {}
+  if (typeof toast === 'function') toast('注册后即可留言 ✦');
+  return false;
+}
+
+
 async function submitPost() {
+  if (!requireAuthInTree('注册后即可在记忆树留言')) return;
   if (isSubmitting) return;
   const content = el.postText.value.trim();
   const title = (el.postTitle && el.postTitle.value.trim()) || '';
@@ -919,6 +929,7 @@ function bindUI() {
 
   el.form.addEventListener('submit', async (e) => {
     e.preventDefault();
+    if (!requireAuthInTree('注册后即可评论')) return;
     if (!currentItem) return;
     const content = el.text.value.trim();
     if (!content) return;
