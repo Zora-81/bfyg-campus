@@ -115,6 +115,15 @@ input,textarea { font-family:inherit; }
 .view { display:none; }
 .view.active { display:block; }
 
+/* 游客：把登录/注册视图当浮层盖在主界面之上（复用现有小怪兽登录 UI） */
+.view.active.auth-overlay {
+  position:fixed; inset:0; z-index:900;
+  background:rgba(8,10,24,0.72);
+  backdrop-filter:blur(3px);
+  -webkit-backdrop-filter:blur(3px);
+}
+body.guest-mode .notify-badge { display:none !important; }
+
 /* ── Mobile touch polish ── */
 button, a, .ch-item, .quick-action, .member-item, .msg-author,
 .msg-hover-btn, .msg-reaction, .role-badge, .login-actions .btn-signin,
@@ -123,7 +132,7 @@ button, a, .ch-item, .quick-action, .member-item, .msg-author,
   touch-action: manipulation;
 }
 .ch-item, .member-item, .quick-action, .sidebar-server, .msg-author,
-.msg-mention, .msg-tag-pill, .friend-item {
+.msg-mention, .msg-tag-pill {
   -webkit-user-select: none;
   user-select: none;
 }
@@ -155,8 +164,11 @@ body.main-active #stars-canvas,
 body.main-active .vignette-overlay,
 body.main-active .grain-overlay,
 body.main-active #welcome-screen,
-body.main-active #login-submit-loader,
+body.main-active #login-submit-loader { display:none !important; }
+/* monster-login 在 main-active 下默认隐藏，但游客点发言时会作为浮层重新唤起
+   （此时 #view-login 带 .auth-overlay，需要放行 display） */
 body.main-active #monster-login { display:none !important; }
+body.main-active #view-login.auth-overlay #monster-login.active { display:grid !important; }
 
 /* ── 主题背景（极光为默认 :root） ── */
 :root {
@@ -338,8 +350,7 @@ body.main-active #monster-login { display:none !important; }
 }
 
 /* 频道/好友列表项：像便签条（白纸卡片落在羊皮纸上） */
-[data-theme="light"] .ch-item,
-[data-theme="light"] .friend-item {
+[data-theme="light"] .ch-item {
   background: #FFFDF7;
   border: 1.5px dashed rgba(31,27,22,0.18);
   border-radius: 12px 14px 10px 16px;
@@ -350,15 +361,13 @@ body.main-active #monster-login { display:none !important; }
               background 0.18s ease,
               border-color 0.18s ease;
 }
-[data-theme="light"] .ch-item:hover,
-[data-theme="light"] .friend-item:hover {
+[data-theme="light"] .ch-item:hover {
   background: #F5F0E4;
   border-color: rgba(31,27,22,0.28);
   box-shadow: 2px 5px 0 rgba(31,27,22,0.08);
   transform: translateY(-2px) rotate(-0.4deg);
 }
-[data-theme="light"] .ch-item.active,
-[data-theme="light"] .friend-item.active {
+[data-theme="light"] .ch-item.active {
   background: #EDE7D6;
   border-color: var(--accent);
   box-shadow: inset 2px 2px 0 rgba(31,27,22,0.04);
@@ -387,8 +396,7 @@ body.main-active #monster-login { display:none !important; }
 }
 
 /* 头像：手绘不规则圆 */
-[data-theme="light"] .msg-feed-avatar,
-[data-theme="light"] .friend-avatar {
+[data-theme="light"] .msg-feed-avatar {
   border: none;
   box-shadow: var(--sh-sm);
 }
@@ -921,12 +929,8 @@ body.main-active #monster-login { display:none !important; }
   /* starry 专属深空底图（v1.5.100）：基底压黑、色斑退角落、银河带=亮芯+暗尘缝。
      不再回退到 :root 极光渐变——星空的"黑"是主角，色只是点缀 */
   --main-bg-image:
-    /* 暗尘缝：切在银河亮芯上，制造星云照片的"剪影感"（v1.5.101 减淡） */
-    linear-gradient(115deg, transparent 42%, rgba(4,6,16,0.40) 48.5%, transparent 55%),
-    /* 银河亮芯：加宽加亮一档 */
-    linear-gradient(115deg, transparent 34%, rgba(199,210,254,0.16) 47%, rgba(148,163,255,0.10) 54%, transparent 66%),
     /* 星云色斑：找回存在感（v1.5.101 alpha +50%） */
-    radial-gradient(ellipse 55% 38% at 78% 10%, rgba(124,92,252,0.30) 0%, transparent 60%),
+    radial-gradient(ellipse 58% 40% at 68% 6%, rgba(124,92,252,0.32) 0%, transparent 62%),
     radial-gradient(ellipse 45% 30% at 10% 24%, rgba(34,211,238,0.17) 0%, transparent 55%),
     radial-gradient(ellipse 60% 34% at 50% 102%, rgba(88,101,242,0.20) 0%, transparent 60%),
     radial-gradient(ellipse 40% 26% at 90% 80%, rgba(236,72,153,0.11) 0%, transparent 55%),
@@ -981,6 +985,13 @@ body.main-active #monster-login { display:none !important; }
   --main-bg-dim: 0.04;
 }
 
+/* v1.7.0 幕布化：顶栏作为"台口"，深色横条框住舞台 */
+[data-theme="starry"] .top-nav {
+  background: rgba(7,10,22,0.90);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
 /* starry 玻璃质感：面板半透明透出星空 */
 [data-theme="starry"] .top-nav,
 [data-theme="starry"] .channel-drawer,
@@ -1003,19 +1014,33 @@ body.main-active #monster-login { display:none !important; }
 }
 /* 舞台+侧翼（v1.5.94）：中栏透明当主角，左右翼退后变暗，拉开纵深 */
 [data-theme="starry"] .right-sidebar {
-  background: rgba(13,16,36,0.55);
+  /* v1.7.0 幕布化：近乎实心，银河只在中央舞台可见，割裂感转为"台前幕后" */
+  background: linear-gradient(180deg, rgba(9,12,24,0.96), rgba(6,8,18,0.97));
   border-left-color: rgba(255,255,255,0.05);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 [data-theme="starry"] .channel-drawer {
-  background: rgba(13,16,36,0.72);
+  background: rgba(7,10,22,0.94);
 }
 [data-theme="starry"] .sidebar-card {
   background: rgba(255,255,255,0.035);
   border-color: rgba(255,255,255,0.05);
 }
 
+/* v1.7.3 背景叠层 wrapper：只有它接受漂移/视差 transform，
+   里面的 CSS 渐变层与 canvas 星层共享同一变换 → 两层银河永远重合。
+   缩放留 1.05 余量避免漂移时露出屏幕边缘。 */
+#bg-stack {
+  position:fixed; inset:0; z-index:0; pointer-events:none;
+  transform-origin:50% 50%;
+  will-change:transform;
+}
+#bg-stack > #main-bg, #bg-stack > #main-dots {
+  position:absolute; inset:0; width:100%; height:100%; display:block;
+}
 #main-bg {
-  display:block; position:fixed; inset:0; z-index:0; pointer-events:none;
+  display:block; position:absolute; inset:0; width:100%; height:100%; z-index:auto; pointer-events:none;
   background:
     var(--main-bg-overlay),
     var(--main-bg-image,
@@ -1041,16 +1066,15 @@ body.main-active #monster-login { display:none !important; }
 body[data-theme="starry"] #main-bg::after,
 body[data-theme="custom"] #main-bg::after {
   background:
-    /* 地平线辉光（v1.6.7）：底部一道极淡的"校园夜色"，给星空一个参照系 */
-    linear-gradient(0deg, hsla(var(--channel-hue,265), 60%, 30%, 0.13) 0%, transparent 9%),
     radial-gradient(ellipse at 50% 0%, transparent 30%, rgba(5,8,22,var(--main-bg-dim)) 100%),
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E");
-  background-size: auto, auto, 160px 160px;
-  background-repeat: no-repeat, no-repeat, repeat;
+  background-size: auto, 160px 160px;
+  background-repeat: no-repeat, repeat;
 }
 
 #main-dots {
-  display:block; position:fixed; inset:0; z-index:1; pointer-events:none;
+  /* v1.7.3：改为 wrapper 内层级（不再独立 fixed），跟随 #bg-stack 一起变换 */
+  display:block; position:absolute; inset:0; width:100%; height:100%; z-index:1; pointer-events:none;
 }
 
 /* ══════════════════════════════════════════════════
@@ -2298,14 +2322,156 @@ body[data-theme="custom"] #main-bg::after {
 .notify-item .notify-title { font-size:0.88rem; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .notify-item .notify-preview { font-size:0.78rem; color:var(--text-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px; }
 .notify-empty { padding:32px 16px; text-align:center; color:var(--text-muted); font-size:0.85rem; }
-.notify-actions { display:flex; gap:8px; align-items:center; flex-shrink:0; }
-.notify-btn { padding:5px 11px; border-radius:var(--r); border:none; font-size:0.75rem; font-weight:600; cursor:pointer; transition:opacity var(--t), background var(--t); }
-.notify-btn:disabled { opacity:0.55; cursor:default; }
-.notify-accept { background:var(--accent); color:#fff; }
-.notify-accept:hover:not(:disabled) { filter:brightness(0.9); }
-.notify-reject { background:var(--bg-hover); color:var(--text); border:1px solid var(--border); }
-.notify-reject:hover:not(:disabled) { background:var(--bg-pressed); }
-.notify-status { font-size:0.75rem; color:var(--text-muted); }
+
+/* ══════════════════════════════════════════════════════════════════
+   信箱（通知）：手绘信封 + 信件展开
+   设计语言复用自记忆树 letter-reader（信封盖 rotateX、蜡封下沉、
+   弹性展开 cubic-bezier）；颜色只用语义变量，跨 light/starry/classroom 成立。
+   ══════════════════════════════════════════════════════════════════ */
+
+/* ── 信箱图标：信封 ── */
+.mailbox-btn { position:relative; }
+.mailbox-icon { width:22px; height:16px; display:block; overflow:visible; }
+.mailbox-icon .mb-flap {
+  transform-origin:50% 30%;
+  transition:transform .5s cubic-bezier(.2,.8,.3,1.1);
+}
+.mailbox-icon .mb-seal {
+  transform-origin:50% 50%;
+  transition:transform .4s ease, opacity .3s ease;
+}
+/* 悬停：信封盖轻抬（暗示"可以打开"）*/
+.mailbox-btn:hover .mailbox-icon .mb-flap { transform:rotateX(18deg); }
+/* 打开态：信封盖完全掀开 + 蜡封下沉淡出 */
+.mailbox-btn[aria-expanded="true"] .mailbox-icon .mb-flap { transform:rotateX(38deg); }
+.mailbox-btn[aria-expanded="true"] .mailbox-icon .mb-seal {
+  transform:translateY(3px) scale(.9); opacity:.85;
+}
+
+/* ── 信件本体 ── */
+.mailbox-letter {
+  transform-origin:50% 0%;
+  padding:0;
+  background:transparent;      /* 纸面由内层承载，便于做不规则手绘边 */
+  border:none;
+  box-shadow:none;
+  overflow:visible;
+  z-index:160;                 /* 高于侧栏/热门话题，避免内容透出 */
+}
+.mailbox-letter-paper {
+  position:relative;
+  display:flex; flex-direction:column;
+  max-height:420px;
+  padding:2px 0 0;
+  /* 信纸必须不透明：starry/classroom 主题的 --bg-elevated 是半透明玻璃色，
+     单用会让下方侧栏内容透出。此处用实心底色 + 主题色叠加。 */
+  background-color:var(--bg-base);
+  background-image:linear-gradient(var(--bg-elevated), var(--bg-elevated));
+  isolation:isolate;           /* 建立独立层叠上下文，防止内容透出 */
+  border:1px solid var(--border);
+  border-radius:var(--r-md);
+  box-shadow:0 12px 40px rgba(0,0,0,0.42);
+  overflow:hidden;
+}
+/* 顶部胶带：手绘感（仅浅色纸主题显露色彩） */
+.mailbox-letter-paper::before {
+  content:'';
+  position:absolute; top:-6px; left:50%;
+  width:74px; height:16px;
+  transform:translateX(-50%) rotate(-2.5deg);
+  background:rgba(255,214,90,0.30);
+  border-left:1px dashed rgba(31,27,22,0.10);
+  border-right:1px dashed rgba(31,27,22,0.10);
+  pointer-events:none;
+}
+.mailbox-letter-head {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:12px 16px 10px;
+  border-bottom:1px dashed var(--border);
+  flex-shrink:0;
+  background:inherit;          /* 不透明，避免下方侧栏内容透出 */
+  border-radius:var(--r-md) var(--r-md) 0 0;
+}
+.mailbox-letter-title {
+  font-weight:700; font-size:0.92rem; color:var(--text);
+  letter-spacing:0.02em;
+}
+
+/* ── 信件内的通知条目：便签纸条 ── */
+.mailbox-letter .notify-item {
+  position:relative;
+  margin:6px 10px;
+  padding:9px 12px;
+  border:1.5px dashed var(--border);
+  border-radius:13px 15px 11px 16px;
+  background:var(--bg-surface);
+  transition:transform var(--t), box-shadow var(--t), background var(--t), border-color var(--t);
+}
+.mailbox-letter .notify-item:hover {
+  transform:translateY(-2px) rotate(-0.25deg);
+  box-shadow:2px 4px 0 rgba(0,0,0,0.16);
+  background:var(--bg-hover);
+}
+.mailbox-letter .notify-item.unread {
+  border-color:var(--accent);
+  background:var(--accent-soft);
+}
+.mailbox-letter .notify-list { padding:6px 0 8px; }
+
+/* ── 浅色「校园手稿」主题：纸张 + 手写字 + 铅笔阴影 ── */
+[data-theme="light"] .mailbox-letter-paper {
+  background-color:var(--paper-card, #FFFDF7);
+  background-image:none;
+  border:1.5px dashed rgba(31,27,22,0.22);
+  border-radius:14px 16px 12px 18px;
+  box-shadow:2px 4px 0 rgba(31,27,22,0.08);
+}
+[data-theme="light"] .mailbox-letter-head { border-bottom-color:rgba(31,27,22,0.14); }
+[data-theme="light"] .mailbox-letter-title {
+  font-family:var(--font-hand, inherit);
+  color:var(--ink, #1F1B16);
+}
+[data-theme="light"] .mailbox-letter .notify-item {
+  background:#FFFDF7;
+  border:1.5px dashed rgba(31,27,22,0.18);
+  border-radius:12px 14px 10px 16px;
+  box-shadow:2px 3px 0 rgba(31,27,22,0.06);
+  color:var(--ink, #1F1B16);
+}
+[data-theme="light"] .mailbox-letter .notify-item:hover {
+  background:#F5F0E4;
+  border-color:rgba(31,27,22,0.28);
+  box-shadow:2px 5px 0 rgba(31,27,22,0.08);
+}
+[data-theme="light"] .mailbox-letter .notify-item.unread {
+  border-color:var(--accent);
+  background:rgba(124,92,252,0.06);
+}
+
+/* ── 星空主题：玻璃质感 ── */
+[data-theme="starry"] .mailbox-letter-paper {
+  /* 玻璃质感但保持不透明：底色用 --bg-base 兜底 */
+  background-color:var(--bg-deeper, #0f1226);
+  background-image:linear-gradient(var(--bg-elevated), var(--bg-elevated));
+  backdrop-filter:blur(18px) saturate(1.3);
+  -webkit-backdrop-filter:blur(18px) saturate(1.3);
+}
+
+/* ── 移动端 ── */
+@media (max-width:900px) {
+  .mailbox-letter { width:min(340px, calc(100vw - 24px)); }
+  .mailbox-letter-paper { max-height:calc(100dvh - 140px); }
+}
+
+/* ── 减少动效：不做开合过渡，直接显隐 ── */
+@media (prefers-reduced-motion: reduce) {
+  .mailbox-icon .mb-flap,
+  .mailbox-icon .mb-seal { transition:none !important; }
+  .mailbox-btn:hover .mailbox-icon .mb-flap { transform:none; }
+  .mailbox-letter { transform:none !important; opacity:1 !important; }
+  .mailbox-letter .notify-item { transition:none; }
+  .mailbox-letter .notify-item:hover { transform:none; }
+}
 
 /* Notify tabs（通知 / 好友 切换） */
 .notify-tabs { display:flex; border-bottom:1px solid var(--border); flex-shrink:0; }
@@ -2321,50 +2487,6 @@ body[data-theme="custom"] #main-bg::after {
   background:var(--accent); border-radius:2px;
 }
 .notify-tab-panel { display:flex; flex-direction:column; flex:1; min-height:0; overflow:hidden; }
-
-/* Friends Tab 内容 */
-.friends-box { display:flex; flex-direction:column; flex:1; min-height:0; overflow-y:auto; padding:4px 0; }
-.friends-head {
-  padding:10px 16px 4px; font-size:0.72rem; font-weight:700; letter-spacing:0.04em;
-  text-transform:uppercase; color:var(--text-muted);
-}
-.friend-item { display:flex; align-items:center; gap:10px; padding:8px 16px; }
-.friend-avatar {
-  width:32px; height:32px; border-radius:34% 44% 38% 46%; flex-shrink:0; overflow:hidden;
-  display:flex; align-items:center; justify-content:center;
-  color:#fff; font-size:0.78rem; font-weight:700; background:var(--accent);
-}
-.friend-avatar img { width:100%; height:100%; object-fit:cover; border-radius:inherit; }
-.friend-name { flex:1; min-width:0; font-size:0.86rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.friend-actions { display:flex; gap:6px; flex-shrink:0; }
-.friend-btn {
-  border:1px solid var(--border); background:var(--bg-elevated); color:var(--text);
-  border-radius:var(--r); padding:4px 10px; font-size:0.74rem; cursor:pointer; transition:all var(--t);
-}
-.friend-btn:hover { border-color:var(--accent); }
-.friend-accept { color:var(--accent); border-color:var(--accent-soft); }
-.friend-accept:hover { background:var(--accent-soft); }
-.friend-reject { color:var(--text-dim); }
-.friend-remove { color:var(--red); border-color:transparent; }
-.friend-remove:hover { background:var(--red-bg, rgba(224,48,58,0.10)); }
-.friends-add { display:flex; flex-direction:column; gap:8px; padding:10px 16px 14px; border-top:1px solid var(--border); margin-top:4px; }
-.friend-add-row { display:flex; gap:8px; align-items:stretch; }
-.friend-add-input {
-  flex:1; min-width:0; padding:8px 10px; border-radius:var(--r);
-  border:1px solid var(--border); background:var(--bg-elevated); color:var(--text); font-size:0.82rem;
-}
-.friend-add-input:focus { outline:none; border-color:var(--accent); }
-.friend-add-btn {
-  flex-shrink:0; padding:8px 14px; border:none; border-radius:var(--r);
-  background:var(--accent); color:#fff; font-size:0.82rem; font-weight:600; cursor:pointer;
-}
-.friend-add-btn:disabled { opacity:0.6; cursor:default; }
-.friend-search-results { display:none; max-height:160px; overflow-y:auto; border:1px solid var(--border); border-radius:var(--r); background:var(--bg-elevated); }
-.friend-search-results.visible { display:block; }
-.friend-search-candidate { display:flex; align-items:center; gap:8px; padding:8px 10px; cursor:pointer; transition:background var(--t); border-bottom:1px solid var(--border); }
-.friend-search-candidate:last-child { border-bottom:none; }
-.friend-search-candidate:hover { background:var(--bg-hover); }
-.friend-search-candidate .friend-avatar { width:28px; height:28px; font-size:0.75rem; flex-shrink:0; }
 
 /* 通知锚点消息高亮 */
 .msg-highlight { animation: msgHighlight 2.4s ease-out; }
@@ -3478,23 +3600,6 @@ body[data-theme="custom"] #main-bg::after {
 }
 .profile-section h3 .badge { background:var(--accent); color:#fff; padding:0 8px; border-radius:8px; font-size:0.68rem; font-weight:700; }
 .empty-text { font-size:0.85rem; color:var(--text-muted); padding:8px 0; }
-.friend-list { display:flex; flex-direction:column; gap:2px; }
-.friend-item { display:flex; align-items:center; gap:12px; padding:8px 10px; border-radius:var(--r); transition:background var(--t); }
-.friend-item:hover { background:var(--bg-hover); }
-.friend-avatar { width:36px; height:36px; border-radius:34% 44% 38% 46%; display:flex; align-items:center; justify-content:center; font-size:0.85rem; font-weight:700; color:#fff; flex-shrink:0; }
-.friend-info { flex:1; min-width:0; }
-.friend-name { font-size:0.88rem; font-weight:600; }
-.friend-since { font-size:0.72rem; color:var(--text-muted); }
-.friend-actions { display:flex; gap:4px; flex-shrink:0; }
-.add-friend-form { display:flex; gap:8px; }
-.add-friend-input {
-  flex:1; padding:8px 12px; border-radius:var(--r);
-  background:var(--bg-input); border:1px solid var(--border);
-  color:var(--text); outline:none; font-size:0.85rem;
-}
-.add-friend-input:focus { border-color:var(--accent); }
-.add-friend-input::placeholder { color:var(--text-muted); }
-
 /* Account card embedded in settings page */
 .settings-account-group .profile-card {
   background:transparent; border:none;
@@ -3719,7 +3824,11 @@ body[data-theme="custom"] #main-bg::after {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
-  #stars-canvas, #main-dots, .login-carousel-container, .login-badge::after {
+  /* v1.7.3：不再隐藏 #main-dots——它的静态帧由 JS 的
+     drawStaticOnce() 绘制（含银河微星层）。
+     旧写法 display:none 会让 reduced-motion 用户完全看不到星空/银河。
+     仍隐藏登录页专用的旧星空层。 */
+  #stars-canvas, .login-carousel-container, .login-badge::after {
     display:none !important;
   }
   .login-modal-overlay, .login-card-modal, .channel-drawer, .drawer-overlay,
@@ -3889,79 +3998,6 @@ body[data-theme="custom"] #main-bg::after {
   border:1px solid var(--border, rgba(255,255,255,0.12));
   background:transparent; color:var(--text-sec); font-size:0.88rem;
 }
-
-/* ══════════════════════════════════════════════════════════════
-   好友列表（头像弹窗内，原快捷操作区）
-   ══════════════════════════════════════════════════════════════ */
-.friend-list {
-  display:flex; flex-direction:column; gap:6px;
-  max-height:264px; overflow-y:auto; margin-top:8px;
-  padding-right:2px;
-}
-.friend-item {
-  display:flex; align-items:center; gap:10px;
-  padding:8px 10px; border-radius:var(--r);
-  background:var(--bg-surface);
-  cursor:pointer; user-select:none;
-  transition:background var(--t), transform var(--t);
-  position:relative;
-}
-.friend-item:hover { background:var(--bg-hover); transform:translateX(2px); }
-.friend-item:active { background:var(--bg-active); }
-.friend-avatar {
-  width:38px; height:38px; border-radius:34% 44% 38% 46%; flex:0 0 auto;
-  display:flex; align-items:center; justify-content:center;
-  background:var(--accent); color:#fff; font-weight:600; font-size:15px;
-  overflow:hidden;
-}
-.friend-avatar img { width:100%; height:100%; object-fit:cover; border-radius:inherit; }
-.friend-name {
-  flex:1; min-width:0; color:var(--text); font-size:14px; font-weight:500;
-  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-}
-.friend-badge {
-  flex:0 0 auto; min-width:20px; height:20px; padding:0 6px;
-  border-radius:10px; background:var(--red); color:#fff;
-  font-size:12px; font-weight:700; line-height:20px; text-align:center;
-  display:none;
-}
-.friend-item.has-unread .friend-badge { display:block; }
-
-/* 主题专属适配 */
-[data-theme="starry"] .friend-avatar {
-  box-shadow:0 0 0 2px var(--accent-g), 0 0 14px var(--accent-g);
-}
-[data-theme="starry"] .friend-item { backdrop-filter:blur(6px); background:var(--bg-surface); }
-[data-theme="starry"] .friend-item:hover { background:var(--bg-hover); }
-[data-theme="classroom"] .friend-item { border-radius:var(--r-md); }
-[data-theme="classroom"] .friend-item:hover { transform:translateY(-1px); box-shadow:var(--sh-sm); }
-[data-theme="light"] .friend-item { box-shadow:var(--sh-sm); }
-[data-theme="light"] .friend-item:hover { box-shadow:var(--sh); }
-
-/* ══════════════════════════════════════════════════════════════
-   DM 返回箭头（顶部 nav-left，进入私聊时显示）
-   ══════════════════════════════════════════════════════════════ */
-.dm-back-btn {
-  width:38px; height:38px; border-radius:50%; flex:0 0 auto;
-  display:none; align-items:center; justify-content:center;
-  background:var(--bg-surface); color:var(--text);
-  border:1px solid var(--border-light);
-  transition:background var(--t), color var(--t);
-  will-change:transform;
-}
-.dm-back-btn:hover { background:var(--bg-hover); color:var(--accent); }
-.dm-back-btn svg { display:block; }
-/* 进入私聊：显示返回箭头，隐藏 hamburger / 服务器徽标 / # 前缀 */
-body.dm-mode #dm-back-btn { display:flex !important; }
-body.dm-mode #hamburger-btn,
-body.dm-mode .nav-hash { display:none !important; }
-
-[data-theme="starry"] .dm-back-btn {
-  backdrop-filter:blur(10px); background:var(--bg-elevated);
-}
-[data-theme="starry"] .dm-back-btn:hover { background:var(--bg-hover); }
-[data-theme="classroom"] .dm-back-btn { border-radius:var(--r-md); }
-[data-theme="light"] .dm-back-btn { box-shadow:var(--sh-sm); }
 
 /* ══════════════════════════════════════════════════════════════
    PC 三栏布局：频道抽屉常驻左栏
@@ -4377,12 +4413,44 @@ body { --channel-hue: 265; }
 .bobo-avatar-host { background:transparent !important; }
 .bobo-avatar-host .bobo-mini-avatar { width:100%; height:100%; display:block; border-radius:inherit; }
 
-/* ── 傍晚星空（v1.6.7）：18~21 点底部辉光变暖橙，模拟"刚入夜的天" ── */
-body.hour-dusk[data-theme="starry"] #main-bg::after {
-  background:
-    linear-gradient(0deg, rgba(255,159,90,0.10) 0%, rgba(255,120,90,0.04) 5%, transparent 11%),
-    radial-gradient(ellipse at 50% 0%, transparent 30%, rgba(5,8,22,var(--main-bg-dim)) 100%),
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E");
-  background-size: auto, auto, 160px 160px;
-  background-repeat: no-repeat, no-repeat, repeat;
+
+/* ═══════════════════════════════════════════════════════════
+   v1.6.7 星空收尾三件：地平线辉光/热榜合并角标/bot 视觉降权
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── 热榜合并角标：×N ── */
+.hot-dup-badge {
+  display:inline-block; margin-left:6px; padding:0 5px;
+  border-radius:8px; font-size:0.62rem; font-weight:700; line-height:14px;
+  color:hsla(var(--channel-hue,265),80%,72%,0.95);
+  background:hsla(var(--channel-hue,265),70%,55%,0.14);
+  vertical-align:1px;
 }
+[data-theme="light"] .hot-dup-badge { color:hsl(var(--channel-hue,265),65%,38%); background:hsla(var(--channel-hue,265),60%,50%,0.10); }
+
+/* ── bot 视觉降权（#3）：啵宝消息卡在"场"但不抢戏 ──
+   极淡的频道色底 + 头像一圈微呼吸光。不遮内容、不动布局。 */
+.msg-group.msg-bot-card {
+  background: hsla(var(--channel-hue,265), 60%, 55%, 0.035);
+  border-radius: var(--r-md);
+}
+.msg-group.msg-bot-card .msg-feed-avatar {
+  box-shadow: 0 0 0 1.5px hsla(var(--channel-hue,265),80%,70%,0.35),
+              0 0 12px hsla(var(--channel-hue,265),85%,65%,0.18);
+  animation: boboBreath 3.2s ease-in-out infinite;
+}
+@keyframes boboBreath {
+  0%,100% { box-shadow: 0 0 0 1.5px hsla(var(--channel-hue,265),80%,70%,0.28), 0 0 10px hsla(var(--channel-hue,265),85%,65%,0.14); }
+  50%     { box-shadow: 0 0 0 1.5px hsla(var(--channel-hue,265),80%,70%,0.42), 0 0 16px hsla(var(--channel-hue,265),85%,65%,0.24); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .msg-group.msg-bot-card .msg-feed-avatar { animation: none; }
+}
+[data-theme="light"] .msg-group.msg-bot-card { background: hsla(var(--channel-hue,265),60%,50%,0.05); }
+
+/* ── 评论"展开"按钮弱化成细字一行（#4 配套） ── */
+.comment-more-btn {
+  color: var(--text-muted); font-size: 0.75rem; cursor: pointer;
+  letter-spacing: 0.04em;
+}
+.comment-more-btn:hover { color: var(--text-sec); }

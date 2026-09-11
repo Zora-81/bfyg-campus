@@ -1,0 +1,183 @@
+{
+ "backed_up_at": "2026-09-12T01:06:34.111449",
+ "friends": [
+  {
+   "id": "9d30063f-1f82-46ad-9902-d9d460d1cafa",
+   "user_id": "36f9e8f0-4417-4aae-9f9b-541cf85e4f8a",
+   "friend_id": "176a6707-9234-4e1c-bda6-42f8d5231bc1",
+   "status": "pending",
+   "created_at": "2026-07-19T10:22:48.282829+00:00"
+  },
+  {
+   "id": "de29252a-cb18-44ac-a44d-9efded82e134",
+   "user_id": "47b96cf8-8da9-4383-96c8-9ab1ae2bd7cd",
+   "friend_id": "176a6707-9234-4e1c-bda6-42f8d5231bc1",
+   "status": "accepted",
+   "created_at": "2026-07-20T05:24:40.273372+00:00"
+  },
+  {
+   "id": "4b651e38-ad23-4a76-b561-91232665baf5",
+   "user_id": "176a6707-9234-4e1c-bda6-42f8d5231bc1",
+   "friend_id": "2b1424d7-e603-4789-9dc4-14f2d7f8ba83",
+   "status": "pending",
+   "created_at": "2026-07-22T07:01:19.437782+00:00"
+  },
+  {
+   "id": "780f4238-a162-49f7-8766-7b581bbd91b6",
+   "user_id": "176a6707-9234-4e1c-bda6-42f8d5231bc1",
+   "friend_id": "11111111-1111-1111-1111-111111111111",
+   "status": "pending",
+   "created_at": "2026-07-22T07:01:19.900114+00:00"
+  },
+  {
+   "id": "dcc0a63e-da66-47cb-bd34-b2f05436c798",
+   "user_id": "0e12f2ed-bad2-4acb-9a70-af3764b48269",
+   "friend_id": "5c6ba2c9-654f-44ef-9404-ec103ebccdbf",
+   "status": "accepted",
+   "created_at": "2026-07-22T08:17:29.054164+00:00"
+  },
+  {
+   "id": "086cc38c-d717-4e80-b913-1c1b7c56f346",
+   "user_id": "68e3868f-f77e-4b19-8545-15b56e278191",
+   "friend_id": "e54a2441-6434-4987-93ec-55e98b45dc97",
+   "status": "accepted",
+   "created_at": "2026-07-22T08:41:49.774819+00:00"
+  },
+  {
+   "id": "cdbf5601-7965-4d86-be32-d58765f7aeb6",
+   "user_id": "fb45ce8d-12c1-498d-97b3-c5daf019132b",
+   "friend_id": "9b8904cd-b685-4b1e-9407-96c8e2cd163d",
+   "status": "pending",
+   "created_at": "2026-08-02T18:44:05.752969+00:00"
+  },
+  {
+   "id": "d9335e98-462a-4e90-9be2-0e4ba9ce0958",
+   "user_id": "fb45ce8d-12c1-498d-97b3-c5daf019132b",
+   "friend_id": "36f9e8f0-4417-4aae-9f9b-541cf85e4f8a",
+   "status": "accepted",
+   "created_at": "2026-08-02T18:44:39.137666+00:00"
+  }
+ ],
+ "friend_notifications": [
+  {
+   "id": "fc80eef2-a365-431b-b862-fc7e1cb605ec",
+   "user_id": "47b96cf8-8da9-4383-96c8-9ab1ae2bd7cd",
+   "type": "friend_accepted",
+   "title": "管理员T0 已接受你的好友申请",
+   "body": "",
+   "link": "",
+   "is_read": true,
+   "created_at": "2026-07-20T05:25:27.402974+00:00"
+  },
+  {
+   "id": "85c74f3e-047d-436a-81e9-82c9bb6df715",
+   "user_id": "47b96cf8-8da9-4383-96c8-9ab1ae2bd7cd",
+   "type": "friend_accepted",
+   "title": "管理员T0 已接受你的好友申请",
+   "body": "",
+   "link": "",
+   "is_read": true,
+   "created_at": "2026-07-20T05:25:44.108868+00:00"
+  },
+  {
+   "id": "ed535534-9572-42ca-afad-04cb6af26371",
+   "user_id": "176a6707-9234-4e1c-bda6-42f8d5231bc1",
+   "type": "friend_request",
+   "title": "2195251393 想加你为好友",
+   "body": "点击同意或拒绝",
+   "link": "/friends/request?id=de29252a-cb18-44ac-a44d-9efded82e134",
+   "is_read": true,
+   "created_at": "2026-07-20T05:24:40.273372+00:00"
+  },
+  {
+   "id": "0ddb17f5-ff78-40ca-ab0a-e7e11aba7284",
+   "user_id": "176a6707-9234-4e1c-bda6-42f8d5231bc1",
+   "type": "friend_request",
+   "title": "暖白 想加你为好友",
+   "body": "",
+   "link": "",
+   "is_read": true,
+   "created_at": "2026-07-19T10:22:48.282829+00:00"
+  },
+  {
+   "id": "d325fd69-74cb-457c-a279-51069ff5b6a1",
+   "user_id": "47b96cf8-8da9-4383-96c8-9ab1ae2bd7cd",
+   "type": "friend_accepted",
+   "title": "管理员T0 已接受你的好友申请",
+   "body": "",
+   "link": "",
+   "is_read": true,
+   "created_at": "2026-07-20T05:25:07.490625+00:00"
+  },
+  {
+   "id": "e5e2a033-e5f0-4117-b579-6d0c7c108a05",
+   "user_id": "47b96cf8-8da9-4383-96c8-9ab1ae2bd7cd",
+   "type": "friend_accepted",
+   "title": "管理员T0 已接受你的好友申请",
+   "body": "",
+   "link": "",
+   "is_read": true,
+   "created_at": "2026-07-20T05:26:42.524444+00:00"
+  },
+  {
+   "id": "b7935206-83ce-492a-8404-b671c9d58502",
+   "user_id": "d4d08662-a0bf-4c6f-a153-8886f61993fe",
+   "type": "friend_request",
+   "title": "管理员T0 想加你为好友",
+   "body": "点击同意或拒绝",
+   "link": "/friends/request?id=254fcc0f-64c2-462d-ac2d-ecbdd036242e",
+   "is_read": false,
+   "created_at": "2026-07-22T05:46:58.020492+00:00"
+  },
+  {
+   "id": "67196107-7a2c-4125-8fe3-3fedb2c66ece",
+   "user_id": "11111111-1111-1111-1111-111111111111",
+   "type": "friend_request",
+   "title": "管理员T0 想加你为好友",
+   "body": "点击同意或拒绝",
+   "link": "/friends/request?id=780f4238-a162-49f7-8766-7b581bbd91b6",
+   "is_read": false,
+   "created_at": "2026-07-22T07:01:19.900114+00:00"
+  },
+  {
+   "id": "cf813f2d-5c7f-4049-b1e4-7e527ebdcc5f",
+   "user_id": "0e12f2ed-bad2-4acb-9a70-af3764b48269",
+   "type": "friend_accepted",
+   "title": "autu 已接受你的好友申请",
+   "body": "",
+   "link": "",
+   "is_read": true,
+   "created_at": "2026-07-22T08:17:58.554394+00:00"
+  },
+  {
+   "id": "a137e6cc-20bb-4d3c-97f7-160071089eab",
+   "user_id": "68e3868f-f77e-4b19-8545-15b56e278191",
+   "type": "friend_accepted",
+   "title": "芸鶴 已接受你的好友申请",
+   "body": "",
+   "link": "",
+   "is_read": true,
+   "created_at": "2026-07-22T08:41:59.729368+00:00"
+  },
+  {
+   "id": "1b542531-6d74-4c83-ac83-c1907e7fad7e",
+   "user_id": "9b8904cd-b685-4b1e-9407-96c8e2cd163d",
+   "type": "friend_request",
+   "title": "竹深幽静 想加你为好友",
+   "body": "点击同意或拒绝",
+   "link": "/friends/request?id=cdbf5601-7965-4d86-be32-d58765f7aeb6",
+   "is_read": false,
+   "created_at": "2026-08-02T18:44:05.752969+00:00"
+  },
+  {
+   "id": "9c36b235-9043-44c6-85ea-d3e3dbade9ea",
+   "user_id": "fb45ce8d-12c1-498d-97b3-c5daf019132b",
+   "type": "friend_accepted",
+   "title": "暖白 已接受你的好友申请",
+   "body": "",
+   "link": "",
+   "is_read": false,
+   "created_at": "2026-08-04T02:01:48.270698+00:00"
+  }
+ ]
+}

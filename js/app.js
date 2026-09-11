@@ -432,6 +432,9 @@
 
   function openLoginModal(mode){
     loginMode = mode;
+    // 同步小怪兽登录卡的正/反面开关（纯 CSS 由 #doodle 复选框驱动卡片翻转）
+    var doodleToggle = document.getElementById('doodle');
+    if (doodleToggle) doodleToggle.checked = (mode === 'signup');
     var vp0 = document.getElementById('verify-panel'); if(vp0) vp0.style.display='none';
     pendingVerifyEmail = null; pendingVerifyPassword = null;
     var nickGroup = document.getElementById('group-nickname');
@@ -816,7 +819,7 @@
   // 全部失败时在侧栏渲染可点击的"重试"卡片，而不是只弹一条 toast 就静默空白。
   function loadChannels(onDone) {
     IF.listChannels().then(function(list) {
-      channels = filterDmChannels(list);
+      channels = list || [];
       renderChannels();
       removeChannelRetry();
       if (!currentChannel && channels.length > 0) {
@@ -2627,6 +2630,7 @@
 
   // 执行撤回：乐观更新 + 请求 + 广播
   function doRecall(msg) {
+    if (!requireAuth('撤回消息')) return;
     if (!currentChannel || !currentUser || msg._recalling) return;
     msg._recalling = true;
     var recalledBy = currentUser.id;
@@ -3797,6 +3801,7 @@
   }
 
   function sendMessage(){
+    if (!requireAuth('发言')) return;
     if(!msgInput||!currentUser||!currentChannel||!IF) return;
     var text=msgInput.value.trim(); if(!text) return;
     // 仅管理员可发主楼消息；评论/回复（带 parent_id）对所有已登录用户开放
@@ -3848,19 +3853,7 @@
       replacePendingMessage(tempId, currentChannel.id, msg);
       // 触发 @ 提及通知：@ 解析交给后端 RPC，前端只传完整 content
       try {
-        if (currentChannel.type === 'dm') {
-          // 私聊：给对方发私信通知（不 @ 提醒）；friendId 来自进入私聊时记录的映射
-          var dmFriend = dmChannelToFriend[currentChannel.id];
-          if (dmFriend && IF.notifyDm && typeof IF.notifyDm === 'function') {
-            IF.notifyDm({
-              messageId: msg.id,
-              authorId: currentUser.id,
-              channelId: currentChannel.id,
-              friendId: dmFriend,
-              content: (msg.content != null ? msg.content : text)
-            }).catch(function(){});
-          }
-        } else if (IF.notifyMentions && typeof IF.notifyMentions === 'function') {
+        if (IF.notifyMentions && typeof IF.notifyMentions === 'function') {
           IF.notifyMentions({
             messageId: msg.id,
             authorId: currentUser.id,
@@ -3966,6 +3959,7 @@
   }
 
   function handleFileUpload() {
+    if (!requireAuth('上传文件')) { if(fileInput) fileInput.value=''; return; }
     if(!fileInput.files || !fileInput.files[0] || !currentChannel) return;
     // 仅管理员可发主楼附件；评论/回复（带 parent_id）对所有用户开放
     if (isChannelLocked() && !getCommentTarget() && !(replyingTo && replyingTo.id)) {
@@ -4148,21 +4142,8 @@
     IF.unreadCount().then(function(count){
       count = count || 0;
       if (count > unreadNotifCount) {
-        // 实时未覆盖时的兜底：出现新未读通知，刷新好友列表与下拉（不只红点）
-        if (typeof renderFriends === 'function') renderFriends();
+        // 实时未覆盖时的兜底：出现新未读通知，刷新下拉（不只红点）
         if (notifyDropdown && notifyDropdown.style.display === 'block') loadNotifications();
-        // 新未读若是好友类，弹明确浮层提示（实时链路未覆盖时的兜底可见性）
-        if (IF.listNotifications) {
-          IF.listNotifications().then(function(list) {
-            var n = list && list[0];
-            if (n && !n.is_read && (n.type === 'friend_request' || n.type === 'friend_accepted')) {
-              if (typeof showToast === 'function') {
-                showToast((n.type === 'friend_request' ? '💌 ' : '✅ ') + (n.title || '好友通知'),
-                          n.type === 'friend_accepted' ? 'success' : 'info', 4500);
-              }
-            }
-          }).catch(function() {});
-        }
       }
       unreadNotifCount = count;
       updateNotifBadge();
@@ -4180,21 +4161,81 @@
   }
 
   var notifyOpen = false;
+  // 信封盖开合由 aria-expanded 驱动（CSS 负责旋转），此处只切换状态
+  function setMailboxExpanded(expanded) {
+    if (btnNotify) btnNotify.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+  }
+
+  // 信箱开启：信封盖掀开（CSS）+ 信件弹性缩进放大（GSAP，房屋惯例 back.out）
   function openNotifDropdown() {
     if (!notifyDropdown || !notifyList) return;
     if (notifyOpen) { hideNotifDropdown(); return; }
     notifyOpen = true;
+    setMailboxExpanded(true);
     notifyDropdown.style.display = 'block';
     // 强制重置动画残留，避免卡在 opacity:0 不可见
     notifyDropdown.style.opacity = '1';
     notifyDropdown.style.transform = 'none';
     if (!REDUCED_MOTION && typeof gsap !== 'undefined') {
       gsap.killTweensOf(notifyDropdown);
-      gsap.from(notifyDropdown, { opacity: 0, y: -8, duration: 0.24, ease: 'power2.out' });
+      // 丝滑缩进放大：以信件上缘为原点弹入，clearProps 防残留 transform
+      gsap.fromTo(notifyDropdown,
+        { opacity: 0, scale: 0.85, transformOrigin: '50% 0%' },
+        { opacity: 1, scale: 1, duration: 0.32, ease: 'back.out(1.7)', clearProps: 'transform' }
+      );
     }
     loadNotifications();
-    // 进入 dropdown 即加载好友数据（无论当前 Tab，确保切换即时）
-    renderFriends();
+  }
+
+  // 解析通知 link 并跳转定位。
+  // 兼容两种线上格式：
+  //   /channel/{id}#msg-{id}   新格式（notify_mentions / comment 通知）
+  //   channel/{id}             遗留格式（publish_message_realtime，无前导斜杠、无锚点）
+  function parseNotifLink(link) {
+    if (!link) return null;
+    var hashIdx = String(link).indexOf('#');
+    var chPart = hashIdx >= 0 ? link.slice(0, hashIdx) : link;
+    var frag = hashIdx >= 0 ? link.slice(hashIdx + 1) : '';
+    // 去掉可选的 /channel/ 或 channel/ 前缀，再粗取 uuid
+    var chId = chPart.replace(/^\/?channel\//, '').replace(/\/+$/, '').trim();
+    var msgId = '';
+    if (frag) {
+      var m = frag.match(/^msg-(.+)$/);
+      if (m) msgId = m[1];
+    }
+    if (!chId) return null;
+    return { channelId: chId, messageId: msgId };
+  }
+
+  // 点击通知：跳到目标频道并定位；目标已删/已撤回/找不到时给明确反馈
+  function openNotificationTarget(n) {
+    var t = parseNotifLink(n && n.link);
+    if (!t) {
+      // 无 link（如部分 system 通知）：无可跳转目标，仅提示
+      if (typeof showToast === 'function') showToast('该通知没有可定位的内容', 'info', 2200);
+      return;
+    }
+    var ch = (channels || []).find(function(c) { return String(c.id) === String(t.channelId); });
+    if (!ch) {
+      // 频道不在当前列表（可能已删除或未加载）
+      if (typeof showToast === 'function') showToast('原内容已不存在', 'info', 2600);
+      return;
+    }
+    if (!t.messageId) {
+      // 只有频道没有锚点：跳到频道即可
+      switchChannel(ch);
+      return;
+    }
+    switchChannel(ch, function() {
+      // scrollToMessage 内部有 ~4s 重试；若最终没定位到，给出明确反馈
+      scrollToMessage(t.messageId);
+      setTimeout(function() {
+        var node = document.querySelector('.msg-group[data-msg-id="' + t.messageId + '"]')
+                || document.querySelector('.msg-comment-item[data-comment-id="' + t.messageId + '"]')
+                || document.querySelector('[data-id="' + t.messageId + '"]');
+        if (!node && typeof showToast === 'function') showToast('原内容已不存在', 'info', 2600);
+      }, 4300);
+    });
   }
 
   function loadNotifications() {
@@ -4207,148 +4248,40 @@
           return;
         }
         list.forEach(function(n) {
-          if (n.type === 'dm') return; // 私信不进通知 tab，未读只在好友列表显示
+          if (n.type === 'friend_request' || n.type === 'friend_accepted' || n.type === 'friend' || n.type === 'friend_request_received' || n.type === 'dm') return; // 好友/私聊已下线，历史行不再展示
           var item = document.createElement('div');
           item.className = 'notify-item' + (n.is_read ? '' : ' unread');
-          var isFriendReq = n.type === 'friend_request' || n.type === 'friend' || n.type === 'friend_request_received';
-          // 已读的好友请求不再显示操作按钮（已处理过，防止反复点击）
-          var showActions = isFriendReq && !n.is_read;
           item.innerHTML =
-            '<span class="notify-icon">' + (n.type === 'mention' ? '💬' : (isFriendReq ? '👋' : '🔔')) + '</span>' +
+            '<span class="notify-icon">' + (n.type === 'mention' ? '💬' : (n.type === 'comment' ? '💭' : '🔔')) + '</span>' +
             '<div class="notify-body">' +
               '<div class="notify-title">' + escapeHtml(n.title) + '</div>' +
               '<div class="notify-preview">' + escapeHtml(n.body) + '</div>' +
-            '</div>' +
-            (showActions ? '<div class="notify-actions"><button type="button" class="notify-btn notify-accept" data-action="accept">同意</button><button type="button" class="notify-btn notify-reject" data-action="reject">拒绝</button></div>' : '');
-          if (showActions) {
-            var acceptBtn = item.querySelector('.notify-accept');
-            var rejectBtn = item.querySelector('.notify-reject');
-            if (acceptBtn) {
-              acceptBtn.addEventListener('click', function(e) {
-                e.stopPropagation();
-                respondToFriendRequest(n, 'accept', item);
-              });
-            }
-            if (rejectBtn) {
-              rejectBtn.addEventListener('click', function(e) {
-                e.stopPropagation();
-                respondToFriendRequest(n, 'reject', item);
-              });
-            }
-          } else {
-            item.addEventListener('click', function() {
+            '</div>';
+          item.addEventListener('click', function() {
               markNotifRead(n.id);
-              if (n.link) {
-                // 解析 /channel/{id}#msg-{id}：支持锚点跳转并高亮对应消息
-                var hashIdx = n.link.indexOf('#');
-                var chPart = hashIdx >= 0 ? n.link.slice(0, hashIdx) : n.link;
-                var frag = hashIdx >= 0 ? n.link.slice(hashIdx + 1) : '';
-                var chId = chPart.replace('/channel/', '').replace(/\/+$/, '');
-                var msgId = '';
-                var m = frag && frag.match(/^msg-(.+)$/);
-                if (m) msgId = m[1];
-                if (chId) {
-                  var ch = channels.find(function(c) { return String(c.id) === String(chId); });
-                  if (ch) {
-                    if (msgId) {
-                      switchChannel(ch, function() { scrollToMessage(msgId); });
-                    } else {
-                      switchChannel(ch);
-                    }
-                  }
-                }
-              }
+              openNotificationTarget(n);
               hideNotifDropdown();
-            });
-          }
+          });
           notifyList.appendChild(item);
         });
       }).catch(function(){});
   }
 
-  function respondToFriendRequest(n, action, item) {
-    if (!IF || !IF.friendRespond) {
-      if (typeof showToast === 'function') showToast('无法操作好友请求', 'error', 2000);
+
+  // 关闭信箱：信封盖落下（CSS 由 aria-expanded 驱动）+ 信件缩回
+  function hideNotifDropdown() {
+    if (!notifyDropdown || !notifyOpen) return;
+    notifyOpen = false;
+    setMailboxExpanded(false);
+    if (REDUCED_MOTION || typeof gsap === 'undefined') {
+      notifyDropdown.style.display = 'none';
       return;
     }
-    var acceptBtn = item && item.querySelector('.notify-accept');
-    var rejectBtn = item && item.querySelector('.notify-reject');
-    if (acceptBtn) acceptBtn.disabled = true;
-    if (rejectBtn) rejectBtn.disabled = true;
-
-    function doRespond(id) {
-      IF.friendRespond(id, action)
-        .then(function() {
-          // 从 DOM 移除该通知项（而非仅改透明度），防止反复操作
-          if (item && item.parentNode) item.parentNode.removeChild(item);
-          markNotifRead(n.id);
-          renderFriends();
-          // 重载通知列表确保干净状态（原 friend_request 通知已被 RPC 删除）
-          loadNotifications();
-          // 同步刷新弹窗好友列表
-          if (typeof loadFriendsToPopup === 'function') loadFriendsToPopup();
-        })
-        .catch(function(err) {
-          if (acceptBtn) acceptBtn.disabled = false;
-          if (rejectBtn) rejectBtn.disabled = false;
-          var raw = (err && (err.message || err.error_description || err.msg || String(err))) || '操作失败';
-          if (typeof showToast === 'function') showToast(raw, 'error', 2500);
-        });
-    }
-
-    // 新通知 link 已修复，旧通知 link 为空，兜底从 pending 列表找
-    var m = n.link ? n.link.match(/[?&]id=([^&]+)/) : null;
-    var id = m ? m[1] : '';
-    if (id) { doRespond(id); return; }
-
-    function clearStaleNotif() {
-      item.style.opacity = '0.55';
-      var actions = item.querySelector('.notify-actions');
-      if (actions) actions.innerHTML = '<span class="notify-status">已过期</span>';
-      markNotifRead(n.id);
-    }
-
-    function pickByTitle(incoming) {
-      var senderName = (n.title || '').replace(/[[:space:]]*想加你为好友[[:space:]]*$/, '').trim();
-      if (!senderName) return null;
-      var matches = incoming.filter(function(p) {
-        var name = p.other && (p.other.nickname || p.other.username || '');
-        return name && name.indexOf(senderName) !== -1;
-      });
-      return matches.length === 1 ? matches[0] : null;
-    }
-
-    if (IF.friendsList) {
-      IF.friendsList().then(function(res) {
-        var pending = (res && res.pending) || [];
-        var incoming = pending.filter(function(p) { return p.direction === 'in'; });
-        if (incoming.length === 1) {
-          doRespond(incoming[0].id);
-        } else if (incoming.length > 1) {
-          var picked = pickByTitle(incoming);
-          if (picked) {
-            doRespond(picked.id);
-          } else {
-            if (acceptBtn) acceptBtn.disabled = false;
-            if (rejectBtn) rejectBtn.disabled = false;
-            if (typeof showToast === 'function') showToast('该通知未携带请求ID，请在「好友」列表中操作', 'error', 2500);
-          }
-        } else {
-          clearStaleNotif();
-          if (acceptBtn) acceptBtn.disabled = false;
-          if (rejectBtn) rejectBtn.disabled = false;
-          if (typeof showToast === 'function') showToast('该请求已处理或已过期，已移除通知', 'error', 2000);
-        }
-      }).catch(function() {
-        if (acceptBtn) acceptBtn.disabled = false;
-        if (rejectBtn) rejectBtn.disabled = false;
-        if (typeof showToast === 'function') showToast('无法操作好友请求', 'error', 2000);
-      });
-    } else {
-      if (acceptBtn) acceptBtn.disabled = false;
-      if (rejectBtn) rejectBtn.disabled = false;
-      if (typeof showToast === 'function') showToast('缺少请求ID', 'error', 2000);
-    }
+    gsap.killTweensOf(notifyDropdown);
+    gsap.to(notifyDropdown, {
+      opacity: 0, scale: 0.92, transformOrigin: '50% 0%', duration: 0.16, ease: 'power2.in',
+      onComplete: function(){ notifyDropdown.style.display = 'none'; gsap.set(notifyDropdown, { clearProps: 'transform' }); }
+    });
   }
 
   function markNotifRead(id) {
@@ -4356,17 +4289,6 @@
       unreadNotifCount = Math.max(0, unreadNotifCount - 1);
       updateNotifBadge();
     }).catch(function(){});
-  }
-
-  function hideNotifDropdown() {
-    if (!notifyDropdown || !notifyOpen) return;
-    notifyOpen = false;
-    if (REDUCED_MOTION || typeof gsap === 'undefined') {
-      notifyDropdown.style.display = 'none';
-      return;
-    }
-    gsap.killTweensOf(notifyDropdown);
-    gsap.to(notifyDropdown, { opacity: 0, y: -8, duration: 0.16, ease: 'power2.in', onComplete: function(){ notifyDropdown.style.display = 'none'; } });
   }
 
   function markAllRead() {
@@ -4403,225 +4325,16 @@
     }
   });
 
-  // ── Friends Tab（好友 Tab）────────────────────
-  var tabNotif   = document.getElementById('tab-notif');
-  var tabFriends = document.getElementById('tab-friends');
-  var panelNotif = document.getElementById('panel-notif');
-  var panelFriends = document.getElementById('panel-friends');
-  var friendsListEl = document.getElementById('friends-list');
-  var friendsReqEl  = document.getElementById('friends-requests');
-  var friendAddInput = document.getElementById('friend-add-input');
-  var friendAddBtn  = document.getElementById('friend-add-btn');
-  var friendSearchResults = document.getElementById('friend-search-results');
-
-  function switchNotifyTab(tab) {
-    if (!tabNotif || !tabFriends || !panelNotif || !panelFriends) return;
-    var isFriends = tab === 'friends';
-    tabNotif.classList.toggle('active', !isFriends);
-    tabFriends.classList.toggle('active', isFriends);
-    panelNotif.style.display = isFriends ? 'none' : 'flex';
-    panelFriends.style.display = isFriends ? 'flex' : 'none';
-    if (isFriends) renderFriends();
-  }
-  if (tabNotif) tabNotif.addEventListener('click', function(){ switchNotifyTab('notif'); });
-  if (tabFriends) tabFriends.addEventListener('click', function(){ switchNotifyTab('friends'); });
-
-  function friendAvatarHtml(u) {
-    var name = (u && (u.nickname || u.username)) || '同学';
-    var initial = getInitial(name);
-    if (u && u.avatar_url) {
-      return '<div class="friend-avatar"><img src="' + u.avatar_url + '" alt="" onerror="this.parentNode.textContent=\'' + initial + '\'"></div>';
-    }
-    return '<div class="friend-avatar" style="background:' + getAvatarColor((u && u.username) || '?') + '">' + initial + '</div>';
-  }
-
-  function renderFriendList(container, list, isRequest) {
-    if (!container) return;
-    container.innerHTML = '';
-    if (!list || list.length === 0) {
-      container.innerHTML = '<div class="notify-empty">' + (isRequest ? '暂无请求' : '暂无好友') + '</div>';
-      return;
-    }
-    list.forEach(function(u) {
-      var user = u.other || u;   // entry.other 才是用户资料对象
-      var item = document.createElement('div');
-      item.className = 'friend-item';
-      item.innerHTML = friendAvatarHtml(user) +
-        '<span class="friend-name">' + escapeHtml((user && (user.nickname || user.username)) || '同学') + '</span>';
-      var actions = document.createElement('span');
-      actions.className = 'friend-actions';
-      if (!isRequest) {
-        var rm = document.createElement('button');
-        rm.type = 'button';
-        rm.className = 'friend-btn friend-remove';
-        rm.textContent = '移除';
-        rm.addEventListener('click', function(e) {
-          e.stopPropagation();
-          if (!IF || !IF.friendRemove || !user.id) return;
-          IF.friendRemove(user.id).then(function(){ renderFriends(); }).catch(function(){});
-        });
-        actions.appendChild(rm);
-      } else {
-        var acc = document.createElement('button');
-        acc.type = 'button';
-        acc.className = 'friend-btn friend-accept';
-        acc.textContent = '接受';
-        acc.addEventListener('click', function(e) {
-          e.stopPropagation();
-          if (!IF || !IF.friendRespond || !u.id) return;
-          IF.friendRespond(u.id, 'accept').then(function(){ renderFriends(); }).catch(function(){});
-        });
-        var rej = document.createElement('button');
-        rej.type = 'button';
-        rej.className = 'friend-btn friend-reject';
-        rej.textContent = '拒绝';
-        rej.addEventListener('click', function(e) {
-          e.stopPropagation();
-          if (!IF || !IF.friendRespond || !u.id) return;
-          IF.friendRespond(u.id, 'reject').then(function(){ renderFriends(); }).catch(function(){});
-        });
-        actions.appendChild(acc);
-        actions.appendChild(rej);
-      }
-      item.appendChild(actions);
-      container.appendChild(item);
-    });
-
-    // 校园手稿：好友/请求项 stagger 入场
-    if (document.body.dataset.theme === 'light' && typeof gsap !== 'undefined' && !REDUCED_MOTION) {
-      try {
-        var items = container.querySelectorAll('.friend-item');
-        gsap.killTweensOf(items);
-        gsap.fromTo(items,
-          { y: -12, rotation: function(i){ return (i % 2 === 0 ? -1 : 1); }, opacity: 0, transformOrigin: 'top center' },
-          { y: 0, rotation: 0, opacity: 1, duration: 0.45, stagger: 0.06, ease: 'back.out(1.5)', clearProps: 'opacity,transform' });
-      } catch(e){}
-    }
-  }
-
-  function renderFriends() {
-    if (!IF || !IF.friendsList || !friendsListEl || !friendsReqEl) return;
-    IF.friendsList().then(function(data) {
-      data = data || {};
-      // 兼容多种返回结构：{ friends, requests } 或 { accepted, pending }
-      var friends = data.friends || data.accepted || [];
-      var requests = data.requests || data.pending || [];
-      renderFriendList(friendsListEl, friends, false);
-      renderFriendList(friendsReqEl, requests, true);
-    }).catch(function() {
-      if (friendsListEl) friendsListEl.innerHTML = '<div class="notify-empty">加载失败</div>';
-    });
-  }
-
-  if (friendAddBtn && friendAddInput) {
-    function isUuid(str) {
-      return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
-    }
-    function clearSearchCandidates() {
-      if (!friendSearchResults) return;
-      friendSearchResults.innerHTML = '';
-      friendSearchResults.classList.remove('visible');
-    }
-    function renderSearchCandidates(list) {
-      if (!friendSearchResults) return;
-      friendSearchResults.innerHTML = '';
-      if (!list || list.length === 0) {
-        friendSearchResults.classList.remove('visible');
-        return;
-      }
-      list.forEach(function(u) {
-        var item = document.createElement('div');
-        item.className = 'friend-search-candidate';
-        item.setAttribute('data-id', u.id);
-        item.innerHTML = friendAvatarHtml(u) +
-          '<span class="friend-name">' + escapeHtml((u && (u.nickname || u.username)) || '同学') + '</span>' +
-          '<span class="friend-username">' + escapeHtml((u && u.username) || '') + '</span>';
-        item.addEventListener('click', function(e) {
-          e.stopPropagation();
-          sendFriendRequest(u.id, u);
-        });
-        friendSearchResults.appendChild(item);
-      });
-      friendSearchResults.classList.add('visible');
-    }
-    function sendFriendRequest(targetId, targetUser) {
-      if (!IF || !IF.friendRequest || !targetId) return;
-      if (friendAddBtn) friendAddBtn.disabled = true;
-      Promise.resolve(IF.friendRequest(targetId))
-        .then(function() {
-          if (friendAddInput) friendAddInput.value = '';
-          clearSearchCandidates();
-          renderFriends();
-          var name = (targetUser && (targetUser.nickname || targetUser.username)) || '该用户';
-          if (typeof showToast === 'function') showToast('已向 ' + name + ' 发送好友申请', 'success', 2500);
-        })
-        .catch(function(err) {
-          var raw = (err && (err.message || err.error_description || err.msg || String(err))) || '加好友失败';
-          var msg = raw, kind = 'error', ms = 3000;
-          // RPC 返回 {ok:false,error:'exists'|'self'|'noauth'} 时翻译成人话，便于定位
-          if (raw.indexOf('exists') !== -1) { msg = '已向该用户发送过申请，等待对方通过'; kind = 'info'; ms = 2600; }
-          else if (raw.indexOf('self') !== -1) { msg = '不能添加自己为好友'; }
-          else if (raw.indexOf('noauth') !== -1) { msg = '登录已失效，请重新登录后再试'; }
-          if (typeof showToast === 'function') showToast(msg, kind, ms);
-        })
-        .then(function() { if (friendAddBtn) friendAddBtn.disabled = false; });
-    }
-    function onAddFriendClick() {
-      if (!IF || !friendAddInput) return;
-      clearSearchCandidates();
-      var val = (friendAddInput.value || '').trim();
-      if (!val) {
-        if (typeof showToast === 'function') showToast('请输入 uid 或昵称', 'error', 2000);
-        return;
-      }
-      // uuid 直接发送请求
-      if (isUuid(val)) {
-        sendFriendRequest(val);
-        return;
-      }
-      // 昵称/用户名搜索
-      if (!IF.searchUsers) {
-        if (typeof showToast === 'function') showToast('暂不支持昵称搜索', 'error', 2000);
-        return;
-      }
-      if (friendAddBtn) friendAddBtn.disabled = true;
-      Promise.resolve(IF.searchUsers(val, 5))
-        .then(function(list) {
-          if (!list || list.length === 0) {
-            if (typeof showToast === 'function') showToast('未找到用户：' + val, 'error', 2500);
-            return;
-          }
-          // 始终显示候选列表，让用户点选确认，避免误发
-          renderSearchCandidates(list);
-        })
-        .catch(function(err) {
-          var raw = (err && (err.message || err.error_description || err.msg || String(err))) || '搜索失败';
-          if (typeof showToast === 'function') showToast(raw, 'error', 2500);
-        })
-        .then(function() { if (friendAddBtn) friendAddBtn.disabled = false; });
-    }
-    friendAddBtn.addEventListener('click', function(e) {
-      e.stopPropagation();
-      onAddFriendClick();
-    });
-    friendAddInput.addEventListener('keydown', function(e) {
-      if (e.key === 'Enter') { e.preventDefault(); onAddFriendClick(); }
-    });
-    // 输入变化时清空候选，避免旧候选残留
-    friendAddInput.addEventListener('input', clearSearchCandidates);
-  }
-
   // ── Realtime 通知订阅（最小订阅，不干扰聊天订阅）──
   var notifRtHandler = null;
   var notifRtSubscribed = false;
   var _notifFallbackTimer = null;
-  // 实时订阅失败时的兜底：4s 短轮询未读 + 好友列表，保证被加方几秒内必看到通知
+  // 实时订阅失败时的兜底：4s 短轮询未读，保证通知几秒内必看到
   function startNotifFallbackPoll() {
     if (_notifFallbackTimer) return;
     _notifFallbackTimer = setInterval(function() {
       if (document.visibilityState === 'visible' && currentUser && IF && IF.unreadCount) {
         fetchUnreadCount();
-        if (typeof renderFriends === 'function') renderFriends();
       }
     }, 4000);
   }
@@ -4643,30 +4356,11 @@
           notifRtHandler = function(payload) {
             var rec = (payload && (payload.record || payload)) || {};
             if (rec.user_id && rec.user_id !== currentUser.id) return;
-            if (rec.type === 'dm') {
-              // 私信未读只在好友列表显示，不冒顶部铃红点
-              var fu = parseDmLink(rec.link);
-              if (fu) {
-                dmUnread[fu.friendId] = (dmUnread[fu.friendId] || 0) + 1;
-                refreshFriendBadges();
-              }
-              return;
-            }
             unreadNotifCount = (unreadNotifCount || 0) + 1;
             updateNotifBadge();
             // 啵宝：被@或收到系统通知 → alert 强提示；其余通知 → notify
             if (BoboFX) { if (rec.type === 'mention') BoboFX.mention(); else BoboFX.message(); }
             if (notifyDropdown && notifyDropdown.style.display === 'block') loadNotifications();
-            // 好友关系变化时同步刷新好友列表（解决"对方同意后列表不显示"）
-            if (rec.type === 'friend_accepted' || rec.type === 'friend_request') {
-              renderFriends();
-              if (typeof loadFriendsToPopup === 'function') loadFriendsToPopup();
-              // 明确浮层提示，避免"通知没显示"误判（不只静默亮铃标）
-              if (typeof showToast === 'function') {
-                if (rec.type === 'friend_request') showToast('💌 ' + (rec.title || '收到新的好友申请'), 'info', 4500);
-                else showToast('✅ ' + (rec.title || '对方已接受你的好友申请'), 'success', 4500);
-              }
-            }
           };
           rt.on('new_notification', notifRtHandler);
         }).catch(function(e) { console.warn('[notif-rt] subscribe', e); });
@@ -5076,7 +4770,6 @@
         gsap.fromTo(avatarPopupOverlay, {autoAlpha:0}, {autoAlpha:1, duration:0.28});
       }
     }
-    loadFriendsToPopup();
     updatePopupUserCard();
   }
 
@@ -5163,17 +4856,15 @@
     }
 
     if (animate && !REDUCED_MOTION && typeof gsap !== 'undefined') {
-      var mainBg = document.getElementById('main-bg');
-      var mainDots = document.getElementById('main-dots');
-      if (mainBg) {
-        gsap.killTweensOf(mainBg);
-        gsap.fromTo(mainBg, { opacity: 0, scale: 1.05 }, { opacity: 1, scale: 1, duration: 0.9, ease: 'power2.out' });
+      // v1.7.3：CSS 渐变层与 canvas 星层现在同属 #bg-stack。
+      // 入场动画只能写给 wrapper，否则会与 BgDrift 的 wrapper transform 争抢，
+      // 且分别缩放两个子层会让两条银河瞬间错位（v1.7.2 前的回归根因）。
+      var bgStack = document.getElementById('bg-stack');
+      if (bgStack) {
+        gsap.killTweensOf(bgStack);
+        gsap.fromTo(bgStack, { opacity: 0, scale: 1.05 }, { opacity: 1, scale: 1, duration: 0.9, ease: 'power2.out' });
         // 1.2s 内让背景漂移/视差暂停写 transform，避免与 gsap 入场动画互相覆盖
         window.__bgHoldUntil = Date.now() + 1200;
-      }
-      if (mainDots) {
-        gsap.killTweensOf(mainDots);
-        gsap.fromTo(mainDots, { opacity: 0, scale: 1.02 }, { opacity: 1, scale: 1, duration: 1.0, ease: 'power2.out' });
       }
 
       // 校园手稿主题：面板像纸张从上方 stagger 飘落
@@ -5198,35 +4889,11 @@
   function setupStarryGsapEffects(){
     if (REDUCED_MOTION || typeof gsap === 'undefined') return;
 
-    var mainBg = document.getElementById('main-bg');
-    var mainDots = document.getElementById('main-dots');
-    if (!mainBg || !mainDots) return;
-
-    // 鼠标视差：背景层与 Canvas 层错位移动，营造纵深
-    var hasQuickTo = typeof gsap.quickTo === 'function';
-    var bgX, bgY, dotsX, dotsY;
-    if (hasQuickTo) {
-      bgX = gsap.quickTo(mainBg, 'x', { duration: 1.2, ease: 'power2.out' });
-      bgY = gsap.quickTo(mainBg, 'y', { duration: 1.2, ease: 'power2.out' });
-      dotsX = gsap.quickTo(mainDots, 'x', { duration: 0.8, ease: 'power2.out' });
-      dotsY = gsap.quickTo(mainDots, 'y', { duration: 0.8, ease: 'power2.out' });
-    }
-
-    var parallax = { x: 0, y: 0 };
-    window.addEventListener('mousemove', function(e){
-      if (document.body.dataset.theme !== 'starry') return;
-      var nx = (e.clientX / window.innerWidth - 0.5) * 2;
-      var ny = (e.clientY / window.innerHeight - 0.5) * 2;
-      parallax.x = -nx; parallax.y = -ny;
-      if (hasQuickTo) {
-        bgX(parallax.x * 10); bgY(parallax.y * 6);
-        dotsX(parallax.x * 18); dotsY(parallax.y * 10);
-      } else {
-        gsap.to(mainBg, { x: parallax.x * 10, y: parallax.y * 6, duration: 1.2, ease: 'power2.out', overwrite: true });
-        gsap.to(mainDots, { x: parallax.x * 18, y: parallax.y * 10, duration: 0.8, ease: 'power2.out', overwrite: true });
-      }
-    }, { passive: true });
-
+    // v1.7.3：背景视差已统一到 #bg-stack（见 js/main-bg.js 的 BgDrift）。
+    // 旧实现在这里给 #main-bg 和 #main-dots 分别做 *不同幅度* 的位移
+    //（背景 ±10px / 1.2s，canvas ±18px / 0.8s），两层的银河必然分家——
+    // 这正是「银河老是在动/错位」的直接原因。故不再单独驱动这两层。
+    return;
   }
 
   function initBackgroundSettings(){
@@ -5957,6 +5624,44 @@
     });
   }
 
+  // ==================== 游客模式 ====================
+  // 未登录访客可浏览全站（后端 RLS 已放开 anon 只读），但不能写入。
+  // 任何"发言"动作 → 弹注册/登录面板。
+  function makeGuestUser() {
+    return { id: null, role: 'guest', nickname: '访客', username: '', avatar_url: '', title: '', isGuest: true };
+  }
+  function isGuest() { return !!(currentUser && currentUser.isGuest); }
+
+  // 把 #view-login 作为浮层盖在主界面上，复用现有小怪兽登录/注册 UI
+  function openAuthPanel(mode, hint) {
+    try {
+      if (typeof openLoginModal === 'function') {
+        // 让 view-login 可见但不卸载主界面：临时加浮层类
+        if (viewLogin) {
+          viewLogin.classList.add('active', 'auth-overlay');
+          viewLogin.removeAttribute('aria-hidden');
+        }
+        // 关键：welcome 屏（固定定位 z-index:60）会盖住登录卡，必须收起
+        if (welcomeScreen) {
+          welcomeScreen.classList.remove('active');
+          welcomeScreen.setAttribute('aria-hidden', 'true');
+        }
+        openLoginModal(mode || 'signup');
+        if (hint && typeof showToast === 'function') showToast(hint, 'info', 3200);
+      } else if (typeof showToast === 'function') {
+        showToast('请先注册或登录后再发言', 'info', 2600);
+      }
+    } catch (e) { /* 开关失败不应阻断浏览 */ }
+  }
+
+  // 统一写入守卫：已登录 → true；游客 → 弹注册面板并返回 false。
+  // 各写入处理器在入口处调用：if (!requireAuth()) return;
+  function requireAuth(action) {
+    if (currentUser && !currentUser.isGuest) return true;
+    openAuthPanel('signup', action ? ('注册后可' + action) : '注册后即可发言');
+    return false;
+  }
+
   // ==================== INIT ====================
 
   // 检查自动登录（InsForge 会话由 cookie 管理，无需本地 token）
@@ -5965,9 +5670,28 @@
     IF.getCurrentUser().then(function(user) {
       if (user) {
         currentUser = user;
-        showMain();
+      } else {
+        // 未登录：以游客身份进入，浏览全站只读内容
+        currentUser = makeGuestUser();
+        enterGuestMode();
       }
-    }).catch(function(){});
+      showMain();
+    }).catch(function(){
+      // 会话检查失败也按游客放行，避免白屏卡在登录页
+      if (!currentUser) { currentUser = makeGuestUser(); enterGuestMode(); }
+      try { showMain(); } catch (e) {}
+    });
+  }
+
+  // 游客模式下的降级：不订阅实时、隐藏需登录的入口
+  function enterGuestMode() {
+    try {
+      // 实时订阅（chat: / notifications:）策略均为 TO authenticated，游客订阅必被拒 → 直接跳过
+      if (typeof subscribeNotifications === 'function') { /* 内部已有 currentUser 检查，这里不调用 */ }
+      var badge = document.getElementById('notify-badge');
+      if (badge) badge.style.display = 'none';
+      document.body.classList.add('guest-mode');
+    } catch (e) {}
   }
   if (window.IF) initAuth();
   else window.addEventListener('IF_READY', initAuth);
@@ -6033,6 +5757,8 @@
       if (!e || !e.data) return;
       if (e.data.type === 'mt-close') closeMemoryTree();
       if (e.data.type === 'mt-open-profile' && e.data.userId && window.openUserProfile) window.openUserProfile(e.data.userId);
+      // 记忆树 iframe 内的游客写入 → 请父页面弹注册面板
+      if (e.data.type === 'mt-need-auth') openAuthPanel('signup', e.data.hint || '注册后即可在记忆树留言');
     });
   })();
 
@@ -6371,143 +6097,6 @@
       render(null);
     }
   };
-
-  // ==================== 好友私聊 DM ====================
-  // 私信未读只显示在好友列表（顶部铃不冒红点），计数内存维护。
-  var dmUnread = {};            // friendId -> 未读数
-  var dmChannelToFriend = {};   // dmChannelId -> friendId（发送私信通知用）
-  var dmReturnChannel = null;   // 进入私聊前的公共频道（返回目标）
-  var dmBackBtn = document.getElementById('dm-back-btn');
-
-  // 过滤 DM 频道：私聊房间只通过好友列表进入，不进公共频道列表
-  function filterDmChannels(list) {
-    return (list || []).filter(function(c) { return c.type !== 'dm'; });
-  }
-
-  // 解析通知 link：/dm/{channelId}/{friendId}
-  function parseDmLink(link) {
-    if (!link) return null;
-    var m = String(link).match(/^\/dm\/([^/]+)\/([^/]+)/);
-    if (!m) return null;
-    return { channelId: m[1], friendId: m[2] };
-  }
-
-  // 渲染好友列表到头像弹窗（整行点击进入私聊）
-  function loadFriendsToPopup() {
-    var box = document.getElementById('panel-friends-list');
-    if (!box || !IF) return;
-    IF.friendsList().then(function(res) {
-      var friends = (res && res.friends) || [];
-      box.innerHTML = '';
-      if (!friends.length) {
-        box.innerHTML = '<div class="popup-empty">暂无好友，去通知里加好友吧</div>';
-        return;
-      }
-      friends.forEach(function(f) {
-        var u = f.other || {};
-        var item = document.createElement('div');
-        item.className = 'friend-item' + (dmUnread[u.id] ? ' has-unread' : '');
-        item.setAttribute('data-friend', u.id);
-        var initial = getInitial(u.nickname || u.username || '友');
-        var av = u.avatar_url
-          ? '<img src="'+escapeHtml(u.avatar_url)+'" alt="" onerror="this.style.display=\'none\'">'
-          : escapeHtml(initial);
-        item.innerHTML =
-          '<div class="friend-avatar" style="background:'+getAvatarColor(u.username||u.id)+'">'+av+'</div>'+
-          '<span class="friend-name">'+escapeHtml(u.nickname || u.username || '未知用户')+'</span>'+
-          '<span class="friend-badge">'+(dmUnread[u.id]||'')+'</span>';
-        item.addEventListener('click', function() { openDm(f); });
-        box.appendChild(item);
-      });
-    }).catch(function() {
-      box.innerHTML = '<div class="popup-empty">好友加载失败</div>';
-    });
-  }
-
-  // 刷新已渲染好友项的未读红点（收到私信实时更新）
-  function refreshFriendBadges() {
-    var box = document.getElementById('panel-friends-list');
-    if (!box) return;
-    box.querySelectorAll('.friend-item').forEach(function(item) {
-      var fid = item.getAttribute('data-friend');
-      var n = dmUnread[fid] || 0;
-      item.classList.toggle('has-unread', n > 0);
-      var badge = item.querySelector('.friend-badge');
-      if (badge) badge.textContent = n;
-    });
-  }
-
-  // 进入与某好友的私聊（复用 switchChannel + 现有消息体系）
-  function openDm(friend) {
-    if (!IF || !currentUser) return;
-    var u = friend.other || {};
-    if (!u.id) return;
-    dmReturnChannel = currentChannel; // 记住返回目标（进入前是公共频道）
-    closeAvatarPopup();
-    IF.findOrCreateDm(u.id).then(function(res) {
-      if (!res || res.error || !res.id) { showToast('打开私聊失败', 'error'); return; }
-      dmChannelToFriend[res.id] = u.id;
-      var dmChannel = { id: res.id, name: (u.nickname || u.username || '好友'), type: 'dm', description: '私聊' };
-      document.body.classList.add('dm-mode');
-      switchChannel(dmChannel, function() {
-        if (msgInput) msgInput.placeholder = '发私信给 ' + (u.nickname || u.username);
-        // 进入动画：聊天区从右侧轻微滑入
-        if (!REDUCED_MOTION && typeof gsap !== 'undefined') {
-          var main = document.getElementById('channel-main');
-          if (main) gsap.fromTo(main, { x: 24, autoAlpha: 0 }, { x: 0, autoAlpha: 1, duration: 0.32, ease: 'expo.out', clearProps: 'opacity,transform' });
-        }
-        dmUnread[u.id] = 0;          // 进入即清空该好友未读
-        refreshFriendBadges();
-      });
-    }).catch(function(e) {
-      showToast('打开私聊失败：' + ((e && e.message) || '未知错误'), 'error');
-    });
-  }
-
-  // 返回公共频道（带 GSAP 过渡）
-  function returnFromDm() {
-    document.body.classList.remove('dm-mode');
-    var target = dmReturnChannel || (channels && channels[0]) || null;
-    if (!target) {
-      if (IF && IF.listChannels) {
-        IF.listChannels().then(function(list){
-          channels = filterDmChannels(list);
-          renderChannels();
-          removeChannelRetry();
-          if (channels[0]) switchChannel(channels[0]);
-        }).catch(function(){ renderChannelRetry(); });
-      }
-      return;
-    }
-    switchChannel(target, function() {
-      if (!REDUCED_MOTION && typeof gsap !== 'undefined') {
-        var main = document.getElementById('channel-main');
-        if (main) gsap.fromTo(main, { x: 30, autoAlpha: 0 }, { x: 0, autoAlpha: 1, duration: 0.32, ease: 'expo.out', clearProps: 'opacity,transform' });
-      }
-      if (dmBackBtn) gsap.set(dmBackBtn, { x: 0, opacity: 1, clearProps: 'transform,opacity' });
-    });
-  }
-
-  // 返回箭头交互：hover 微动 + 点击滑出后返回
-  if (dmBackBtn) {
-    dmBackBtn.addEventListener('click', function(e) {
-      e.stopPropagation();
-      if (REDUCED_MOTION || typeof gsap === 'undefined') { returnFromDm(); return; }
-      var main = document.getElementById('channel-main');
-      gsap.killTweensOf([dmBackBtn, main]);
-      var tl = gsap.timeline({ onComplete: function(){ returnFromDm(); } });
-      tl.to(dmBackBtn, { x: -22, opacity: 0, duration: 0.18, ease: 'power2.in' }, 0);
-      if (main) tl.to(main, { x: -28, autoAlpha: 0, duration: 0.24, ease: 'power2.in' }, 0);
-    });
-    dmBackBtn.addEventListener('mouseenter', function() {
-      if (REDUCED_MOTION || typeof gsap === 'undefined') return;
-      gsap.to(dmBackBtn, { x: -4, scale: 1.08, duration: 0.2, ease: 'power2.out' });
-    });
-    dmBackBtn.addEventListener('mouseleave', function() {
-      if (REDUCED_MOTION || typeof gsap === 'undefined') return;
-      gsap.to(dmBackBtn, { x: 0, scale: 1, duration: 0.2, ease: 'power2.out' });
-    });
-  }
 
   // ==================== CHIP 信用卡资料卡 ====================
   // 触发：侧栏底部 #user-avatar → openChipCard()
@@ -6848,6 +6437,7 @@
   }
 
   function openChipCard(userId){
+    if (isGuest()) { openAuthPanel('signup', '注册后即可编辑个人资料'); return; }
     if(!isLoggedIn()){ showLogin(); return; }
     if(!chipBuilt) chipBuildCard();
     var isSelf = !userId || (currentUser && userId === currentUser.id);
@@ -7011,6 +6601,7 @@
 
   /* 先关后存：退出按钮专用 — 立即关面板+存本地，API 后台静默跑 */
   function chipSaveAndClose(){
+    if (isGuest()) { openAuthPanel('signup', '注册后即可保存资料'); return; }
     var u = currentUser; if(!u){ chipCloseEdit(); return; }
     var nn = (chipEl('chip-ep-nickname').value||'').trim();
     var ttl = (chipEl('chip-ep-title') ? (chipEl('chip-ep-title').value||'').trim() : '');
@@ -7035,6 +6626,7 @@
   }
 
   function chipSaveEdit(){
+    if (isGuest()) { openAuthPanel('signup', '注册后即可编辑资料'); return; }
     var u = currentUser; if(!u) return;
     var nn = (chipEl('chip-ep-nickname').value||'').trim();
     if(!nn){ chipShowMsg('昵称不能为空','err'); chipEl('chip-ep-nickname').focus(); return; }
@@ -7062,6 +6654,7 @@
   }
 
   function chipOnAvatarChange(){
+    if (isGuest()) { openAuthPanel('signup', '注册后即可更换头像'); this.value=''; return; }
     var file = this.files && this.files[0]; if(!file) return;
     if(!file.type || !file.type.startsWith('image/')){ alert('请选择图片文件'); return; }
     if(file.size > 5*1024*1024){ alert('图片不能超过 5MB'); return; }
