@@ -539,9 +539,8 @@ async function listNotifications() {
 }
 
 async function unreadCount() {
-  // 私信(dm)未读只在好友列表显示，不计入顶部铃红点
   const { count, error } = await insforge.database
-    .from('notifications').select('*', { count: 'exact', head: true }).eq('is_read', false).neq('type', 'dm')
+    .from('notifications').select('*', { count: 'exact', head: true }).eq('is_read', false)
   if (error) return 0
   return count || 0
 }
@@ -553,13 +552,6 @@ async function markRead(id) {
 async function markAllRead() {
   await insforge.database.from('notifications').update({ is_read: true }).eq('is_read', false)
 }
-
-// ---------------------------------------------------------------------------
-// 社交：好友关系 / @提及提醒
-//   friends 表 RLS 已限定用户只能读写涉及自己的行（user_id/friend_id = auth.uid()）。
-//   3 个写 RPC（create/respond/remove）为 SECURITY DEFINER，当前用户身份由后端
-//   auth.uid() 取得，前端无需传 uid；friendsList 仅按 RLS 可见范围过滤即可。
-// ---------------------------------------------------------------------------
 
 // 取当前登录用户 id（复用 SDK 会话，与 getCurrentUser 同一来源）
 async function getCurrentUserId() {
@@ -578,101 +570,6 @@ async function notifyMentions({ messageId, authorId, channelId, content }) {
     p_message_id: messageId,
     p_author_id: authorId,
     p_channel_id: channelId,
-    p_content: content
-  })
-  if (error) throw error
-}
-
-// 好友列表：区分「我的好友(accepted)」与「待处理(pending)」。
-// 每条附带对方 profile（nickname/username/avatar_url）与 direction（in=别人加我 / out=我加别人）。
-async function friendsList() {
-  const me = await getCurrentUserId()
-  if (!me) return { friends: [], pending: [] }
-  // InsForge SDK 对 OR 条件支持不稳定，拆成两次 eq 查询再合并更可靠
-  const [outgoing, incoming] = await Promise.all([
-    insforge.database.from('friends').select('*').eq('user_id', me),
-    insforge.database.from('friends').select('*').eq('friend_id', me)
-  ]);
-  const rows = [...(outgoing.data || []), ...(incoming.data || [])]
-
-  // 关联 profiles 取对方资料（与现有 loadProfiles/getLikeAggregates 的 JS 侧 join 风格一致）
-  const otherIds = rows.map(function (r) { return r.user_id === me ? r.friend_id : r.user_id })
-  let profiles = {}
-  if (otherIds.length) {
-    const { data: pd, error: pe } = await insforge.database
-      .from('profiles').select('id, username, nickname, avatar_url')
-      .in('id', otherIds)
-    if (!pe && pd) pd.forEach(function (p) { profiles[p.id] = p })
-  }
-
-  const friends = []
-  const pending = []
-  rows.forEach(function (r) {
-    const direction = (r.friend_id === me) ? 'in' : 'out'
-    const otherId = (r.user_id === me) ? r.friend_id : r.user_id
-    const p = profiles[otherId] || { id: otherId, username: '未知', nickname: '未知用户', avatar_url: '' }
-    const entry = {
-      id: r.id,
-      status: r.status,
-      direction: direction,
-      other: {
-        id: p.id,
-        username: p.username || '',
-        nickname: p.nickname || p.username || '未知用户',
-        avatar_url: p.avatar_url || ''
-      }
-    }
-    if (r.status === 'accepted') friends.push(entry)
-    else pending.push(entry)
-  })
-  return { friends: friends, pending: pending }
-}
-
-// 发起好友申请（后端用 auth.uid() 作为发起方，RETURNS jsonb）
-async function friendRequest(friendId) {
-  const { data, error } = await insforge.database
-    .rpc('create_friend_request', { p_friend_id: friendId })
-  if (error) throw error
-  // 业务层可能返回 {ok:false,...}（重复申请/加自己/noauth），PostgREST 仍视为 200，
-  // 必须显式检查，否则前端会误判成功假弹“已发送”。
-  if (data && data.ok === false) throw new Error('好友申请失败：' + (data.error || 'unknown'))
-  return data
-}
-
-// 接受 / 拒绝好友申请（id 为 friends 行 id；action: 'accept' | 'reject'，RETURNS jsonb）
-async function friendRespond(id, action) {
-  const { data, error } = await insforge.database
-    .rpc('respond_friend_request', { p_friendship_id: id, p_action: action })
-  if (error) throw error
-  if (data && data.ok === false) throw new Error('操作失败：' + (data.error || 'unknown'))
-  return data
-}
-
-// 移除好友（双向删除，RETURNS jsonb）
-async function friendRemove(id) {
-  const { data, error } = await insforge.database
-    .rpc('remove_friend', { p_friend_id: id })
-  if (error) throw error
-  if (data && data.ok === false) throw new Error('移除失败：' + (data.error || 'unknown'))
-  return data
-}
-
-// ============ 私聊 DM ============
-// 开/取与某好友的私聊房间（前端只传好友 id，身份由后端 auth.uid() 取得；RETURNS jsonb）
-async function findOrCreateDm(friendId) {
-  const { data, error } = await insforge.database
-    .rpc('find_or_create_dm', { p_friend_id: friendId })
-  if (error) throw error
-  return data
-}
-
-// 私信到达时给对方写 dm 类型通知（顶部铃不冒红点，仅好友列表显示未读；RETURNS void）
-async function notifyDm({ messageId, authorId, channelId, friendId, content }) {
-  const { error } = await insforge.database.rpc('notify_dm', {
-    p_message_id: messageId,
-    p_author_id: authorId,
-    p_channel_id: channelId,
-    p_friend_id: friendId,
     p_content: content
   })
   if (error) throw error
@@ -1006,8 +903,7 @@ const IF = {
   sendResetPasswordEmail, exchangeResetPasswordToken, resetPassword,
   listChannels, getMessages, getReplyMessages, sendMessage, moderateMessage, deleteUserAsAdmin,
   listNotifications, unreadCount, markRead, markAllRead,
-  getCurrentUserId, notifyMentions, searchUsers, friendsList, friendRequest, friendRespond, friendRemove,
-  findOrCreateDm, notifyDm,
+  getCurrentUserId, notifyMentions, searchUsers,
   uploadFile, sendFileMessage,
   toggleLike, getLikeAggregates, forwardMessage,
   connectRealtime, unsubscribeChannel, disconnectRealtime, publishDelete,
