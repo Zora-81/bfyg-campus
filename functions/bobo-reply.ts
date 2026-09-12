@@ -188,13 +188,24 @@ export default async function (req) {
       }
     } catch (e) { /* 记忆失败不挡回复 */ }
 
+    // 6.5 身份记忆：直接拉这位同学的全部记忆（不做语义过滤，保证"我是谁"类问题能答上）
+    try {
+      const userMems = await restSelect("bobo_memories?select=content&scope=eq.user&user_id=eq." + authorId + "&order=updated_at.desc&limit=2").catch(() => []);
+      if (Array.isArray(userMems) && userMems.length) {
+        const memLine = userMems.map((m) => m.content).join('；');
+        contextText += '\n【你记得的关于这位同学的事：' + memLine + '】';
+      }
+    } catch (e) {}
+
     // 7. 深夜模式（Asia/Shanghai = UTC+8）
     const hour = (new Date().getUTCHours() + 8) % 24;
     const isDeep = hour >= 0 && hour < 6;
 
     // 8. 生成
     const sys = PERSONA + (isDeep ? DEEP_NIGHT : '') + (memoryText ? ('\n你记得的事：\n' + memoryText) : '');
-    const user = '最近频道里的对话：\n' + contextText + '\n\n刚收到 ' + (parentReply ? '评论' : '消息') + '：' + String(content).slice(0, 200) + '\n（以啵宝身份回一句，直接输出内容，不要引号不要前缀）';
+    const speakerMatch = contextText.match(/【正在跟你说话的人是：(.+?)】/);
+    const speakerName = speakerMatch ? speakerMatch[1] : '同学';
+    const user = '最近频道里的对话（"啵宝(你)"就是你自己说过的话）：' + '\n' + contextText + '\n\n现在' + (parentReply ? '在评论串里' : '') + '收到【' + speakerName + '】的' + (parentReply ? '评论' : '消息') + '：' + String(content).slice(0, 200) + '\n（以啵宝身份回一句。第一铁律：你正在跟【' + speakerName + '】说话——需要称呼TA时只准用这个名字，哪怕上下文出现过别的名字也绝不能用！第二：如果消息里问了具体问题，先回答问题本身。直接输出内容，不要引号不要前缀）';
     const ai = await aiChat([{ role: 'system', content: sys }, { role: 'user', content: user }], 140);
     if (!ai) return json({ ok: false, why: 'ai-down' }); // 全通道挂 → 静默
 
@@ -217,7 +228,7 @@ export default async function (req) {
     try {
       const cnt = await restSelect('bobo_reply_log?select=id&kind=eq.reply&order=created_at.desc&limit=3').catch(() => []);
       if (Array.isArray(cnt) && cnt.length >= 3) {
-        const memPrompt = '把下面这段校园对话提炼成一句不超过60字的"关于这位同学的记忆"，只记爱好/口头禅/常聊话题等无害人设信息，直接输出摘要：\n' + contextText.slice(-400) + '\n最新消息：' + content;
+        const memPrompt = '下面是啵宝和一位同学的对话。请提炼一句不超过60字的【关于这位同学本人的记忆】：TA的昵称、爱好、问过什么、聊过什么话题。绝对不要写啵宝自己的行为和口头禅！直接输出摘要：' + '\n' + contextText.slice(-500) + '\n这位同学的最新消息：' + content;
         const mem = await aiChat([{ role: 'system', content: memPrompt }], 80);
         if (mem && mem.text && mem.text.length <= 90) {
           const mv = await embed(mem.text);
