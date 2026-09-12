@@ -1,6 +1,6 @@
 # ⚡ 宝丰一高校园频道 — 沉浸式校园社交平台
 
-> 一个属于宝丰一高师生的实时数字校园：登录页动漫流星雨、QQ 频道风格聊天、后台管理，不只是聊天，更是校园生活的在线入口。
+> 一个属于宝丰一高师生的实时数字校园：登录页影片式 GSAP 开场 + HERO 滚动首屏、QQ 频道风格聊天、后台管理，不只是聊天，更是校园生活的在线入口。
 
 🌐 **在线预览**：[https://bfgzlt.cc.cd](https://bfgzlt.cc.cd)
 
@@ -30,7 +30,10 @@
 ```
 ├── html/
 │   ├── index.html            # 主页面（登录 + 频道聊天）
-│   └── admin.html            # 后台管理
+│   ├── admin.html            # 后台管理
+│   ├── memory-tree.html      # 记忆树
+│   ├── nav-demos.html 等     # 演示/工具页
+│   └── archive/              # 历史版本页（v52~v72，已归档，不参与构建部署）
 ├── css/
 │   ├── style.css             # 主样式
 │   └── admin.css             # 后台样式
@@ -38,22 +41,23 @@
 │   ├── app.js                # 主逻辑（聊天/认证/轮播/通知）
 │   ├── admin.js              # 后台管理逻辑
 │   ├── if-client.js          # InsForge SDK 封装（Auth/DB/Storage/Realtime）
-│   ├── shooting-stars.js     # 登录页流星雨动画
+│   ├── hero.js               # 登录页 GSAP 开场 + HERO 滚动首屏
 │   └── main-bg.js            # 聊天背景漂浮光点
 ├── images/                   # 校徽、校园照片、图标
+├── functions/                # Cloudflare Pages Functions（.ts 源码，构建时拷入 web_build/）
 ├── server/                   # Express + Socket.io + SQLite 服务
 │   ├── index.js              # 服务入口
 │   ├── db.js                 # SQLite 封装
-│   ├── seed-auto.js          # 初始化数据
-│   ├── middleware/auth.js    # JWT 鉴权
-│   └── routes/               # REST API 路由
+│   └── seed-auto.js          # 初始化数据
 ├── worker/                   # Cloudflare Worker 反代
 │   ├── index.js
 │   └── wrangler.toml
+├── scripts/                  # 本地小工具（Playwright 冒烟脚本、截图读取）
 ├── _build.mjs                # 前端构建脚本
 ├── deploy.sh / deploy.bat    # 一键部署脚本
 └── docs/
     ├── plans/                # 进行中/待实现的设计方案
+    ├── reports/              # 验证报告
     └── archive/              # 过期文档与调研产物
 ```
 
@@ -90,6 +94,7 @@ cd worker && wrangler deploy
 ## 设计/规划文档
 
 - 进行中方案：`docs/plans/`
+- 验证报告：`docs/reports/`
 - 过期归档：`docs/archive/`
 
 ## 许可证
