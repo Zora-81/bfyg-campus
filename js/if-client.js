@@ -81,6 +81,12 @@ function resolveAuthor(authorId) {
   return { id: authorId, username: '未知', nickname: '未知用户', avatar_url: '', title: '' }
 }
 
+// 游客预热 profiles 缓存（v1.8.7）：游客 RLS 允许读 profiles，未登录时不调 loadProfiles
+// 会导致整屏「未知用户」+ 无头像。失败静默（resolveAuthor 有兜底占位，不会崩）。
+async function warmProfiles() {
+  return withTimeout(loadProfiles(), 8000).catch(function () { return profileCache })
+}
+
 function adaptUser(user) {
   const p = profileCache[user.id] || {}
   const base = (user.email || '').split('@')[0] || 'user'
@@ -898,7 +904,7 @@ async function publishRecall(channelId, id, recalledBy) {
 // ---------------------------------------------------------------------------
 const IF = {
   insforge,
-  loadProfiles, resolveAuthor, adaptUser, ensureProfile, completePendingProfile, updateMyProfile,
+  loadProfiles, warmProfiles, resolveAuthor, adaptUser, ensureProfile, completePendingProfile, updateMyProfile,
   signIn, signUp, signOut, getCurrentUser, verifyEmail, resendVerification,
   sendResetPasswordEmail, exchangeResetPasswordToken, resetPassword,
   listChannels, getMessages, getReplyMessages, sendMessage, moderateMessage, deleteUserAsAdmin,

@@ -2334,127 +2334,273 @@ body[data-theme="custom"] #main-bg::after {
 .mailbox-icon { width:22px; height:16px; display:block; overflow:visible; }
 .mailbox-icon .mb-flap {
   transform-origin:50% 30%;
-  transition:transform .5s cubic-bezier(.2,.8,.3,1.1);
+  transition:transform .26s cubic-bezier(.2,.8,.3,1.2);  /* 快掀：盖先动，信后出 */
 }
 .mailbox-icon .mb-seal {
   transform-origin:50% 50%;
-  transition:transform .4s ease, opacity .3s ease;
+  transition:transform .3s ease, opacity .22s ease;
 }
 /* 悬停：信封盖轻抬（暗示"可以打开"）*/
-.mailbox-btn:hover .mailbox-icon .mb-flap { transform:rotateX(18deg); }
-/* 打开态：信封盖完全掀开 + 蜡封下沉淡出 */
-.mailbox-btn[aria-expanded="true"] .mailbox-icon .mb-flap { transform:rotateX(38deg); }
+.mailbox-btn:hover .mailbox-icon .mb-flap { transform:rotateX(24deg); }
+/* 打开态：信封盖完全掀开 + 蜡封消失（信已拆） */
+.mailbox-btn[aria-expanded="true"] .mailbox-icon .mb-flap { transform:rotateX(75deg); }
 .mailbox-btn[aria-expanded="true"] .mailbox-icon .mb-seal {
-  transform:translateY(3px) scale(.9); opacity:.85;
+  transform:translateY(3px) scale(.6); opacity:0;
+}
+/* 信被抽出的瞬间：信封被"顶"得一颤（手绘弹性 pop） */
+@keyframes mailbox-pop {
+  0%   { transform:scale(1); }
+  30%  { transform:scale(1.2) rotate(-5deg); }
+  60%  { transform:scale(.94) rotate(2.5deg); }
+  100% { transform:scale(1); }
+}
+.mailbox-btn[aria-expanded="true"] .mailbox-icon {
+  animation:mailbox-pop .55s cubic-bezier(.2,.8,.3,1.1);
+  transform-origin:50% 60%;
 }
 
-/* ── 信件本体 ── */
+/* ── 信件本体 ──
+   真拆信结构：mailbox-mouth（信封口袋，永远压在最上层）+ mailbox-paper-slot
+   （裁剪窗口，高度从 0 长到满）+ 信纸本体（在 slot 里向上滑）。
+   "拆开"= 纸从口袋后面一点点被拉出来，口袋始终遮着纸的上缘。 */
 .mailbox-letter {
   transform-origin:50% 0%;
+  width:360px;
   padding:0;
-  background:transparent;      /* 纸面由内层承载，便于做不规则手绘边 */
+  background:transparent;
   border:none;
   box-shadow:none;
   overflow:visible;
-  z-index:160;                 /* 高于侧栏/热门话题，避免内容透出 */
+  z-index:160;
+}
+/* 抽出舞台：上方留口袋的高度 */
+.mailbox-extract {
+  position:relative;
+  padding-top:44px;            /* 口袋露出区 */
+}
+/* 信封口袋：压在信纸上层（z-index 高于纸），固定不动 */
+.mailbox-mouth {
+  position:absolute; top:-6px; left:50%;
+  transform:translateX(-50%);
+  width:200px; height:70px;
+  z-index:5;
+  pointer-events:none;
+  filter:drop-shadow(0 3px 6px rgba(0,0,0,.35));
+}
+.mailbox-mouth-art { width:100%; height:100%; display:block; }
+/* 拆开后：口袋上的蜡封消失（信已开封）；过渡时长与抽出动画同步 */
+.mailbox-mouth-art .mb2-wax {
+  transition:opacity .3s ease .25s, transform .3s ease .25s;
+  transform-origin:80px 54px;
+}
+.mailbox-letter[aria-expanded="true"] .mailbox-mouth-art .mb2-wax,
+.mailbox-open .mailbox-mouth-art .mb2-wax {
+  opacity:0; transform:scale(.5);
+}
+/* 裁剪窗口：高度揭示 = 抽出量 */
+.mailbox-paper-slot {
+  position:relative;
+  z-index:1;
+  overflow:hidden;             /* 关键：纸露出的部分之外全部裁掉 */
+  border-radius:3px 6px 5px 4px;
+  /* 撑起投影：纸在 slot 里，slot 本身不带投影，投影由纸内层补 */
+}
+/* 信纸本体：默认 translateY(-60%) 藏在口袋后，动画拉到 0 */
+.mailbox-paper-slot .mailbox-letter-paper {
+  will-change:transform;
+  box-shadow:
+    0 1px 0 rgba(255,255,255,.5) inset,
+    0 18px 44px rgba(0,0,0,.5),
+    0 2px 6px rgba(0,0,0,.3);
 }
 .mailbox-letter-paper {
   position:relative;
   display:flex; flex-direction:column;
-  max-height:420px;
-  padding:2px 0 0;
-  /* 信纸必须不透明：starry/classroom 主题的 --bg-elevated 是半透明玻璃色，
-     单用会让下方侧栏内容透出。此处用实心底色 + 主题色叠加。 */
-  background-color:var(--bg-base);
-  background-image:linear-gradient(var(--bg-elevated), var(--bg-elevated));
-  isolation:isolate;           /* 建立独立层叠上下文，防止内容透出 */
-  border:1px solid var(--border);
-  border-radius:var(--r-md);
-  box-shadow:0 12px 40px rgba(0,0,0,0.42);
+  max-height:460px;
+  padding:18px 20px 14px;
+  /* 真纸：米黄底 + 上缘微亮的日光感 */
+  background-color:#f5edd8;
+  background-image:linear-gradient(180deg, #faf4e4 0%, #f5edd8 55%, #efe4c8 100%);
+  color:#3a3226;
+  isolation:isolate;
+  border:none;
+  border-radius:3px 6px 5px 4px;   /* 纸边几乎不圆，手裁感 */
   overflow:hidden;
 }
-/* 顶部胶带：手绘感（仅浅色纸主题显露色彩） */
+/* 纸张横纹（细密纤维感） */
 .mailbox-letter-paper::before {
   content:'';
-  position:absolute; top:-6px; left:50%;
-  width:74px; height:16px;
-  transform:translateX(-50%) rotate(-2.5deg);
-  background:rgba(255,214,90,0.30);
-  border-left:1px dashed rgba(31,27,22,0.10);
-  border-right:1px dashed rgba(31,27,22,0.10);
+  position:absolute; inset:0;
+  background:repeating-linear-gradient(0deg, rgba(120,95,50,.028) 0 1px, transparent 1px 3px);
   pointer-events:none;
+  z-index:0;
 }
+/* 底部旧化阴影 */
+.mailbox-letter-paper::after {
+  content:'';
+  position:absolute; left:0; right:0; bottom:0; height:46px;
+  background:linear-gradient(180deg, transparent, rgba(120,90,40,.09));
+  pointer-events:none;
+  z-index:0;
+}
+.mailbox-letter-paper > * { position:relative; z-index:1; }
+
+/* ── 邮票：贴在信纸右上角（随纸一起被抽出） ── */
+.mailbox-stamp {
+  position:absolute; top:8px; right:10px; z-index:3;
+  transform:rotate(4deg);
+  pointer-events:none;
+  filter:drop-shadow(1px 2px 2px rgba(60,40,10,.28));
+}
+.mailbox-stamp-inner {
+  display:flex; flex-direction:column; align-items:center;
+  padding:4px 4px 3px;
+  /* 邮票锯齿边：径向冲孔 */
+  background:
+    radial-gradient(circle at 50% 0%,   transparent 2.2px, #fffdf4 2.4px) top    left  / 8px 8px,
+    radial-gradient(circle at 50% 0%,   transparent 2.2px, #fffdf4 2.4px) top    right / 8px 8px,
+    radial-gradient(circle at 50% 100%, transparent 2.2px, #fffdf4 2.4px) bottom left  / 8px 8px,
+    radial-gradient(circle at 50% 100%, transparent 2.2px, #fffdf4 2.4px) bottom right / 8px 8px,
+    radial-gradient(circle at 0%   50%, transparent 2.2px, #fffdf4 2.4px) top    left  / 8px 8px repeat-y,
+    radial-gradient(circle at 100% 50%, transparent 2.2px, #fffdf4 2.4px) top    right / 8px 8px repeat-y,
+    radial-gradient(circle at 0%   50%, transparent 2.2px, #fffdf4 2.4px) bottom left  / 8px 8px repeat-y,
+    radial-gradient(circle at 100% 50%, transparent 2.2px, #fffdf4 2.4px) bottom right / 8px 8px repeat-y,
+    #fffdf4;
+  background-repeat:no-repeat;
+}
+.mailbox-stamp-art { width:40px; height:28px; display:block; }
+.mailbox-stamp-val { font-size:.52rem; font-weight:800; color:#8a6d3b; letter-spacing:.1em; }
+
+/* ── 信箱标题行（纸上是手写小标 + 圆珠笔链接）；右侧让位给邮票 ── */
 .mailbox-letter-head {
   display:flex; align-items:center; justify-content:space-between;
-  padding:12px 16px 10px;
-  border-bottom:1px dashed var(--border);
+  padding:0 64px 6px 0;        /* 右侧 64px 留给骑边的邮票，不再压住"全部已读" */
+  border-bottom:2px solid rgba(140,110,60,.25);
   flex-shrink:0;
-  background:inherit;          /* 不透明，避免下方侧栏内容透出 */
-  border-radius:var(--r-md) var(--r-md) 0 0;
 }
 .mailbox-letter-title {
-  font-weight:700; font-size:0.92rem; color:var(--text);
-  letter-spacing:0.02em;
+  font-family:var(--font-hand, "Kaiti SC","STKaiti","KaiTi",cursive);
+  font-weight:700; font-size:1.02rem; color:#4a3d28;
+  letter-spacing:.14em;
+}
+.notify-mark-all {
+  color:#a0502c;               /* 红蓝铅笔的蓝红 */
+}
+.mailbox-letter .notify-mark-all:hover { text-decoration:underline; }
+
+/* ── 称呼 / 落款 / 日期：手写信语气（墨蓝色钢笔字） ── */
+.mailbox-salutation, .mailbox-signoff, .mailbox-date {
+  font-family:var(--font-hand, "Kaiti SC","STKaiti","KaiTi",cursive);
+  color:#4a4030;
+  flex-shrink:0;
+}
+.mailbox-salutation {
+  position:relative;
+  margin:10px 0 12px;
+  font-size:1.05rem;
+  letter-spacing:.1em;
+  align-self:flex-start;        /* 收窄成内容宽，波浪线只划在字下 */
+  padding:0 2px 6px;
+}
+/* 称呼下的手绘波浪线（钢笔一笔） */
+.mailbox-salutation::after {
+  content:'';
+  position:absolute; left:0; right:0; bottom:0; height:5px;
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='5' viewBox='0 0 120 5'%3E%3Cpath d='M0 2.6 Q10 0.8 20 2.8 T40 2.4 T60 3 T80 2.3 T100 2.9 T120 2.5' fill='none' stroke='%235d7ba8' stroke-width='1.4' opacity='.8'/%3E%3C/svg%3E") repeat-x left center/120px 5px;
+  pointer-events:none;
+}
+.mailbox-signoff {
+  margin:10px 4px 0;
+  text-align:right;
+  font-size:.95rem;
+  color:#5a4c36;
+}
+.mailbox-date {
+  margin:2px 4px 0;
+  text-align:right;
+  font-size:.78rem;
+  color:#8a7a58;
 }
 
-/* ── 信件内的通知条目：便签纸条 ── */
+/* ── 通知条目：两行布局（标题行 + 预览行），横线画在每行底边（随内容滚动） ── */
+.mailbox-letter .notify-list {
+  padding:2px 2px 4px;
+  overflow-y:auto;
+  scrollbar-width:thin;
+  scrollbar-color:rgba(140,110,60,.35) transparent;
+}
 .mailbox-letter .notify-item {
   position:relative;
-  margin:6px 10px;
-  padding:9px 12px;
-  border:1.5px dashed var(--border);
-  border-radius:13px 15px 11px 16px;
-  background:var(--bg-surface);
-  transition:transform var(--t), box-shadow var(--t), background var(--t), border-color var(--t);
+  display:block;
+  margin:0; padding:3px 6px 8px;
+  border:none; border-radius:6px;
+  background:transparent;
+  cursor:pointer;
+  transition:background var(--t);
 }
-.mailbox-letter .notify-item:hover {
-  transform:translateY(-2px) rotate(-0.25deg);
-  box-shadow:2px 4px 0 rgba(0,0,0,0.16);
-  background:var(--bg-hover);
+/* 每行自己的手绘横线（SVG 波浪，随内容一起滚动） */
+.mailbox-letter .notify-item::after {
+  content:'';
+  position:absolute; left:2px; right:2px; bottom:2px; height:4px;
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='4' viewBox='0 0 120 4'%3E%3Cpath d='M0 2.4 Q7.5 0.6 15 2.4 T30 2.4 T45 2.4 T60 2.4 T75 2.4 T90 2.4 T105 2.4 T120 2.4' fill='none' stroke='%23a3865a' stroke-width='1.1' opacity='.55'/%3E%3C/svg%3E") repeat-x left center/120px 4px;
+  pointer-events:none;
 }
-.mailbox-letter .notify-item.unread {
-  border-color:var(--accent);
-  background:var(--accent-soft);
+.mailbox-letter .notify-item:hover { background:rgba(160,120,50,.10); transform:none; box-shadow:none; }
+.mailbox-letter .notify-item.unread .notify-title { font-weight:800; color:#2f2418; }
+/* 未读 = 手绘红蜡封点 */
+.mailbox-letter .notify-item.unread::before {
+  content:'';
+  position:absolute; left:-2px; top:9px;
+  width:8px; height:7px;
+  border-radius:46% 54% 50% 48%;
+  background:radial-gradient(circle at 35% 30%, #ef6b4a, #c0331b);
+  box-shadow:0 1px 2px rgba(140,30,10,.4);
+  z-index:2;
 }
-.mailbox-letter .notify-list { padding:6px 0 8px; }
+/* 已读 = 铅笔划掉：标题一道歪斜手绘横线（像批改完划掉一封） */
+.mailbox-letter .notify-item:not(.unread) .notify-title {
+  position:relative;
+  color:#8a7a58;               /* 墨色褪掉 */
+  font-weight:600;
+}
+.mailbox-letter .notify-item:not(.unread) .notify-title::after {
+  content:'';
+  position:absolute; left:8px; right:-2px; top:52%; height:5px;
+  transform:rotate(-.8deg);
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='5' viewBox='0 0 120 5'%3E%3Cpath d='M0 2.8 Q10 1 20 3.1 T40 2.6 T60 3.2 T80 2.5 T100 3.1 T120 2.7' fill='none' stroke='%236b5a3e' stroke-width='1.3' opacity='.75'/%3E%3C/svg%3E") repeat-x left center/120px 5px;
+  pointer-events:none;
+}
+.mailbox-letter .notify-item:not(.unread) .notify-preview { color:#a09272; opacity:.85; }
+.mailbox-letter .notify-item .notify-body { display:block; }
+.mailbox-letter .notify-item .notify-title {
+  display:block;
+  font-size:.86rem; color:#3a3226; line-height:1.45;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  padding-left:10px;           /* 给蜡封点让位 */
+}
+.mailbox-letter .notify-item .notify-preview {
+  display:block;
+  font-size:.78rem; color:#7a6a4c; line-height:1.5;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  padding-left:10px;
+}
+/* 悬停：行底浮现铅笔色实线（可点的暗示，代替方形色块） */
+.mailbox-letter .notify-item:hover::after {
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='4' viewBox='0 0 120 4'%3E%3Cpath d='M0 2.4 Q7.5 0.6 15 2.4 T30 2.4 T45 2.4 T60 2.4 T75 2.4 T90 2.4 T105 2.4 T120 2.4' fill='none' stroke='%23a0502c' stroke-width='1.5' opacity='.9'/%3E%3C/svg%3E") repeat-x left center/120px 4px;
+}
+.mailbox-letter .notify-icon { display:none; }
+.mailbox-letter .notify-empty {
+  padding:18px 8px; text-align:center;
+  font-family:var(--font-hand, "Kaiti SC","STKaiti","KaiTi",cursive);
+  color:#8a7a58; font-size:.9rem;
+}
 
-/* ── 浅色「校园手稿」主题：纸张 + 手写字 + 铅笔阴影 ── */
-[data-theme="light"] .mailbox-letter-paper {
-  background-color:var(--paper-card, #FFFDF7);
-  background-image:none;
-  border:1.5px dashed rgba(31,27,22,0.22);
-  border-radius:14px 16px 12px 18px;
-  box-shadow:2px 4px 0 rgba(31,27,22,0.08);
-}
-[data-theme="light"] .mailbox-letter-head { border-bottom-color:rgba(31,27,22,0.14); }
-[data-theme="light"] .mailbox-letter-title {
-  font-family:var(--font-hand, inherit);
-  color:var(--ink, #1F1B16);
-}
-[data-theme="light"] .mailbox-letter .notify-item {
-  background:#FFFDF7;
-  border:1.5px dashed rgba(31,27,22,0.18);
-  border-radius:12px 14px 10px 16px;
-  box-shadow:2px 3px 0 rgba(31,27,22,0.06);
-  color:var(--ink, #1F1B16);
-}
-[data-theme="light"] .mailbox-letter .notify-item:hover {
-  background:#F5F0E4;
-  border-color:rgba(31,27,22,0.28);
-  box-shadow:2px 5px 0 rgba(31,27,22,0.08);
-}
-[data-theme="light"] .mailbox-letter .notify-item.unread {
-  border-color:var(--accent);
-  background:rgba(124,92,252,0.06);
-}
-
-/* ── 星空主题：玻璃质感 ── */
+/* ── 星空主题：纸在深空里更亮一点，投影更重（悬浮感） ── */
 [data-theme="starry"] .mailbox-letter-paper {
-  /* 玻璃质感但保持不透明：底色用 --bg-base 兜底 */
-  background-color:var(--bg-deeper, #0f1226);
-  background-image:linear-gradient(var(--bg-elevated), var(--bg-elevated));
-  backdrop-filter:blur(18px) saturate(1.3);
-  -webkit-backdrop-filter:blur(18px) saturate(1.3);
+  box-shadow:
+    0 1px 0 rgba(255,255,255,.55) inset,
+    0 24px 60px rgba(0,0,0,.62),
+    0 0 40px rgba(120,140,255,.10);
 }
 
 /* ── 移动端 ── */
@@ -4405,28 +4551,23 @@ body { --channel-hue: 265; }
   .msg-group.msg-continuation .msg-feed-meta { display: none !important; }
   .msg-group.msg-continuation .msg-feed-body { grid-column: 2 !important; grid-row: 1 !important; }
 }
-/* 移动端（flex 结构）：头像直接收起、内容不缩进（替换旧 82px 缩进方案） */
-.msg-group.msg-continuation { padding-left: 0 !important; }
+/* 移动端（flex 结构）：头像收起、内容与普通消息通栏起点对齐。
+   v1.8.7 修正：移动端普通消息正文起点 = .messages-area > * 的 16px（头像在标题行内，正文不缩进）；
+   连发此前 padding-left 被清 0，正文顶到最左、比普通消息凸出 16px（390px 视口实测 baseX=16 vs contX=4）。
+   与桌面端"缩进到正文列"不同——移动端对齐目标就是 16px 通栏。 */
+.msg-group.msg-continuation { padding-left: 16px !important; }
 .msg-group.msg-continuation .msg-feed-left { display: none !important; }
 
-/* 啵宝动态迷你头像：SVG铺满头像圆框（主feed + 评论串通用） */
+/* 啵宝动态迷你头像：SVG铺满头像圆框（主feed + 评论串通用）。
+   圆框 + 细描边让主feed/评论串两处视觉一致（评论原本是手绘圆角方块底）。 */
 .bobo-avatar-host { background:transparent !important; }
 .bobo-avatar-host .bobo-mini-avatar { width:100%; height:100%; display:block; border-radius:inherit; }
+.msg-comment-avatar.bobo-avatar-host { border-radius:50%; box-shadow:0 0 0 1.5px rgba(34,211,238,.35); }
 
 
 /* ═══════════════════════════════════════════════════════════
-   v1.6.7 星空收尾三件：地平线辉光/热榜合并角标/bot 视觉降权
+   v1.6.7 星空收尾两件：地平线辉光/bot 视觉降权
    ═══════════════════════════════════════════════════════════ */
-
-/* ── 热榜合并角标：×N ── */
-.hot-dup-badge {
-  display:inline-block; margin-left:6px; padding:0 5px;
-  border-radius:8px; font-size:0.62rem; font-weight:700; line-height:14px;
-  color:hsla(var(--channel-hue,265),80%,72%,0.95);
-  background:hsla(var(--channel-hue,265),70%,55%,0.14);
-  vertical-align:1px;
-}
-[data-theme="light"] .hot-dup-badge { color:hsl(var(--channel-hue,265),65%,38%); background:hsla(var(--channel-hue,265),60%,50%,0.10); }
 
 /* ── bot 视觉降权（#3）：啵宝消息卡在"场"但不抢戏 ──
    极淡的频道色底 + 头像一圈微呼吸光。不遮内容、不动布局。 */

@@ -19,7 +19,7 @@
 
     (function(){
 
-      var v = '1.8.0';
+      var v = '1.8.7';
 
       // 暴露版本号全局：__APP_VERSION 供设置面板；window.v 供 app.js 记忆树版本读取（根治兜底串漏 bump）
       window.__APP_VERSION = v;
@@ -1430,23 +1430,113 @@
 
             <span class="notify-badge" id="notify-badge" style="display:none" role="status" aria-live="polite">0</span>
 
-            <!-- 信件本体：点击信箱后展开 -->
+            <!-- 信件本体：点击信箱后展开。真实拆信：信封口袋固定在上，信纸从口袋后面抽出（slot 高度揭示） -->
 
             <div class="notify-dropdown mailbox-letter" id="notify-dropdown" style="display:none" role="dialog" aria-label="信箱">
 
-              <div class="mailbox-letter-paper">
+              <div class="mailbox-extract">
 
-                <div class="mailbox-letter-head">
+                <div class="mailbox-mouth" aria-hidden="true">
 
-                  <span class="mailbox-letter-title">信箱</span>
+                  <svg viewBox="0 0 160 70" class="mailbox-mouth-art">
 
-                  <button class="notify-mark-all" id="notify-mark-all" type="button">全部已读</button>
+                    <defs>
+
+                      <linearGradient id="mb2-paper" x1="0" y1="0" x2="0" y2="1">
+
+                        <stop offset="0%" stop-color="#efe2c4"/>
+
+                        <stop offset="100%" stop-color="#ddcda6"/>
+
+                      </linearGradient>
+
+                      <linearGradient id="mb2-flap" x1="0" y1="1" x2="0" y2="0">
+
+                        <stop offset="0%" stop-color="#d8c5a0"/>
+
+                        <stop offset="100%" stop-color="#c9b48c"/>
+
+                      </linearGradient>
+
+                      <radialGradient id="mb2-wax" cx="40%" cy="35%" r="70%">
+
+                        <stop offset="0%" stop-color="#e87a50"/>
+
+                        <stop offset="50%" stop-color="#d45a32"/>
+
+                        <stop offset="100%" stop-color="#8a2815"/>
+
+                      </radialGradient>
+
+                    </defs>
+
+                    <!-- 掀开的盖（朝上竖起） -->
+
+                    <path d="M12 38 L80 6 L148 38 L148 44 L80 13 L12 44 Z" fill="url(#mb2-flap)" stroke="rgba(150,124,86,.45)" stroke-width="1"/>
+
+                    <!-- 口袋（信纸从它后面滑出） -->
+
+                    <rect x="6" y="36" width="148" height="32" rx="3" fill="url(#mb2-paper)" stroke="rgba(150,124,86,.5)" stroke-width="1"/>
+
+                    <path d="M8 38 L80 56 L152 38" fill="none" stroke="rgba(165,138,98,.5)" stroke-width="1.1"/>
+
+                    <!-- 蜡封（拆开后淡出） -->
+
+                    <ellipse class="mb2-wax" cx="80" cy="54" rx="7" ry="6.2" fill="url(#mb2-wax)" stroke="rgba(120,40,15,.5)" stroke-width=".8"/>
+
+                    <circle class="mb2-wax" cx="80" cy="54" r="3.6" fill="none" stroke="rgba(255,220,190,.45)" stroke-width="1"/>
+
+                  </svg>
 
                 </div>
 
-                <div class="notify-list" id="notify-list"><div class="notify-empty">暂无通知</div></div>
+                <div class="mailbox-paper-slot">
 
-              </div>
+                  <div class="mailbox-letter-paper">
+
+                    <div class="mailbox-stamp" aria-hidden="true">
+
+                      <div class="mailbox-stamp-inner">
+
+                        <svg viewBox="0 0 100 72" class="mailbox-stamp-art">
+
+                          <circle cx="50" cy="30" r="14" fill="#22d3ee"/>
+
+                          <circle cx="44" cy="27" r="3.2" fill="#0f1226"/>
+
+                          <circle cx="56" cy="27" r="3.2" fill="#0f1226"/>
+
+                          <path d="M42 34 Q50 40 58 34" fill="none" stroke="#0f1226" stroke-width="2.4" stroke-linecap="round"/>
+
+                        </svg>
+
+                        <span class="mailbox-stamp-val">8分</span>
+
+                      </div>
+
+                    </div>
+
+                    <div class="mailbox-letter-head">
+
+                      <span class="mailbox-letter-title">信箱</span>
+
+                      <button class="notify-mark-all" id="notify-mark-all" type="button">全部已读</button>
+
+                    </div>
+
+                    <p class="mailbox-salutation">亲爱的同学：</p>
+
+                    <div class="notify-list mailbox-lines" id="notify-list"><div class="notify-empty">暂无通知</div></div>
+
+                    <p class="mailbox-signoff">—— 啵宝，愿你今天也开心 (๑•̀ㅂ•́)و✧</p>
+
+                    <p class="mailbox-date" id="mailbox-date"></p>
+
+                  </div><!-- /mailbox-letter-paper -->
+
+                </div><!-- /mailbox-paper-slot -->
+
+              </div><!-- /mailbox-extract -->
 
             </div>
 

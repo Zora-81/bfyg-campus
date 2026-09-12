@@ -240,13 +240,13 @@
       onMessage: function (msg) {
         var uid = BoboBot._uid;
         if (uid && msg.author_id === uid) return;
-        // 主频道里 @啵宝（或"啵宝"开头）→ 啵宝以"评论该条消息"的方式回复（进评论串）
+        // 啵宝所有回复都进评论串：评论→回在原评论串；主频道根消息→以"评论该条消息"的方式回复，
+        // 主 feed 只留真人消息，不再被啵宝根消息刷屏 (v1.8.1)
         var text = String(msg.content || '');
-        var isAtBobo = text.indexOf('@啵宝') >= 0 || /^@?啵宝/.test(text.trim());
         fire(msg.channel_id + ':' + (msg.parent_id || ''), {
           messageId: msg.id, channelId: msg.channel_id,
           authorId: msg.author_id, content: text,
-          parentReply: msg.parent_id || (isAtBobo ? msg.id : null)
+          parentReply: msg.parent_id || msg.id
         });
       }
     };
@@ -1939,31 +1939,7 @@
       m._comments = cc;
     });
     allMsgs.sort(function(a, b){ return b._heat - a._heat; });
-
-    // v1.6.7：同标题+同频道去重合并——同一句话（如和啵宝的对话）不占两个坑位。
-    // 合并规则：title 相同且 channel 相同 → 取热度最高的一条为代表，讨论数相加，_dup 记合并数。
-    var merged = [];
-    var seenKey = {};
-    for (var mi = 0; mi < allMsgs.length; mi++) {
-      var mm = allMsgs[mi];
-      var mtitle = (function(){
-        var pv0 = hotPreviewOf(mm);
-        return pv0.title;
-      })();
-      var key = mm.channel_id + '|' + mtitle;
-      if (seenKey[key]) {
-        var rep = seenKey[key];       // 已存在的代表条目
-        rep._comments = (rep._comments || 0) + (mm._comments || 0);
-        rep._heat = (rep._heat || 0) + (mm._heat || 0);
-        rep._dup = (rep._dup || 1) + 1;
-        // 合并后热度可能反超：重排由下方 sort 处理
-        continue;
-      }
-      seenKey[key] = mm;
-      merged.push(mm);
-    }
-    merged.sort(function(a, b){ return b._heat - a._heat; });
-    return merged.slice(0, 7);
+    return allMsgs.slice(0, 7);
   }
 
   // 热门榜预览（v1.5.93）：text→截断标题；image→首图缩略图；file→类型角标+文件名
@@ -2029,7 +2005,7 @@
         (pv.thumb ? '<img class="hot-card-thumb" src="'+escapeHtml(pv.thumb)+'" alt="" loading="lazy" onerror="this.remove()">' : '')+
         (pv.chip ? '<span class="hot-card-chip">'+pv.chip+'</span>' : '')+
         '<div class="hot-card-body">'+
-          '<div class="hot-card-title">'+escapeHtml(title)+(msg._dup>1?'<span class="hot-dup-badge">×'+msg._dup+'</span>':'')+'</div>'+
+          '<div class="hot-card-title">'+escapeHtml(title)+'</div>'+
           '<div class="hot-card-meta">'+escapeHtml(chName)+' · '+cc+' 讨论</div>'+
           '<div class="hot-card-foot">'+
             '<span class="hot-card-time" data-ts="'+escapeHtml(msg.created_at||'')+'">'+escapeHtml(ageStr)+'</span>'+
@@ -3043,6 +3019,7 @@
         if (act === 'like') {
           // 真实点赞：写 message_likes 表（Flarum 范式），乐观更新 + 后台持久化
           if (!IF || !IF.toggleLike || !currentUser) return;
+          if (!requireAuth('点赞')) return; // v1.8.7：游客点赞 → 弹注册并中止（登录用户返回 true 放行）
           var lBtn = btn;
           var lIsLiked = !lBtn.classList.contains('liked');
           if (lIsLiked) lBtn.classList.add('liked'); else lBtn.classList.remove('liked');
@@ -3230,7 +3207,7 @@
     }
 
     return '<div class="msg-comment-item" data-comment-id="'+comment.id+'" data-depth="'+depth+'">'+
-      '<div class="msg-comment-avatar" style="background:'+color+'" title="查看资料" onclick="window.openChipCard(\''+escapeHtml(a.id)+'\');event.stopPropagation();">'+avatarInner+'</div>'+
+      '<div class="msg-comment-avatar'+(a.role==='ai'?' bobo-avatar-host':'')+'" style="background:'+(a.role==='ai'?'transparent':color)+'" title="查看资料" onclick="window.openChipCard(\''+escapeHtml(a.id)+'\');event.stopPropagation();">'+avatarInner+'</div>'+
       '<div class="msg-comment-body">'+
         '<div class="comment-name-row">'+nameHtml+'</div>'+
         '<div class="msg-comment-text">'+escapeHtml(text)+'</div>'+
@@ -3260,6 +3237,7 @@
       btn.addEventListener('click', function(e){
         e.stopPropagation();
         if (!currentUser || !IF || !IF.toggleLike) return;
+        if (!requireAuth('点赞')) return; // v1.8.7：游客评论点赞 → 弹注册并中止
         var msgId = btn.getAttribute('data-msg-id');
         var countEl = btn.parentElement.querySelector('.comment-like-count');
         var wasLiked = btn.classList.contains('liked');
@@ -3423,6 +3401,7 @@
   var forwardModal = null;
   function openForwardModal(msg) {
     if (!currentUser || !IF) return;
+    if (!requireAuth('转发')) return; // v1.8.7：游客转发 → 弹注册并中止
     closeForwardModal();
     var fAuthor = (IF ? IF.resolveAuthor(msg.author_id) : { nickname:'未知' });
     var fName = fAuthor.nickname || fAuthor.username || '未知';
@@ -4166,23 +4145,45 @@
     if (btnNotify) btnNotify.setAttribute('aria-expanded', expanded ? 'true' : 'false');
   }
 
-  // 信箱开启：信封盖掀开（CSS）+ 信件弹性缩进放大（GSAP，房屋惯例 back.out）
+  // 信箱开启：信封盖掀开（CSS）+ 信纸从信封后抽出（GSAP，拆信感）
   function openNotifDropdown() {
     if (!notifyDropdown || !notifyList) return;
     if (notifyOpen) { hideNotifDropdown(); return; }
     notifyOpen = true;
     setMailboxExpanded(true);
+    // 口袋蜡封淡出（CSS 钩子 .mailbox-open）
+    notifyDropdown.classList.add('mailbox-open');
     notifyDropdown.style.display = 'block';
     // 强制重置动画残留，避免卡在 opacity:0 不可见
     notifyDropdown.style.opacity = '1';
     notifyDropdown.style.transform = 'none';
     if (!REDUCED_MOTION && typeof gsap !== 'undefined') {
       gsap.killTweensOf(notifyDropdown);
-      // 丝滑缩进放大：以信件上缘为原点弹入，clearProps 防残留 transform
-      gsap.fromTo(notifyDropdown,
-        { opacity: 0, scale: 0.85, transformOrigin: '50% 0%' },
-        { opacity: 1, scale: 1, duration: 0.32, ease: 'back.out(1.7)', clearProps: 'transform' }
-      );
+      // 真拆信：口袋固定在上，纸从口袋后面被往下拉出来。
+      // 纸本身不动——slot（裁剪窗）高度 0→全高，露出的永远是纸的顶部（邮票/标题先出），
+      // 口袋（z 更高）始终压在纸的上缘，即"从口子里抽出来"。
+      var slot = notifyDropdown.querySelector('.mailbox-paper-slot');
+      var paper = notifyDropdown.querySelector('.mailbox-letter-paper');
+      gsap.set(notifyDropdown, { opacity: 1 });
+      if (slot && paper) {
+        var fullH = paper.offsetHeight;
+        var tl = gsap.timeline({
+          onComplete: function(){ gsap.set(slot, { clearProps: 'height' }); }
+        });
+        gsap.set(slot, { height: 10 });
+        // ① 纸边从口袋口冒头
+        tl.to(slot, { height: 64, duration: 0.16, ease: 'power2.out' })
+        // ② 匀速抽出（主体过程：邮票→标题→正文逐段露出）
+          .to(slot, { height: fullH, duration: 0.52, ease: 'power1.inOut' })
+        // ③ 抽到头：整封信轻微下沉落定
+          .fromTo(notifyDropdown, { y: -5 }, { y: 0, duration: 0.26, ease: 'power2.out' }, '-=0.2');
+      }
+    }
+    // 信纸日期（今天）
+    var dEl = document.getElementById('mailbox-date');
+    if (dEl) {
+      var d = new Date();
+      dEl.textContent = d.getFullYear() + '年' + (d.getMonth() + 1) + '月' + d.getDate() + '日';
     }
     loadNotifications();
   }
@@ -4268,20 +4269,31 @@
   }
 
 
-  // 关闭信箱：信封盖落下（CSS 由 aria-expanded 驱动）+ 信件缩回
+  // 关闭信箱：信纸塞回信封口袋（抽出动画倒放）
   function hideNotifDropdown() {
     if (!notifyDropdown || !notifyOpen) return;
     notifyOpen = false;
     setMailboxExpanded(false);
+    notifyDropdown.classList.remove('mailbox-open');
     if (REDUCED_MOTION || typeof gsap === 'undefined') {
       notifyDropdown.style.display = 'none';
       return;
     }
-    gsap.killTweensOf(notifyDropdown);
-    gsap.to(notifyDropdown, {
-      opacity: 0, scale: 0.92, transformOrigin: '50% 0%', duration: 0.16, ease: 'power2.in',
-      onComplete: function(){ notifyDropdown.style.display = 'none'; gsap.set(notifyDropdown, { clearProps: 'transform' }); }
-    });
+    var slot = notifyDropdown.querySelector('.mailbox-paper-slot');
+    var paper = notifyDropdown.querySelector('.mailbox-letter-paper');
+    gsap.killTweensOf([notifyDropdown, slot, paper]);
+    if (slot) {
+      // 塞回：裁剪窗缩回口袋口，纸被推回信封后面
+      gsap.to(slot, {
+        height: 10, duration: 0.28, ease: 'power2.in',
+        onComplete: function(){
+          notifyDropdown.style.display = 'none';
+          gsap.set(slot, { clearProps: 'height' });
+        }
+      });
+    } else {
+      notifyDropdown.style.display = 'none';
+    }
   }
 
   function markNotifRead(id) {
@@ -5691,6 +5703,16 @@
       var badge = document.getElementById('notify-badge');
       if (badge) badge.style.display = 'none';
       document.body.classList.add('guest-mode');
+      // v1.8.7：游客预热 profiles 缓存——否则 resolveAuthor 全部落「未知用户」占位，
+      // 整屏头像变绿色方块「未」、昵称全丢（游客 RLS 允许读 profiles，可以安全拉取）
+      if (IF && IF.warmProfiles) {
+        IF.warmProfiles().then(function () {
+          // 仅当消息已渲染过才重刷，避免与首次频道加载竞态（首次渲染时缓存大概率已就绪）
+          if (currentChannel && channelMessages[currentChannel.id] && channelMessages[currentChannel.id].length) {
+            renderMessages({ animate: false });
+          }
+        }).catch(function () {});
+      }
     } catch (e) {}
   }
   if (window.IF) initAuth();
@@ -6437,7 +6459,34 @@
   }
 
   function openChipCard(userId){
-    if (isGuest()) { openAuthPanel('signup', '注册后即可编辑个人资料'); return; }
+    // v1.8.7：游客点「别人的头像」→ 只读资料卡（浏览行为，不该拦）；
+    // 游客点「自己的头像」（侧栏底部 / 导航栏）→ 引导注册。
+    if (isGuest()) {
+      if (!userId || (currentUser && userId === currentUser.id)) {
+        openAuthPanel('signup', '注册后即可编辑个人资料');
+        return;
+      }
+      // 游客查看他人：走只读路径，但跳过需要登录态的异步 extras（card_skin 等可空）
+      if(!chipBuilt) chipBuildCard();
+      var apiG = window.IF || IF;
+      var cachedG = (apiG && apiG.resolveAuthor) ? apiG.resolveAuthor(userId) : null;
+      if (cachedG && cachedG.id && cachedG.username) {
+        chipShowCard(cachedG, true);
+      } else if (apiG && apiG.insforge) {
+        apiG.insforge.database.from('profiles')
+          .select('username, nickname, avatar_url, role, title, card_skin, signature, cvv')
+          .eq('id', userId).single()
+          .then(function(r){
+            var row = (r && r.data) ? r.data : null;
+            if (row) chipShowCard(Object.assign({ id: userId }, row), true);
+            else openAuthPanel('signup', '注册后即可查看更多资料');
+          })
+          .catch(function(){ openAuthPanel('signup', '注册后即可查看更多资料'); });
+      } else {
+        openAuthPanel('signup', '注册后即可查看更多资料');
+      }
+      return;
+    }
     if(!isLoggedIn()){ showLogin(); return; }
     if(!chipBuilt) chipBuildCard();
     var isSelf = !userId || (currentUser && userId === currentUser.id);
