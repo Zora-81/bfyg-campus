@@ -6,7 +6,9 @@ const ANON = Deno.env.get('ANON_KEY') || 'anon_a09338fe0bdb3e2a0797c92a73a8431dd
 const SERVICE = Deno.env.get('SERVICE_KEY') || Deno.env.get('INSFORGE_API_KEY') || '';
 const OR_KEY = Deno.env.get('BOBO_OPENROUTER_KEY') || '';
 
-const MODELS = ['minimax/minimax-m3:free', 'minimax/minimax-m2.7:free', 'nvidia/nemotron-3-super-120b-a12b:free', 'inclusionai/ling-3.0-flash-sante:free'];
+// v1.7.1 模型池重排：nex-n2.5-pro 实测智力最强(记忆/推理/共情全优)列首选；
+// nemotron-super 稳定次选；minimax 系三线；ling 四线兜底
+const MODELS = ['nex-agi/nex-n2.5-pro:free', 'nvidia/nemotron-3-super-120b-a12b:free', 'minimax/minimax-m3:free', 'inclusionai/ling-3.0-flash-sante:free'];
 const EMBED_MODEL = 'openai/text-embedding-3-small';
 
 const CORS = {
