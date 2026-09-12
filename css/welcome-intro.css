@@ -17,13 +17,17 @@
   --accent-hover: #FF2E40;
   --sketch-btn:   16px 5px 16px 5px / 5px 16px 5px 16px;
   --ink-shadow:   4px 4px 0 var(--ink);
-  --font-display: 'Noto Sans SC', 'Inter', system-ui, -apple-system, sans-serif;
+  --font-display: 'Inter', 'Noto Sans SC', system-ui, -apple-system, sans-serif;
   --font-body:    'Inter', 'Noto Sans SC', system-ui, sans-serif;
-  --font-hand:    'Caveat', 'Comic Sans MS', cursive;
+  /* 手写体改用本机中文字体：Caveat 只在这一处声明、且没有元素真正使用，
+     为它多打一次 Google Fonts 请求不划算（国内还常超时）。 */
+  --font-hand:    'Kaiti SC', 'STKaiti', 'KaiTi', 'LXGW WenKai', cursive;
+  /* 手账墨绿：替代原先散落的 #0ae448（亮绿在米黄纸上太跳），统一入口便于调色 */
+  --accent-green: #3E8E5A;
 
   /* 单页滚动容器：欢迎 + 登录同屏，向下滚动到登录（对齐 demo） */
   height: 100vh;
-  height: 100dvh;
+  height: 100svh;   /* 稳定视口：手机地址栏伸缩时高度不跳（v1.7.4） */
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
@@ -124,7 +128,17 @@ body:has(#view-login.active) #main-dots {
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  /* v1.7.4 兜底（生死线）：hero.js 里 .intro-overlay 的 display:none 只写在
+     introTL.onComplete 里，一旦 GSAP 加载失败 / hero.js 抛错 / 中途 break，
+     这层 z-index 9999 的全屏米黄就会永久盖住整站，用户什么都点不了。
+     这里给一条纯 CSS 定时兜底：6s 后无论 JS 怎样都强制撤掉遮罩。
+     JS 正常揭幕时会加 .intro-done 停掉该动画（避免 6s 时再写一次样式）。 */
+  animation: introFailSafe 0s linear 6s forwards;
 }
+@keyframes introFailSafe {
+  to { display: none; visibility: hidden; }
+}
+.intro-overlay.intro-done { animation: none; }
 .intro-mark {
   position: absolute;
   top: 32px;
@@ -192,7 +206,7 @@ body:has(#view-login.active) #main-dots {
 .intro-progress-line > i {
   position: absolute;
   inset: 0;
-  background: #0ae448;
+  background: var(--accent-green);
   transform: scaleX(0);
   transform-origin: left center;
 }
@@ -343,18 +357,64 @@ body:has(#view-login.active) #main-dots {
 .intro-corner.br { bottom: 24px; right: 24px; border-left:  none; border-top: none; }
 
 /* ===== HERO ===== */
-/* 流中全屏区块（单页滚动：hero 在第一屏） */
+/* 流中全屏区块（单页滚动：hero 在第一屏）
+   v1.7.4：高度收成 88svh，让下方登录卡露出一条边 —— 这是"本页还能往下滚"的
+   第一层暗示（第二层是底部 .scroll-hint 箭头）。满屏 100svh 时用户完全看不到
+   下面有内容，实测会以为欢迎页就是终点而直接关掉。 */
 .section--hero {
   position: relative;
   inset: auto;
   width: 100%;
-  min-height: 100vh;
-  min-height: 100dvh;
+  min-height: 88vh;
+  min-height: 88svh;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
   z-index: 1;
+}
+
+/* ===== 滚动提示（v1.7.4）：箭头 + 文案，点一下滚到登录 =====
+   之前 hero 里没有任何可点击/可发现的元素（welcome-enter 按钮已移除），
+   用户看到大标题后不知道要往下滑。这里是纯 CSS 呼吸动画，reduced-motion 下
+   由文件末尾的媒体查询关掉。 */
+.scroll-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 26px;
+  transform: translateX(-50%);
+  z-index: 4;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 18px 8px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: 11px;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  opacity: 0;               /* 由 hero.js 在 hero 入场尾声淡入 */
+  pointer-events: none;     /* 淡入前不挡点击 */
+  transition: color 0.2s ease;
+}
+.scroll-hint.is-in { opacity: 1; pointer-events: auto; }
+.scroll-hint:hover { color: var(--ink); }
+.scroll-hint .scroll-hint-text { white-space: nowrap; }
+.scroll-hint .scroll-hint-arrow {
+  width: 16px;
+  height: 16px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg);
+  animation: scrollHintBob 1.8s ease-in-out infinite;
+}
+@keyframes scrollHintBob {
+  0%, 100% { transform: rotate(45deg) translate(0, 0); opacity: 0.55; }
+  50%      { transform: rotate(45deg) translate(3px, 3px); opacity: 1; }
 }
 .hero-scene {
   position: absolute;
@@ -426,7 +486,19 @@ body:has(#view-login.active) #main-dots {
   margin: 0;
   user-select: none;
   will-change: auto;
+  font-variant-numeric: tabular-nums;
 }
+/* v1.7.4：字体加载完成前用 fallback、完成后切 Inter，字宽变化会整体重排；
+   标题被拆成 per-char 的 inline-block span 后，重排表现为"字母左右穿插/重叠"。
+   WELCOME / CAMPUS 全是等宽拉丁大写，直接给每个字符格一个固定 em 宽度，
+   字体怎么切都锁死位置（含空格格）。 */
+.hero-title .gsap-char {
+  display: inline-block;
+  width: 0.72em;
+  text-align: center;
+  margin-right: 0;
+}
+.hero-title .gsap-char[data-space="1"] { width: 0.34em; }
 .hero-title .row-1 {
   display: block;
   font-size: clamp(56px, 10vw, 150px);
@@ -437,7 +509,7 @@ body:has(#view-login.active) #main-dots {
 .hero-title .row-2 {
   display: block;
   font-size: clamp(40px, 8vw, 120px);
-  color: #0ae448;
+  color: var(--accent-green);
   margin-top: 0.06em;
   transform: translateY(0.12em);
   letter-spacing: 0.08em;
@@ -523,4 +595,28 @@ body:has(#view-login.active) #main-dots {
     font-size: 10px;
     top: 20px;
   }
+}
+
+/* ===== v1.7.4 减少动效：尊重系统设置 =====
+   hero.js 里也有对应分支（跳过 intro / 不建 idle tween）。这里补 CSS 侧：
+   关掉滚动提示的呼吸箭头、intro 的兜底动画保留（它是安全网，不是装饰）。
+   注意：style.css 里那条全局 reduced-motion 规则只覆盖 animation/transition，
+   管不到 GSAP 写的内联 transform，所以 JS 分支才是主力，这里是补漏。 */
+@media (prefers-reduced-motion: reduce) {
+  .scroll-hint .scroll-hint-arrow { animation: none; opacity: 0.8; }
+  .scroll-hint { transition: none; }
+  .cta-btn { transition: none; }
+  .cta-btn:hover { transform: rotate(-1.5deg); }
+}
+
+/* ===== v1.7.4 旧浏览器兜底：不支持 svh 时回退到 dvh/vh =====
+   上面 .section--hero 写的是 88svh；老 Safari(<15.4)/旧 Chrome 不认 svh，
+   整条 min-height 声明会被丢弃 → 回落到 88vh，高度仍然正确，无需处理。
+   这里只补 #view-login：它第二条是 100svh，老浏览器会回落到 100vh，同理安全。 */
+
+/* ===== 手机端补充 ===== */
+@media (max-width: 768px) {
+  /* 露出下一屏的边缘在手机上依然重要（甚至更重要：没有鼠标滚轮惯性提示） */
+  .section--hero { min-height: 84svh; }
+  .scroll-hint { bottom: 14px; font-size: 10px; letter-spacing: 0.2em; }
 }

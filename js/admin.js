@@ -1508,7 +1508,7 @@
     dbi.from('bobo_memories').select('id', { count: 'exact', head: true })
       .then(function (r) { var el = document.getElementById('bobo-stat-mem'); if (el) el.textContent = (r && r.count) || 0; }).catch(function () {});
     // 记忆列表
-    dbi.from('bobo_memories').select('scope,content,weight,updated_at').order('updated_at', { ascending: false }).limit(30).then(function (res) {
+    dbi.from('bobo_memories').select('id,scope,content,weight,updated_at').order('updated_at', { ascending: false }).limit(30).then(function (res) {
       var tb = document.getElementById('bobo-mem-tbody');
       if (!tb) return;
       tb.innerHTML = '';
@@ -1516,10 +1516,33 @@
       if (!rows.length) { tb.innerHTML = '<tr><td colspan="4" style="opacity:.6;padding:14px;">啵宝还没有记忆——同学们聊起来它就会记住啦</td></tr>'; return; }
       rows.forEach(function (m) {
         var tr = document.createElement('tr');
-        var scopeTxt = m.scope === 'user' ? '同学' : (m.scope === 'channel' ? '频道' : '全局');
-        tr.innerHTML = '<td>' + scopeTxt + '</td><td style="max-width:420px;">' + String(m.content).replace(/</g, '&lt;') + '</td><td>' + (Math.round(m.weight * 100) / 100) + '</td><td>' + new Date(m.updated_at).toLocaleString('zh-CN') + '</td>';
+        tr.style.borderBottom = '1px solid rgba(255,255,255,0.06)';
+        var scopeTxt = m.scope === 'user' ? '👤 同学' : (m.scope === 'channel' ? '💬 频道' : '🌐 全局');
+        var safeContent = String(m.content).replace(/</g, '&lt;');
+        var delBtn = '<button class="bobo-mem-del" data-id="' + m.id + '" title="删除这条记忆" style="margin-left:8px;background:none;border:1px solid rgba(239,68,68,0.4);color:#ef4444;border-radius:6px;padding:2px 8px;cursor:pointer;font-size:12px;">删除</button>';
+        tr.innerHTML = '<td>' + scopeTxt + '</td>' +
+          '<td style="max-width:460px;line-height:1.6;">🧠 ' + safeContent + delBtn + '</td>' +
+          '<td>' + (Math.round(m.weight * 100) / 100) + '</td>' +
+          '<td style="white-space:nowrap;">' + new Date(m.updated_at).toLocaleString('zh-CN') + '</td>';
         tb.appendChild(tr);
       });
+      // 删除按钮事件（事件委托）
+      if (!tb.dataset.delBound) {
+        tb.dataset.delBound = '1';
+        tb.addEventListener('click', function (e) {
+          var btn = e.target.closest('.bobo-mem-del');
+          if (!btn) return;
+          if (!confirm('确定删除这条记忆吗？啵宝会忘记这段内容。')) return;
+          var id = btn.getAttribute('data-id');
+          db().from('bobo_memories').delete().eq('id', id).then(function (res) {
+            if (res && res.error) throw res.error;
+            showToast('🧠 记忆已删除', 'success');
+            boboLoadData();
+          }).catch(function (err2) {
+            showToast('删除失败：' + ((err2 && err2.message) || '未知'), 'error');
+          });
+        });
+      }
     }).catch(function () {});
     // 回复日志
     dbi.from('bobo_reply_log').select('kind,ok,model,note,created_at').order('created_at', { ascending: false }).limit(50).then(function (res) {

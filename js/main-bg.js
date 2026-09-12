@@ -16,10 +16,20 @@
   var REDUCED = rmQuery && rmQuery.matches;
 
   var W, H, cx, cy;
+  // v1.7.2：resize 时需重建星层。星点存的是绝对像素，而 CSS 渐变是按百分比自适应的；
+  // 不重建会导致窗口改大/变窄后“星带”与“光带”逐渐分离（看起来就是银河位置跳变）。
+  var resizeTimer = null;
   function resize() {
     W = window.innerWidth; H = window.innerHeight;
     canvas.width  = W; canvas.height = H;
     cx = W / 2; cy = H / 2;
+    // 防抖重建：连续 resize 只在停止 180ms 后执行一次（避免拖拽窗口时每帧重建 1100 颗星）
+    if (resizeTimer) clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function () {
+      resizeTimer = null;
+      if (mode === 'starry') { buildStars(); buildMwStars(); }
+      if (REDUCED) drawStaticOnce();
+    }, 180);
   }
   resize();
   window.addEventListener("resize", resize);
@@ -102,12 +112,37 @@
     { rgb: '180,200,255', chance: 0.09 }, // 淡紫蓝
     { rgb: '255,214,170', chance: 0.05 }  // 暖橙（K/M 型星，冷暖对比）
   ];
-  // 银河带距离（v1.5.100）：与 CSS 115deg 银河带同轴，让 canvas 星点密度和底图长在同一条天上
-  function milkyWayDist(x, y) {
-    var nx = x / W, ny = y / H;             // 归一化
-    // 115deg 渐变的等值线法向 ≈ (cos25°, -sin25°)；轴过屏幕中心
-    var axis = Math.abs((nx - 0.5) * 0.906 + (ny - 0.5) * -0.423);
-    return Math.min(1, axis * 2.2);         // 0.45 屏宽内算"带区"
+
+  // ── 银河微星层 v2（纯星点版）：一条由微小暗星组成的淡淡星带 ──
+  // v1.7.x 的教训：CSS 渐变光带 = 假（平滑解析光 vs 真实的星密度）；
+  // 22 个星团 × 2500 颗 = 脏（密到成坨）。这版回到纯星点：
+  //   · 无 CSS 光带，银河完全由星点构成
+  //   · 均匀高斯散布（无星团），总量克制（≤900 颗）
+  //   · sigma 0.13 ≈ 垂直带宽 125px @1920，是"带"而不是"雾"
+  var MW_DIR = { x: -0.4226, y: 0.9063 };   // 沿带方向（右上 → 左下，与 CSS 115deg 同轴推导）
+  var MW_NRM = { x: 0.9063,  y: 0.4226 };   // 垂直带法向
+  var mwStars = [];
+  function buildMwStars() {
+    mwStars = [];
+    var SIGMA = 0.13;
+    var n = Math.round(Math.min(760, Math.max(420, (W * H) / 2600)));
+    for (var i = 0; i < n; i++) {
+      var t = rand(-0.85, 0.85);            // 沿轴位置（过屏幕中心）
+      var g = (Math.random() + Math.random() + Math.random() + Math.random() - 2) / 2; // 近高斯
+      var d = g * SIGMA;                     // 法向偏移
+      var x = (0.5 + t * MW_DIR.x + d * MW_NRM.x) * W;
+      var y = (0.5 + t * MW_DIR.y + d * MW_NRM.y) * H;
+      mwStars.push({
+        x: x, y: y,
+        // v1.8.9：0.30~0.65px + 低 alpha 会被抗锯齿稀释到不可见（实测带心均值仅 1.0/255）。
+        // 半径 ≥0.55px、alpha ≥0.38 才跨过感知阈值；数量下调保持克制。
+        size: rand(0.75, 1.40),
+        base: rand(0.50, 1.00) * (1 - Math.abs(g) * 0.30) * (Math.abs(g) < 0.5 ? 1.2 : 1),  // 带心亮、带缘暗
+        phase: rand(0, Math.PI * 2),
+        tw: rand(0.006, 0.016),
+        col: Math.random() < 0.72 ? '190,215,255' : '255,250,235'
+      });
+    }
   }
 
   function pickStarColor() {
@@ -143,17 +178,13 @@
       for (var i = 0; i < layer.count; i++) {
         var r = Math.pow(Math.random(), 0.75) * maxR;
         var ang = rand(0, Math.PI * 2);
-        // 银河带密度加权：带内(d<0.45)概率提升，带外 rejection 重采样
-        var gx = cx + r * Math.cos(ang), gy = cy + r * Math.sin(ang);
-        var mw = 1 - milkyWayDist(gx, gy); // 1=带心 0=带外
-        if (Math.random() > 0.35 + mw * 0.65) { i--; continue; }
         stars.push({
           x: cx + r * Math.cos(ang),
           y: cy + r * Math.sin(ang),
           r: r, ang: ang,
           layer: layer,
-          size:  rand(layer.size[0],  layer.size[1]) * (mw > 0.5 ? 1.12 : 1),
-          base:  Math.min(1, rand(layer.base[0],  layer.base[1]) * (mw > 0.5 ? 1.15 : 1)),
+          size:  rand(layer.size[0],  layer.size[1]),
+          base:  rand(layer.base[0],  layer.base[1]),
           phase: rand(0, Math.PI * 2),
           tw:    rand(layer.tw[0],    layer.tw[1]),
           col:   pickStarColor()
@@ -306,6 +337,17 @@
 
     // 极慢整体旋转（不同层带轻微差异由视差体现）
     rotation += 0.000045;
+    // 银河微星层：只闪烁不旋转，与主星层同一坐标基准（无自有视差，随 #bg-stack 一起动）
+    for (var w = 0; w < mwStars.length; w++) {
+      var ms = mwStars[w];
+      ms.phase += ms.tw;
+      var msa = ms.base * (0.7 + 0.3 * Math.sin(ms.phase));
+      if (msa <= 0.02) continue;
+      ctx.beginPath();
+      ctx.arc(ms.x, ms.y, ms.size, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(' + ms.col + ',' + msa.toFixed(3) + ')';
+      ctx.fill();
+    }
     for (var i = 0; i < stars.length; i++) {
       stars[i].phase += stars[i].tw;
       drawSpikeStar(stars[i], rotation, px, py);
@@ -342,7 +384,7 @@
   function currentTheme() { return document.body.dataset.theme || 'starry'; }
   function setMode(theme) {
     mode = (theme === 'starry') ? 'starry' : 'dots';
-    if (mode === 'starry') { buildStars(); meteors = []; sats = []; satTimer = 0; satNext = rand(600, 1800); }
+    if (mode === 'starry') { buildStars(); buildMwStars(); meteors = []; sats = []; satTimer = 0; satNext = rand(600, 1800); }
     else buildDots(theme === 'custom' ? 'starry' : theme);
   }
   // 供主题切换时调用，重建背景
@@ -354,6 +396,14 @@
   function drawStaticOnce() {
     ctx.clearRect(0, 0, W, H);
     if (mode === 'starry') {
+      // v1.7.5：静态帧同样绘制微星层（reduced-motion 用户也要能看到银河）
+      for (var w = 0; w < mwStars.length; w++) {
+        var ms0 = mwStars[w];
+        ctx.beginPath();
+        ctx.arc(ms0.x, ms0.y, ms0.size, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(' + ms0.col + ',' + ms0.base.toFixed(3) + ')';
+        ctx.fill();
+      }
       for (var i = 0; i < stars.length; i++) drawSpikeStar(stars[i], 0, 0, 0);
     } else {
       drawDots();
@@ -661,7 +711,9 @@
   var rmq = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)');
   if (rmq && rmq.matches) return;
 
-  var el = document.getElementById('main-bg');
+  // v1.7.3：只变换 #bg-stack 包装层。CSS 渐变层与 canvas 星层都在它里面，
+  // 共享同一个 transform → 两层银河同一个运动定律（v1.7.2 分别写两个元素的做法已废弃）。
+  var el = document.getElementById('bg-stack');
   if (!el) return;
 
   var mx = 0, my = 0;   // 鼠标目标（-1 ~ 1）
@@ -698,16 +750,20 @@
 
     // scale 缓升：放行/加载后 0.9s 内从 1.0 → 1.05，避免与 gsap 终态(1.0)跳变
     var ramp = releaseTs ? smooth((ts - releaseTs) / 900) : smooth(ts / 900);
-    var scale = 1 + 0.05 * ramp;
+    var scale = 1 + 0.02 * ramp; // v1.7.3：1.05→1.02，减少“呼吸”感
 
+    // v1.7.3：幅度大幅收窄。旧值±10/8px 漂移 + ±6/4px 视差，
+    // 叠加 scale 1.05 后整个背景存在感很强，用户感受就是“星空老在动”。
+    // 现在只保留极轻的呼吸感（±3px 漂移 + ±2px 视差）。
     var t = ts / 1000;
-    var dx = Math.sin(t * 0.05) * 10 + Math.sin(t * 0.021) * 6; // ~2min 双正弦漫游
-    var dy = Math.cos(t * 0.041) * 8;
-    px += (mx * 6 - px) * 0.04; // 视差 ±6px，lerp 平滑
-    py += (my * 4 - py) * 0.04;
+    var dx = Math.sin(t * 0.05) * 3 + Math.sin(t * 0.021) * 2; // ~2min 双正弦漫游
+    var dy = Math.cos(t * 0.041) * 2.4;
+    px += (mx * 2 - px) * 0.04; // 视差 ±2px，lerp 平滑
+    py += (my * 1.4 - py) * 0.04;
 
     el.style.transform = 'translate3d(' + (dx + px).toFixed(2) + 'px,' + (dy + py).toFixed(2) + 'px,0) scale(' + scale.toFixed(4) + ')';
   }
   requestAnimationFrame(loop);
+
   console.log('BgDrift — 星云漂移+鼠标视差已启用 (starry/custom, 30fps, scale 1.05 兜底)');
 })();

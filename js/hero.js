@@ -8,11 +8,99 @@
    ============================================================ */
 (function () {
   "use strict";
-  if (!window.gsap) return;
   if (window.__heroInited) return;
   window.__heroInited = true;
 
+  // v1.7.4：减少动效偏好。原文件完全没接这个开关（app.js 里有 REDUCED_MOTION，
+  // hero.js 漏了），系统开了"减少动效"的用户依然会看完整段 scramble + 揭幕。
+  var REDUCED = !!(window.matchMedia &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+
+  const $intro      = document.getElementById("intro");
+  const $introLines = document.querySelectorAll("#intro-title [data-line]");
+  const $introCount = document.getElementById("intro-count");
+  const $introBar   = document.getElementById("intro-bar-fill");
+  const $introFoot  = document.querySelector(".intro-foot");
+
+  const $logo = document.getElementById("logo");
+  const $row1 = document.getElementById("t-row-1");
+  const $row2 = document.getElementById("t-row-2");
+  const $sub  = document.getElementById("t-sub");
+  const $hint = document.getElementById("scroll-hint");
+  const $heroSection = document.getElementById("sec-hero");
+
+  // idle tween 池：后台/离屏时统一暂停（v1.7.4）
+  var idleTweens = [];
+  function pauseIdle() { idleTweens.forEach(function (t) { t && t.pause && t.pause(); }); }
+  function resumeIdle() { idleTweens.forEach(function (t) { t && t.resume && t.resume(); }); }
+
+  // ============================================================
+  // 兜底（v1.7.4 生死线）
+  // 原实现里 .intro-overlay 的 display:none 只写在 introTL.onComplete 内。
+  // 只要 GSAP 没加载 / 下面任一环节抛错 / 动画被别处 kill，这层 z-index:9999
+  // 的全屏米黄就会永久盖住整站 —— 用户什么都点不了，且没有任何提示。
+  // 现在：① 任何异常路径都会撤幕；② 5s 硬看门狗；③ CSS 里还有 6s 兜底动画。
+  // ============================================================
+  var introKilled = false;
+  function killIntro() {
+    if (introKilled || !$intro) return;
+    introKilled = true;
+    $intro.classList.add("intro-done");   // 停掉 CSS 兜底动画
+    $intro.style.display = "none";
+    $intro.setAttribute("aria-hidden", "true");
+  }
+
+  // 静态 hero 兜底：GSAP 缺失或动画失败时，把入场前被设成 opacity:0 的元素放出来
+  function showStaticHero() {
+    [$logo, $sub, $row1, $row2].forEach(function (el) {
+      if (!el) return;
+      el.style.opacity = "1";
+      el.style.transform = "none";
+    });
+    if ($hint) $hint.classList.add("is-in");
+  }
+
+  function showScrollHint() {
+    if ($hint) $hint.classList.add("is-in");
+  }
+
+  // 滚动提示点击 → 滚到登录卡（滚动容器是 #view-login，不是 window）
+  if ($hint) {
+    $hint.addEventListener("click", function () {
+      var $ml = document.getElementById("monster-login");
+      var scroller = document.getElementById("view-login");
+      if (!$ml) return;
+      try {
+        if (scroller) {
+          var top = $ml.getBoundingClientRect().top + scroller.scrollTop;
+          scroller.scrollTo({ top: top, behavior: REDUCED ? "auto" : "smooth" });
+        } else {
+          $ml.scrollIntoView({ behavior: REDUCED ? "auto" : "smooth", block: "start" });
+        }
+      } catch (e) {
+        if (scroller) scroller.scrollTop = $ml.offsetTop;
+      }
+    });
+  }
+
+  // GSAP 缺失：直接撤幕 + 静态 hero，绝不允许遮罩留在屏上
+  if (!window.gsap) { killIntro(); showStaticHero(); return; }
+
+  // 硬看门狗：5s 后无论动画状态如何，强制撤幕
+  setTimeout(killIntro, 5000);
+
   if (window.ScrollTrigger) gsap.registerPlugin(ScrollTrigger);
+
+  // 整体 try/catch：任何一步炸了也要把遮罩撤掉
+  try {
+    runHero();
+  } catch (err) {
+    console.error("[hero] 开场动画异常，已回退静态 hero:", err);
+    killIntro();
+    showStaticHero();
+  }
+
+function runHero() {
 
   // ============================================================
   // scrambleReveal(el, finalText, opts) — 自写 ScrambleText 行为
@@ -79,6 +167,9 @@
   }
 
   // 自写 SplitText（避免付费插件）
+  // v1.7.4：空格字符打 data-space 标记，配合 CSS 的固定 em 宽度锁死格子 ——
+  // WELCOME / CAMPUS 全是等宽拉丁大写，字体从 fallback 切到 Inter 时字宽会变，
+  // per-char 的 inline-block 会整体重排，表现就是“字母左右穿插/重叠”。
   function splitChars(el) {
     const text = el.textContent;
     el.textContent = "";
@@ -87,11 +178,10 @@
       const c = text[i];
       const span = document.createElement("span");
       span.className = "gsap-char";
-      span.style.display = "inline-block";
       span.style.willChange = "transform, opacity";
       if (c === " ") {
         span.innerHTML = "&nbsp;";
-        span.style.minWidth = "0.3em";
+        span.dataset.space = "1";
       } else {
         span.textContent = c;
       }
@@ -101,29 +191,91 @@
     return { chars };
   }
 
-  const $intro      = document.getElementById("intro");
-  const $introLines = document.querySelectorAll("#intro-title [data-line]");
-  const $introCount = document.getElementById("intro-count");
-  const $introBar   = document.getElementById("intro-bar-fill");
-  const $introFoot  = document.querySelector(".intro-foot");
-
-  const $logo = document.getElementById("logo");
-  const $row1 = document.getElementById("t-row-1");
-  const $row2 = document.getElementById("t-row-2");
-  const $sub  = document.getElementById("t-sub");
+  // $intro / $introLines / $introCount / $introBar / $introFoot / $logo /
+  // $row1 / $row2 / $sub 已在 IIFE 顶部取过，这里不再重复查询 DOM。
 
   gsap.set($logo, { opacity: 0, y: 30, scale: 0.92 });
   gsap.set($sub,  { opacity: 0, y: 30 });
   if ($introFoot) gsap.set($introFoot, { opacity: 0, y: 16 });
 
+  // ============================================================
+  // v1.7.4 回访跳过：同一个 session 内第二次进入不再重放 3s 开场
+  // 开场是纯仪式，首次看有倨值，第二次就是纯等待。
+  // 用 sessionStorage 而非 localStorage：换个标签页/新会话仍然会看到完整开场。
+  // ============================================================
+  var SKIP_KEY = "campus_intro_seen";
+  var seenBefore = false;
+  try { seenBefore = sessionStorage.getItem(SKIP_KEY) === "1"; } catch (e) {}
+  function markSeen() {
+    try { sessionStorage.setItem(SKIP_KEY, "1"); } catch (e) {}
+  }
+
+  // ============================================================
+  // v1.7.4 真实进度：原来的 0→100 是固定 1.8s 的假计时，跟页面实际加载没有任何关系。
+  // 现在铺到真实信号上：文档 readyState + 字体就绪（字体是唯一会导致
+  // 标题重排的资源），两个各占一半权重；不支持的浏览器直接给满分。
+  // 但依然保留上限：最少 0.6s（否则一闪而过看不清）、最多 1.8s（不能让开场变等待）。
+  // ============================================================
+  var docReady = (document.readyState === "complete" || document.readyState === "interactive");
+  var fontsDone = false;
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(function () { fontsDone = true; })
+      .catch(function () { fontsDone = true; });
+  } else {
+    fontsDone = true;
+  }
+
+  function realProgress() {
+    var p = 0;
+    if (docReady) p += 0.5;
+    if (fontsDone) p += 0.5;
+    if (!docReady && document.readyState !== "loading") { docReady = true; p += 0.5; }
+    return Math.max(0, Math.min(1, p));
+  }
+
+  // 计算本次开场时长（秒）
+  var INTRO_MIN = 0.6, INTRO_MAX = 1.8;
+  var introDur = INTRO_MAX;
+  if (docReady && fontsDone) {
+    introDur = INTRO_MIN;          // 资源已就绪（回访 / 缓存命中）→ 快速揭幕
+  }
+
+  // ============================================================
+  // v1.7.4 两种“不演开场”的情况：
+  //   a) 用户开了减少动效 → 不演 scramble（闪烁字符是典型的光敏诱发因素）
+  //   b) 本次 session 已看过 → 不重放，只做一个 0.35s 渐隐
+  // 两者都直接撤幕 + 进 playHero（内部会再按 REDUCED 去掉大幅位移）。
+  // ============================================================
+  function skipIntro() {
+    markSeen();
+    showScrollHint();   // 跳过开场时没有 idle 回调，提示必须自己出来
+    if ($intro) {
+      gsap.to($intro, {
+        opacity: 0, duration: REDUCED ? 0 : 0.35, ease: "power1.out",
+        onComplete: killIntro
+      });
+    } else {
+      killIntro();
+    }
+    playHero();
+  }
+
+  if (REDUCED || seenBefore) {
+    skipIntro();
+  } else {
+    buildIntroTL();
+  }
+
+  function buildIntroTL() {
   // ===== 遮罩开场时间线 =====
   const introTL = gsap.timeline({
     onComplete() {
+      markSeen();
       gsap.to($intro, {
         yPercent: -100,
         duration: 1.1,
         ease: "expo.inOut",
-        onComplete() { $intro.style.display = "none"; }
+        onComplete() { killIntro(); }
       });
       playHero();
     }
@@ -131,12 +283,14 @@
 
   const counter = { v: 0 };
   introTL.to(counter, {
-    v: 100, duration: 1.8, ease: "power1.inOut",
+    v: 100, duration: introDur, ease: "power1.inOut",
     onUpdate() {
-      $introCount.textContent = String(Math.round(counter.v)).padStart(2, "0");
+      // 显示值 = min(动画进度, 真实进度)，让数字不会跑在实际加载前面
+      var shown = Math.min(counter.v, realProgress() * 100);
+      if ($introCount) $introCount.textContent = String(Math.round(shown)).padStart(2, "0");
     }
   }, 0);
-  introTL.fromTo($introBar, { scaleX: 0 }, { scaleX: 1, duration: 1.8, ease: "power1.inOut" }, 0);
+  introTL.fromTo($introBar, { scaleX: 0 }, { scaleX: 1, duration: introDur, ease: "power1.inOut" }, 0);
 
   // ===== 标题 Scramble reveal：每行乱码翻飞后定格成 WELCOME / CAMPUS =====
   $introLines.forEach((line, i) => {
@@ -158,11 +312,24 @@
     introTL.to($introFoot, { opacity: 1, y: 0, duration: 0.7, ease: "power2.out" }, 0.95);
   }
 
+  }  // end buildIntroTL
+
   // ============================================================
   // HERO 标题入场 — 拉满
   // ============================================================
   function playHero() {
     const tl = gsap.timeline({ defaults: { ease: "power3.out" } });
+
+    // v1.7.4：减少动效时只做平淡的渐入（仍然是动效，但没有大幅位移/旋转/弹跳）。
+    if (REDUCED) {
+      [$logo, $row1, $row2, $sub].forEach(function (el, i) {
+        if (!el) return;
+        gsap.set(el, { opacity: 0 });
+        tl.to(el, { opacity: 1, duration: 0.4, ease: "none" }, i * 0.05);
+      });
+      showScrollHint();
+      return tl;
+    }
 
     // logo 弹性入场
     tl.fromTo($logo,
@@ -193,13 +360,17 @@
     // 副标入场（紧跟）
     tl.fromTo($sub, { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.7 }, "-=0.35");
 
-    // 入场完成后：每个字符独立永久 idle 浮动（GSAP 那种"每个字母都有生命"）
+    // v1.7.4：提示在副标出现后立刹亮（原先挂在 idle 回调里，
+    // 一旦 idle 被省略或延迟，用户就看不到任何“能往下走”的信号）。
+    tl.add(showScrollHint, "+=0.15");
+
+    // 入场完成后：每个字符独立永久 idle 浮动（GSAP 那种“每个字母都有生命”）
     // 只保 y 浮动，rotation 0 → 避免大字号下 ±1.2° 让左右相邻字符笔画穿插看起来重叠
     tl.add(() => {
       chars.forEach((ch, i) => {
         const ampY = gsap.utils.random(1.5, 3);       // 收紧到 1.5~3px
         const dur  = gsap.utils.random(2.6, 4.2);
-        gsap.to(ch, {
+        idleTweens.push(gsap.to(ch, {
           y: `+=${ampY}`,
           rotation: 0,
           duration: dur,
@@ -207,7 +378,7 @@
           repeat: -1,
           yoyo: true,
           delay: i * 0.07  // 错开，营造群体呼吸不齐
-        });
+        }));
       });
     }, "+=0.5");
 
@@ -255,15 +426,36 @@
 
   // ===== 鼠标视差（quickTo 高效写法，60fps 不掉帧） =====
   // 之前 mouse quickTo 把整 .hero-title 移 ±14px 造成 inline-block 字符 GPU 重绘偶发错位（看着像字母重叠）。
-  // 现在只让 logo 视差，标题字符完全稳定，title 由 quickTo 加锁住 transformOrigin 仍做最轻微的视差。
-  const $titleEl = document.querySelector(".hero-title");
-  const logoXTo  = gsap.quickTo($logo, "x", { duration: 0.9, ease: "power3.out" });
-  const logoYTo  = gsap.quickTo($logo, "y", { duration: 0.9, ease: "power3.out" });
-  document.addEventListener("mousemove", (e) => {
-    const cx = window.innerWidth / 2, cy = window.innerHeight / 2;
-    const dx = (e.clientX - cx) / cx, dy = (e.clientY - cy) / cy;
-    logoXTo(dx * 6);
-    logoYTo(dy * 4);
-    // 标题字符不整体位移（避免 GPU 重绘错位）
+  // 现在只让 logo 视差，标题字符完全稳定。
+  // v1.7.4：减少动效时不挂视差（持续跟随鼠标的位移就是动效）。
+  if (!REDUCED) {
+    const logoXTo = gsap.quickTo($logo, "x", { duration: 0.9, ease: "power3.out" });
+    const logoYTo = gsap.quickTo($logo, "y", { duration: 0.9, ease: "power3.out" });
+    document.addEventListener("mousemove", (e) => {
+      const cx = window.innerWidth / 2, cy = window.innerHeight / 2;
+      const dx = (e.clientX - cx) / cx, dy = (e.clientY - cy) / cy;
+      logoXTo(dx * 6);
+      logoYTo(dy * 4);
+    });
+  }
+
+  // ============================================================
+  // v1.7.4 后台暂停：13 个 idle tween + ScrollTrigger + 视差
+  // 在标签页被切走后仍然每帧写 transform（白费 CPU / 电量）。
+  // 显式暂停：hidden 时停 idle，回来恢复；滚到登录区后 hero 已离屏，一并停掉。
+  // ============================================================
+  document.addEventListener("visibilitychange", function () {
+    if (document.hidden) pauseIdle(); else resumeIdle();
   });
+
+  var heroVisible = true;
+  if ("IntersectionObserver" in window && $heroSection) {
+    new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        heroVisible = en.isIntersecting;
+        if (!heroVisible) pauseIdle(); else if (!document.hidden) resumeIdle();
+      });
+    }, { root: document.getElementById("view-login"), threshold: 0.05 }).observe($heroSection);
+  }
+}
 })();

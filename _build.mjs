@@ -60,7 +60,8 @@ if (fs.existsSync('sw.js')) {
 }
 
 // HTML：../css|js|images/ -> css|js|images/
-const htmlFiles = ['index.html', 'v52.html', 'v53.html', 'v54.html', 'v58.html', 'v59.html', 'v60.html', 'v61.html', 'v62.html', 'v63.html', 'v64.html', 'v65.html', 'v66.html', 'v67.html', 'v68.html', 'v69.html', 'v70.html', 'v71.html', 'v72.html', 'admin.html', 'nav-demos.html', 'welcome-demos.html', 'memory-tree.html', 'clear-sw.html'];
+// 历史版本页已归档至 html/archive/（不部署）；如需线上对比，手动从 archive 取回并加回此列表
+const htmlFiles = ['index.html', 'admin.html', 'nav-demos.html', 'welcome-demos.html', 'memory-tree.html', 'clear-sw.html'];
 const htmlSrc = {};
 for (const f of htmlFiles) {
   const p = path.join('html', f);

@@ -11,6 +11,10 @@
   if (window.__timeFlipInited) return;
   window.__timeFlipInited = true;
 
+  // v1.7.4：减少动效时不做翻页动画（直接是静态文本）。
+  var REDUCED = !!(window.matchMedia &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+
   const $time = document.getElementById("intro-time");
   if (!$time) return;
 
@@ -54,6 +58,8 @@
 
   function flipToDigit(stack, newDigit) {
     if (newDigit < 0 || newDigit > 9) return;
+    // v1.7.4：减少动效时直接跳到目标位，不做翻页 tween
+    if (REDUCED) { gsap.set(stack, { yPercent: -newDigit * 10 }); return; }
     // 翻页：gsap.to yPercent -digit*100 + rotationX 0~90~0 给出"翻板"感
     // 简化版：单次 tween 同时做 yPercent + 轻量 rotationX 抖动
     const cur = gsap.getProperty(stack, "yPercent") || 0;
@@ -92,16 +98,21 @@
   const stacks = renderInitial(initial);
 
   // 进场 stagger：cell + colon 渐入 + y 浮上
-  gsap.from($time.querySelectorAll(".flip-cell, .flip-colon"), {
-    opacity: 0, y: 14,
-    duration: 0.55, ease: "power2.out",
-    stagger: 0.07,
-    delay: 0.95
-  });
+  // v1.7.4：减少动效时省掉这段入场
+  if (!REDUCED) {
+    gsap.from($time.querySelectorAll(".flip-cell, .flip-colon"), {
+      opacity: 0, y: 14,
+      duration: 0.55, ease: "power2.out",
+      stagger: 0.07,
+      delay: 0.95
+    });
+  }
 
   // 每秒检查变化
+  // v1.7.4：页面被切到后台时暂停轮询（原来无论如何都在跑）
   let last = initial;
   setInterval(() => {
+    if (document.hidden) return;
     const t = formatTime(new Date());
     if (t === last) return;
     let i = 0;

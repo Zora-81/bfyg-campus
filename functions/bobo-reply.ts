@@ -230,9 +230,15 @@ export default async function (req) {
     try {
       const cnt = await restSelect('bobo_reply_log?select=id&kind=eq.reply&order=created_at.desc&limit=3').catch(() => []);
       if (Array.isArray(cnt) && cnt.length >= 3) {
-        const memPrompt = '下面是啵宝和一位同学的对话。请提炼一句不超过60字的【关于这位同学本人的记忆】：TA的昵称、爱好、问过什么、聊过什么话题。绝对不要写啵宝自己的行为和口头禅！直接输出摘要：' + '\n' + contextText.slice(-500) + '\n这位同学的最新消息：' + content;
-        const mem = await aiChat([{ role: 'system', content: memPrompt }], 80);
-        if (mem && mem.text && mem.text.length <= 90) {
+        // 先拿旧记忆，让 AI 在旧画像基础上增量更新（合并而不是覆盖成流水账）
+        let oldMem = '';
+        try {
+          const olds = await restSelect('bobo_memories?select=content&scope=eq.user&user_id=eq.' + authorId + '&order=updated_at.desc&limit=1').catch(() => []);
+          if (Array.isArray(olds) && olds[0]) oldMem = olds[0].content || '';
+        } catch (e) {}
+        const memPrompt = '任务：维护一份【同学画像】。下面是已有画像和最新对话，请输出更新后的一句画像（不超过80字），格式「昵称，性格特点，爱好，常聊话题」。规则：1)只写这位同学本人，绝不写啵宝的行为/口头禅；2)不要写"曾问XX"这类对话流水，要提炼稳定特征；3)已有画像中仍成立的信息保留，新信息合并进去，冲突以新为准；4)直接输出画像正文。已有画像：' + (oldMem || '（暂无）') + '\n最新对话：' + contextText.slice(-450) + '\n这位同学刚说：' + content;
+        const mem = await aiChat([{ role: 'system', content: memPrompt }], 130);
+        if (mem && mem.text && mem.text.length <= 130) {
           const mv = await embed(mem.text);
           if (mv) await rpc('bobo_memory_upsert', { p_scope: 'user', p_content: mem.text, p_embedding: mv, p_user: authorId }).catch(() => {});
         }
