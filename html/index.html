@@ -19,7 +19,7 @@
 
     (function(){
 
-      var v = '1.7.3';
+      var v = '1.7.4';
 
       // 暴露版本号全局：__APP_VERSION 供设置面板；window.v 供 app.js 记忆树版本读取（根治兜底串漏 bump）
       window.__APP_VERSION = v;
@@ -1068,6 +1068,8 @@
             </svg>
           </div>
 
+          <p class="hero-overline" id="t-overline">VOL.01 · CAMPUS CHANNEL</p>
+
           <h1 class="hero-title">
             <span class="row-1" id="t-row-1">WELCOME</span>
             <span class="row-2" id="t-row-2">CAMPUS</span>
@@ -1076,6 +1078,11 @@
           <p class="hero-sub" id="t-sub">
             校园频道 · 和你的校园重新呼吸
           </p>
+
+          <svg class="hero-squiggle" viewBox="0 0 300 24" fill="none" aria-hidden="true">
+            <path d="M4 14 Q 22 4, 40 14 T 76 14 T 112 14 T 148 14 T 184 14 T 220 14 T 256 14 T 292 14"
+                  stroke="#3E8E5A" stroke-width="3" stroke-linecap="round"/>
+          </svg>
         </div>
 
         <!-- v1.7.4 滚动提示：hero 里之前没有任何可点击/可发现的东西（welcome-enter 已移除），

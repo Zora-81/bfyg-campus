@@ -196,6 +196,8 @@ function runHero() {
 
   gsap.set($logo, { opacity: 0, y: 30, scale: 0.92 });
   gsap.set($sub,  { opacity: 0, y: 30 });
+  var $overline = document.getElementById("t-overline");
+  gsap.set($overline, { opacity: 0, y: 18 });
   if ($introFoot) gsap.set($introFoot, { opacity: 0, y: 16 });
 
   // ============================================================
@@ -317,24 +319,47 @@ function runHero() {
   // ============================================================
   // HERO 标题入场 — 拉满
   // ============================================================
+  // v1.8.10 字体就绪门：把"等 Inter"压进入场前 1.2s 上限的窗口里。
+  // per-char inline-block 在 fallback 与 Inter 之间切换时字宽不同会整排横移
+  // （历史上表现为"字母左右穿插/重叠"，0.72em 定宽格是修它时的错误答案）。
+  // 字体没就绪就先播入场，最多等 1.2s —— 大多数命中缓存的访问 0~80ms 内就绪。
+  function whenHeroFontsReady(cb) {
+    var done = false;
+    function go() { if (!done) { done = true; cb(); } }
+    if (document.fonts && document.fonts.ready && document.fonts.check) {
+      try {
+        if (document.fonts.check('700 16px Inter')) { go(); return; }
+        document.fonts.ready.then(go).catch(go);
+      } catch (e) { go(); }
+    } else { go(); }
+    setTimeout(go, 1200);
+  }
+
   function playHero() {
+    whenHeroFontsReady(function () { playHeroInner(); });
+  }
+
+  function playHeroInner() {
     const tl = gsap.timeline({ defaults: { ease: "power3.out" } });
 
     // v1.7.4：减少动效时只做平淡的渐入（仍然是动效，但没有大幅位移/旋转/弹跳）。
     if (REDUCED) {
-      [$logo, $row1, $row2, $sub].forEach(function (el, i) {
+      [$overline, $logo, $row1, $row2, $sub].forEach(function (el, i) {
         if (!el) return;
         gsap.set(el, { opacity: 0 });
         tl.to(el, { opacity: 1, duration: 0.4, ease: "none" }, i * 0.05);
       });
+      document.documentElement.classList.add("hero-in");  // v1.8.10：reduced 路径直接给划痕终态
       showScrollHint();
       return tl;
     }
 
-    // logo 弹性入场
+    // v1.8.10：刊头最先淡入（印刷品翻页的第一眼），再 logo 弹性入场
+    tl.fromTo($overline, { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.5 }, 0.05);
     tl.fromTo($logo,
       { opacity: 0, y: 30, scale: 0.92, rotation: -3 },
-      { opacity: 1, y: 0, scale: 1, rotation: 0, duration: 1.0, ease: "back.out(1.6)" }
+      { opacity: 1, y: 0, scale: 1, rotation: 0, duration: 1.0, ease: "back.out(1.6)" },
+      0.12
     );
 
     // 每字符 per-element 升入：加 skewX 手写笔触感（缩到 ±10° 避免入场穿插）
@@ -362,6 +387,10 @@ function runHero() {
 
     // v1.7.4：提示在副标出现后立刹亮（原先挂在 idle 回调里，
     // 一旦 idle 被省略或延迟，用户就看不到任何“能往下走”的信号）。
+    // v1.8.10：入场尾声点亮 html.hero-in —— 荧光笔划痕 / 波浪线的 CSS 动画时钟
+    // 统一从这里起跑，和 GSAP 时间线对齐。REDUCED 分支已单独处理。
+    tl.add(function () { document.documentElement.classList.add("hero-in"); }, "-=0.1");
+
     tl.add(showScrollHint, "+=0.15");
 
     // 入场完成后：每个字符独立永久 idle 浮动（GSAP 那种“每个字母都有生命”）

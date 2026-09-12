@@ -189,6 +189,29 @@ body:has(#view-login.active) #main-dots {
 }
 .gsap-scramble > span:last-child { margin-right: 0; }
 
+/* v1.8.10 intro 同款荧光笔：CAMPUS 行 scramble 定格同时扫出划痕（固定 1.5s 延迟
+   对齐第二行 scramble 结束时刻 ~1.75s，遮罩没撤也先划好，揭幕时正好看见） */
+.intro-title .i-line { position: relative; }
+.intro-title .i-line:nth-child(2)::after {
+  content: "";
+  position: absolute;
+  left: 1%; right: 2%;
+  bottom: 0.08em;
+  height: 0.3em;
+  background: linear-gradient(100deg,
+    rgba(62, 142, 90, 0)    1%,
+    rgba(62, 142, 90, 0.26) 8%,
+    rgba(62, 142, 90, 0.32) 52%,
+    rgba(62, 142, 90, 0.18) 93%,
+    rgba(62, 142, 90, 0)    99%);
+  border-radius: 3px;
+  transform: rotate(-1.2deg) scaleX(0);
+  transform-origin: left center;
+  z-index: -1;
+  pointer-events: none;
+  animation: markerSwipe 0.55s cubic-bezier(0.2, 0.7, 0.2, 1) 1.5s forwards;
+}
+
 /* 居中长横线进度条 + 计数 + 标签 */
 .intro-progress {
   position: relative;
@@ -488,32 +511,58 @@ body:has(#view-login.active) #main-dots {
   will-change: auto;
   font-variant-numeric: tabular-nums;
 }
-/* v1.7.4：字体加载完成前用 fallback、完成后切 Inter，字宽变化会整体重排；
-   标题被拆成 per-char 的 inline-block span 后，重排表现为"字母左右穿插/重叠"。
-   WELCOME / CAMPUS 全是等宽拉丁大写，直接给每个字符格一个固定 em 宽度，
-   字体怎么切都锁死位置（含空格格）。 */
+/* v1.8.10 重叠根修：上面的 0.72em 定宽格正是截图里字母压叠的元凶 ——
+   Inter Bold 的大写 W/M/O 实宽约 0.85~1.0em，塞进 0.72em 的格子必然溢出压叠。
+   改回自然字宽（等宽拉丁假设本来就是错的），配合 hero.js 的字体就绪门
+   （fonts.ready race 1.2s）消除 fallback→Inter 切换的整排横移，双保险。 */
 .hero-title .gsap-char {
   display: inline-block;
-  width: 0.72em;
-  text-align: center;
-  margin-right: 0;
+  width: auto;
+  margin-right: 0.08em;
 }
-.hero-title .gsap-char[data-space="1"] { width: 0.34em; }
+.hero-title .gsap-char:last-child { margin-right: 0; }
 .hero-title .row-1 {
   display: block;
   font-size: clamp(56px, 10vw, 150px);
   color: var(--ink);
   transform: translateY(-0.12em);
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
 }
 .hero-title .row-2 {
   display: block;
+  position: relative;   /* v1.8.10：荧光笔划痕的定位锚 */
   font-size: clamp(40px, 8vw, 120px);
   color: var(--accent-green);
   margin-top: 0.06em;
   transform: translateY(0.12em);
-  letter-spacing: 0.08em;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
 }
+/* v1.8.10 手账荧光笔：CAMPUS 底下扫一道墨绿荧光笔痕，
+   由 hero.js 在入场尾声加 html.hero-in 后划出（CSS 动画时钟和 GSAP 时间线对齐） */
+.hero-title .row-2::after {
+  content: "";
+  position: absolute;
+  left: -1.5%; right: -2.5%;
+  bottom: 0.1em;
+  height: 0.32em;
+  background: linear-gradient(100deg,
+    rgba(62, 142, 90, 0)    1%,
+    rgba(62, 142, 90, 0.26) 8%,
+    rgba(62, 142, 90, 0.30) 52%,
+    rgba(62, 142, 90, 0.18) 93%,
+    rgba(62, 142, 90, 0)    99%);
+  border-radius: 3px;
+  transform: rotate(-1.4deg) scaleX(0);
+  transform-origin: left center;
+  z-index: -1;
+  pointer-events: none;
+}
+html.hero-in .hero-title .row-2::after {
+  animation: markerSwipe 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+}
+@keyframes markerSwipe { to { transform: rotate(-1.4deg) scaleX(1); } }
 .hero-sub {
   font-family: var(--font-body);
   font-size: clamp(14px, 1.4vw, 18px);
@@ -521,6 +570,45 @@ body:has(#view-login.active) #main-dots {
   margin-top: 32px;
   letter-spacing: 0.04em;
 }
+
+/* v1.8.10 编辑刊头：标题上方小号 issue 行（印刷品的克制，和 intro-mark 同语言） */
+.hero-overline {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 30px;
+}
+.hero-overline::before,
+.hero-overline::after {
+  content: "";
+  width: 30px;
+  height: 1px;
+  background: var(--ink-soft);
+  opacity: 0.5;
+}
+
+/* v1.8.10 手绘波浪线：副标语底下划一道墨绿铅笔线，hero-in 后画出 */
+.hero-squiggle {
+  display: block;
+  width: min(250px, 46%);
+  height: 12px;
+  margin: 12px auto 0;
+  opacity: 0.8;
+}
+.hero-squiggle path {
+  stroke-dasharray: 340;
+  stroke-dashoffset: 340;
+}
+html.hero-in .hero-squiggle path {
+  animation: squiggleDraw 0.9s ease 0.15s forwards;
+}
+@keyframes squiggleDraw { to { stroke-dashoffset: 0; } }
 
 /* 进入按钮（沿用旧 welcome-enter 的 id，点击触发 app.js 进入登录） */
 .hero-cta-wrap {
@@ -607,6 +695,10 @@ body:has(#view-login.active) #main-dots {
   .scroll-hint { transition: none; }
   .cta-btn { transition: none; }
   .cta-btn:hover { transform: rotate(-1.5deg); }
+  /* v1.8.10：划痕/波浪线不播动画，直接给终态 */
+  html.hero-in .hero-title .row-2::after { animation: none; transform: rotate(-1.4deg) scaleX(1); }
+  .intro-title .i-line:nth-child(2)::after { animation: none; transform: rotate(-1.2deg) scaleX(1); }
+  html.hero-in .hero-squiggle path { animation: none; stroke-dashoffset: 0; }
 }
 
 /* ===== v1.7.4 旧浏览器兜底：不支持 svh 时回退到 dvh/vh =====

@@ -126,17 +126,30 @@
     mwStars = [];
     var SIGMA = 0.13;
     var n = Math.round(Math.min(760, Math.max(420, (W * H) / 2600)));
+    // v1.7.3 去假感：真银河不是均匀一条——沿轴疏密起伏、宽度涨落、带线漂移。
+    // 用低频连续正弦调制制造大尺度结构（区别于离散星团→灰坨）。
+    var p1 = rand(0, 6.28), p2 = rand(0, 6.28), p3 = rand(0, 6.28);
+    var wobA = rand(0.010, 0.022), wobF = rand(0.7, 1.4), wobP = rand(0, 6.28);
     for (var i = 0; i < n; i++) {
       var t = rand(-0.85, 0.85);            // 沿轴位置（过屏幕中心）
+      // 1) 沿轴密度调制（floor 0.35 防死循环）
+      var dens = 0.5 + 0.35 * Math.sin(t * 5.9 + p1) + 0.25 * Math.sin(t * 12.3 + p2) + 0.15 * Math.sin(t * 21.7 + p3);
+      dens = Math.max(0, Math.min(1, dens));
+      if (Math.random() > 0.35 + dens * 0.65) { i--; continue; }
+      // 2) 带宽沿轴涨落 0.8~1.35 倍
+      var sigmaT = SIGMA * (0.8 + 0.55 * (0.5 + 0.5 * Math.sin(t * 3.7 + p3)));
       var g = (Math.random() + Math.random() + Math.random() + Math.random() - 2) / 2; // 近高斯
-      var d = g * SIGMA;                     // 法向偏移
+      // 3) 带中心低频漂移（不再是一条完美直线）
+      var wob = Math.sin(t * 6.28 * wobF + wobP) * wobA;
+      var d = g * sigmaT + wob;
       var x = (0.5 + t * MW_DIR.x + d * MW_NRM.x) * W;
+      var y = (0.5 + t * MW_DIR.y + d * MW_NRM.y) * H;
       var y = (0.5 + t * MW_DIR.y + d * MW_NRM.y) * H;
       mwStars.push({
         x: x, y: y,
         // v1.8.9：0.30~0.65px + 低 alpha 会被抗锯齿稀释到不可见（实测带心均值仅 1.0/255）。
         // 半径 ≥0.55px、alpha ≥0.38 才跨过感知阈值；数量下调保持克制。
-        size: rand(0.75, 1.40),
+        size: 0.75 + 0.65 * Math.pow(Math.random(), 2),  // 偏小分布+偶发大星=自然层级
         base: rand(0.50, 1.00) * (1 - Math.abs(g) * 0.30) * (Math.abs(g) < 0.5 ? 1.2 : 1),  // 带心亮、带缘暗
         phase: rand(0, Math.PI * 2),
         tw: rand(0.006, 0.016),

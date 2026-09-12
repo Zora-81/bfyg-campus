@@ -1508,7 +1508,7 @@
     dbi.from('bobo_memories').select('id', { count: 'exact', head: true })
       .then(function (r) { var el = document.getElementById('bobo-stat-mem'); if (el) el.textContent = (r && r.count) || 0; }).catch(function () {});
     // 记忆列表
-    dbi.from('bobo_memories').select('id,scope,content,weight,updated_at').order('updated_at', { ascending: false }).limit(30).then(function (res) {
+    dbi.from('bobo_memories').select('id,scope,content,weight,updated_at,kind').order('updated_at', { ascending: false }).limit(30).then(function (res) {
       var tb = document.getElementById('bobo-mem-tbody');
       if (!tb) return;
       tb.innerHTML = '';
@@ -1517,7 +1517,8 @@
       rows.forEach(function (m) {
         var tr = document.createElement('tr');
         tr.style.borderBottom = '1px solid rgba(255,255,255,0.06)';
-        var scopeTxt = m.scope === 'user' ? '👤 同学' : (m.scope === 'channel' ? '💬 频道' : '🌐 全局');
+        var kindTxt = m.kind === 'fact' ? '📌小事' : '🧠 画像';
+        var scopeTxt = (m.scope === 'user' ? '👤 同学' : (m.scope === 'channel' ? '💬 频道' : '🌐 全局')) + ' · ' + kindTxt;
         var safeContent = String(m.content).replace(/</g, '&lt;');
         var delBtn = '<button class="bobo-mem-del" data-id="' + m.id + '" title="删除这条记忆" style="margin-left:8px;background:none;border:1px solid rgba(239,68,68,0.4);color:#ef4444;border-radius:6px;padding:2px 8px;cursor:pointer;font-size:12px;">删除</button>';
         tr.innerHTML = '<td>' + scopeTxt + '</td>' +

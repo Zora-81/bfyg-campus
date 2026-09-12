@@ -2810,7 +2810,7 @@
   var RENDER_WIN = 15;           // 首屏渲染消息条数（点频道进入时，远小于全量避免卡顿）
   var RENDER_BATCH = 15;         // 滚动到底自动加载「更早消息」每批条数
   var renderWinEnd = RENDER_WIN; // 当前已渲染到（从最新起的条数）
-  var pendingJumpMsgId = null;   // 跳转到指定消息时，renderMessages 需把它纳入渲染窗口
+  var pendingJumpMsgId = null;   // 跳转到指定消息时，renderMessages 需把它纳入渲染窗口（必须是顶层消息 id）
   var _noMoreOlder = false;    // 已无更早消息（服务端分页拉取到底）
   var _olderOffset = 0;        // 下一次「加载更早」的服务端分页 offset
   var _loadingEarlier = false;   // 防止滚动监听重入
@@ -3067,6 +3067,30 @@
               renderCommentList(cSec, msg);
               cSec.scrollIntoView({ behavior:'smooth', block:'nearest' });
               setCommentTarget(msg.id); // 评论目标：发送时直接用作 parent_id，不走回复栏
+              // 自愈：这栋楼在内存快照里一条回复都没有 → 首轮 getReplyMessages 可能失败回空过。
+              // 用户正看着，立即补拉一次该频道回复并合并刷新（与45s兜底互不影响，幂等）。
+              var _kids = (channelMessages[currentChannel.id] || []).filter(function(m){ return m.parent_id === msg.id; }).length;
+              if (!_kids && IF.getReplyMessages && !cSec._recovered) {
+                cSec._recovered = true;   // 每个评论区只自愈一次，防刷
+                IF.getReplyMessages(currentChannel.id, { limit: 1000 }).then(function(re2){
+                  if (!re2 || !re2.length || !channelMessages[currentChannel.id]) return;
+                  var topNow = channelMessages[currentChannel.id].filter(function(m){ return !m.parent_id; });
+                  var merged2 = MessageThread.mergeMessages(topNow, re2);
+                  channelMessages[currentChannel.id] = merged2;
+                  var cntNow = merged2.filter(function(m){ return m.parent_id === msg.id; }).length;
+                  if (cntNow > 0) {
+                    // 这栋楼有救了：重渲染评论区 + 同步主 feed 计数
+                    var sec2 = document.getElementById('comment-'+msg.id);
+                    if (sec2 && sec2.classList.contains('open')) {
+                      var rootNow = merged2.find(function(m){ return m.id === msg.id; });
+                      if (rootNow) { renderCommentList(sec2, rootNow); sec2._recovered = false; }
+                    }
+                    var btn2 = document.querySelector('.msg-interact-btn[data-act="comment"][data-msg-id="'+msg.id+'"] .msg-interact-count');
+                    if (btn2) btn2.textContent = cntNow;
+                    showToast('评论加载完成', 'success', 1600);
+                  }
+                }).catch(function(){ cSec._recovered = false; });
+              }
             } else {
               setCommentTarget(null);
             }
@@ -4126,7 +4150,10 @@
       }
       unreadNotifCount = count;
       updateNotifBadge();
-    }).catch(function(){});
+    }).catch(function(e){
+      // 诊断：游客 401 属预期；登录态仍 401 说明会话过期 → 通知必失效，打出日志便于定位
+      console.warn('[notify] unreadCount 拉取失败（游客属预期）:', e && (e.message || e));
+    });
   }
 
   function updateNotifBadge() {
@@ -4227,8 +4254,28 @@
       switchChannel(ch);
       return;
     }
-    switchChannel(ch, function() {
-      // scrollToMessage 内部有 ~4s 重试；若最终没定位到，给出明确反馈
+    // 目标可能是很老的消息（分页在外）：设置 pendingJumpMsgId 强制纳入首屏渲染窗口
+    // （与热门话题点击同一机制），否则 scrollToMessage 的 4s 重试也找不到 → 看似"点了没反应"。
+    // 评论通知的 link 指向【评论自身 id】：渲染窗口只认顶层 msg-group，评论在（默认关闭的）评论区里。
+    // 铁律：pendingJumpMsgId 必须是【根消息 id】（顶层才会被渲染窗口处理）；
+    // 评论 id 只能交给 scrollToMessage 在评论区展开后定位。
+    // 根消息未知（目标不在内存=老评论）→ 先拉频道快照再二段跳转。
+    var jumpTarget = t.messageId;
+    var arrNow = channelMessages[ch.id] || [];
+    var targetMsg = arrNow.find(function(m){ return m.id === jumpTarget; });
+    var rootId = null;
+    if (targetMsg && targetMsg.parent_id) rootId = targetMsg.parent_id;
+
+    var doJump = function() {
+      // 渲染完成后：展开目标评论所在楼 + 定位
+      var rid = rootId;
+      if (rid) {
+        var sec = document.getElementById('comment-' + rid);
+        if (sec && !sec.classList.contains('open')) {
+          var rootMsg = (channelMessages[ch.id] || []).find(function(m){ return m.id === rid; });
+          if (rootMsg) { sec.classList.add('open'); renderCommentList(sec, rootMsg); }
+        }
+      }
       scrollToMessage(t.messageId);
       setTimeout(function() {
         var node = document.querySelector('.msg-group[data-msg-id="' + t.messageId + '"]')
@@ -4236,6 +4283,34 @@
                 || document.querySelector('[data-id="' + t.messageId + '"]');
         if (!node && typeof showToast === 'function') showToast('原内容已不存在', 'info', 2600);
       }, 4300);
+    };
+
+    if (!targetMsg) {
+      // 目标不在内存（老评论/老消息）：手动走大窗口网络拉取（顶层200条 + 回复合并），
+      // 完成后解析出根消息再跳——评论id绝不能直接塞给 pendingJumpMsgId（渲染窗口只认顶层）。
+      showMessageSkeleton();
+      loadChannelSnapshot(ch, { offset: 0, limit: 200 }).then(function(snapshot){
+        if (!currentChannel || currentChannel.id !== ch.id) return;
+        channelMessages[ch.id] = snapshot.all;
+        var m2 = (snapshot.all || []).find(function(m){ return m.id === t.messageId; });
+        if (m2 && m2.parent_id) {
+          rootId = m2.parent_id;
+          pendingJumpMsgId = rootId;          // 窗口定位到根消息
+        } else {
+          pendingJumpMsgId = t.messageId;     // 是顶层老消息：常规路径
+        }
+        renderMessages({ animate: true });
+        if (messagesArea) messagesArea.scrollTop = 0;
+        doJump();
+      }).catch(function(){
+        if (typeof showToast === 'function') showToast('加载失败，请重试', 'error', 2200);
+      });
+      return;
+    }
+
+    pendingJumpMsgId = rootId || t.messageId;
+    switchChannel(ch, function() {
+      doJump();
     });
   }
 
@@ -4259,9 +4334,17 @@
               '<div class="notify-preview">' + escapeHtml(n.body) + '</div>' +
             '</div>';
           item.addEventListener('click', function() {
+              // 已读 = 铅笔划掉：立即给这一行加划线动画（墨色褪掉 + 横线从左划到右），
+              // 用户先看到"这封信被划掉"，随后再跳转
+              item.classList.remove('unread');
+              item.classList.add('just-read');
               markNotifRead(n.id);
-              openNotificationTarget(n);
-              hideNotifDropdown();
+              var jump = function() {
+                openNotificationTarget(n);
+                hideNotifDropdown();
+              };
+              if (REDUCED_MOTION || typeof gsap === 'undefined') { jump(); }
+              else setTimeout(jump, 450);   // 让划线动画演完再走
           });
           notifyList.appendChild(item);
         });

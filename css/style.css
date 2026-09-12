@@ -2557,20 +2557,35 @@ body[data-theme="custom"] #main-bg::after {
   box-shadow:0 1px 2px rgba(140,30,10,.4);
   z-index:2;
 }
-/* 已读 = 铅笔划掉：标题一道歪斜手绘横线（像批改完划掉一封） */
-.mailbox-letter .notify-item:not(.unread) .notify-title {
-  position:relative;
+/* 已读（历史上读过的）：墨色褪掉但【不划线】——划线只属于"刚刚点开的"那封 */
+.mailbox-letter .notify-item:not(.unread):not(.just-read) .notify-title {
   color:#8a7a58;               /* 墨色褪掉 */
   font-weight:600;
 }
-.mailbox-letter .notify-item:not(.unread) .notify-title::after {
+.mailbox-letter .notify-item:not(.unread):not(.just-read) .notify-preview { color:#a09272; opacity:.85; }
+/* 刚刚点开的（just-read）：铅笔划掉——横线从左划到右 + 墨色褪掉 + 蜡封点熄灭 */
+.mailbox-letter .notify-item.just-read .notify-title {
+  position:relative;
+  color:#8a7a58; font-weight:600;
+}
+.mailbox-letter .notify-item.just-read .notify-title::after {
   content:'';
   position:absolute; left:8px; right:-2px; top:52%; height:5px;
   transform:rotate(-.8deg);
   background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='5' viewBox='0 0 120 5'%3E%3Cpath d='M0 2.8 Q10 1 20 3.1 T40 2.6 T60 3.2 T80 2.5 T100 3.1 T120 2.7' fill='none' stroke='%236b5a3e' stroke-width='1.3' opacity='.75'/%3E%3C/svg%3E") repeat-x left center/120px 5px;
   pointer-events:none;
+  animation:mailbox-strike .45s cubic-bezier(.3,.7,.4,1) forwards;
 }
-.mailbox-letter .notify-item:not(.unread) .notify-preview { color:#a09272; opacity:.85; }
+@keyframes mailbox-strike {
+  from { clip-path:inset(0 100% 0 0); }   /* 横线还没出现 */
+  to   { clip-path:inset(0 0 0 0); }      /* 从左划到右划满 */
+}
+.mailbox-letter .notify-item.just-read::before {
+  animation:mailbox-wax-off .3s ease forwards;
+}
+@keyframes mailbox-wax-off {
+  to { transform:scale(0); opacity:0; }
+}
 .mailbox-letter .notify-item .notify-body { display:block; }
 .mailbox-letter .notify-item .notify-title {
   display:block;

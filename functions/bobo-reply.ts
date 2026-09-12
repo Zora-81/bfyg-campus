@@ -201,13 +201,25 @@ export default async function (req) {
       }
     } catch (e) { /* 记忆失败不挡回复 */ }
 
-    // 6.5 身份记忆：直接拉这位同学的全部记忆（不做语义过滤，保证"我是谁"类问题能答上）
+    // 6.5 关系值 + 时间感知 + 身份记忆（三合一）
     try {
-      const userMems = await restSelect("bobo_memories?select=content&scope=eq.user&user_id=eq." + authorId + "&order=updated_at.desc&limit=2").catch(() => []);
+      // 6.5a 关系值：每次对话+1（上限100），并拿上次见面时间做时间感知
+      const bondRows = await rpc('bobo_bond_touch', { p_user: authorId, p_delta: 1 }).catch(() => null);
+      const bondVal = Array.isArray(bondRows) ? (bondRows[0] || 0) : (typeof bondRows === 'number' ? bondRows : 0);
+      // 6.5b 画像 + 细粒度事实记忆
+      const userMems = await restSelect("bobo_memories?select=content,kind&scope=eq.user&user_id=eq." + authorId + "&order=updated_at.desc&limit=8").catch(() => []);
+      let portraitLine = '';
+      let factLines = [];
       if (Array.isArray(userMems) && userMems.length) {
-        const memLine = userMems.map((m) => m.content).join('；');
-        contextText += '\n【你记得的关于这位同学的事：' + memLine + '】';
+        for (const m of userMems) {
+          if (m.kind === 'portrait' && !portraitLine) portraitLine = m.content;
+          else if (m.kind === 'fact') factLines.push(m.content);
+        }
       }
+      // 关系语气指示（写入context，在speakerName解析前就位）
+      contextText += '\n【你和这位同学的关系亲密度：' + bondVal + '/100' + (bondVal >= 60 ? '——老朋友了，可以更随意更皮，可主动开玩笑或提起共同回忆' : bondVal >= 25 ? '——熟人了，语气放松' : '——还不太熟，友好但别过分自来熟') + '】';
+      if (portraitLine) contextText += '\n【这位同学的画像：' + portraitLine + '】';
+      if (factLines.length) contextText += '\n【关于TA的具体小事（闲聊时可自然提起）：' + factLines.slice(0, 5).join('；') + '】';
     } catch (e) {}
 
     // 7. 深夜模式（Asia/Shanghai = UTC+8）
@@ -247,11 +259,43 @@ export default async function (req) {
           const olds = await restSelect('bobo_memories?select=content&scope=eq.user&user_id=eq.' + authorId + '&order=updated_at.desc&limit=1').catch(() => []);
           if (Array.isArray(olds) && olds[0]) oldMem = olds[0].content || '';
         } catch (e) {}
-        const memPrompt = '任务：维护一份【同学画像】。下面是已有画像和最新对话，请输出更新后的一句画像（不超过80字），格式「昵称，性格特点，爱好，常聊话题」。规则：1)只写这位同学本人，绝不写啵宝的行为/口头禅；2)不要写"曾问XX"这类对话流水，要提炼稳定特征；3)已有画像中仍成立的信息保留，新信息合并进去，冲突以新为准；4)直接输出画像正文。已有画像：' + (oldMem || '（暂无）') + '\n最新对话：' + contextText.slice(-450) + '\n这位同学刚说：' + content;
-        const mem = await aiChat([{ role: 'system', content: memPrompt }], 130);
-        if (mem && mem.text && mem.text.length <= 130) {
-          const mv = await embed(mem.text);
-          if (mv) await rpc('bobo_memory_upsert', { p_scope: 'user', p_content: mem.text, p_embedding: mv, p_user: authorId }).catch(() => {});
+        const memPrompt = '两个任务，输出严格JSON（无其他文字）：{"portrait":"更新后的同学画像（不超80字，格式「昵称，性格，爱好，常聊话题」，只写TA本人不写啵宝，保留仍成立的旧信息，新信息合并，冲突以新为准，不写对话流水）","fact":"本次对话里值得记住的1件具体小事（不超30字，如考试/比赛/丢东西/成就等具体事件，没有则填null）"} 已有画像：' + (oldMem || '（暂无）') + '\n最新对话：' + contextText.slice(-450) + '\n这位同学刚说：' + content;
+        const mem = await aiChat([{ role: 'system', content: memPrompt }], 280);
+        if (mem && mem.text) {
+          let portrait = null, fact = null;
+          try {
+            const jm = mem.text.match(/\{[\s\S]*\}/);
+            if (jm) {
+              const pj = JSON.parse(jm[0]);
+              portrait = pj.portrait || null;
+              fact = (pj.fact && pj.fact !== 'null' && pj.fact !== 'null。') ? pj.fact : null;
+            }
+          } catch (e) { portrait = (mem.text.length <= 130 && !mem.text.includes('{')) ? mem.text : null; }
+          if (portrait) {
+            const mv = await embed(portrait).catch(() => null);
+            if (mv) await rpc('bobo_memory_upsert', { p_scope: 'user', p_content: portrait, p_embedding: mv, p_user: authorId, p_kind: 'portrait' }).catch(() => {});
+          }
+          if (fact && fact.length <= 40) {
+            // 细粒度事实：独立成条（kind=fact），与近5条fact做语义去重（余弦>0.92视为重复）
+            const fv = await embed(fact).catch(() => null);
+            if (fv) {
+              let dup = false;
+              try {
+                const existF = await restSelect('bobo_memories?select=id,content&scope=eq.user&user_id=eq.' + authorId + '&kind=eq.fact&order=updated_at.desc&limit=5').catch(() => []);
+                if (Array.isArray(existF)) {
+                  for (const ex of existF) {
+                    const ev = await embed(ex.content).catch(() => null);
+                    if (ev) {
+                      let dot = 0;
+                      for (let i2 = 0; i2 < ev.length; i2++) dot += ev[i2] * fv[i2];
+                      if (dot > 0.92) { dup = true; break; }
+                    }
+                  }
+                }
+              } catch (e) {}
+              if (!dup) await rpc('bobo_memory_upsert', { p_scope: 'user', p_content: fact, p_embedding: fv, p_user: authorId, p_kind: 'fact' }).catch(() => {});
+            }
+          }
         }
         await rpc('bobo_log', { p_kind: 'memory', p_ok: true, p_model: mem ? mem.model : null, p_channel: channelId, p_author: authorId }).catch(() => {});
       }
